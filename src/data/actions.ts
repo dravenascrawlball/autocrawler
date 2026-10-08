@@ -20,8 +20,11 @@ import {
   ExecuteStrikeAction,
   ChainStrikeAction,
   ScatterShotAction,
+  FlankStrikeAction,
+  VenomSpitAction,
+  SearingTouchAction,
 } from '../sim/actions/attack';
-import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction, SplashHealAction } from '../sim/actions/heal';
+import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import { RetreatAction } from '../sim/actions/retreat';
 import {
   EmpowerAction,
@@ -31,6 +34,7 @@ import {
   PotionTossEnemyAction,
   ShieldWallAction,
   GuardiansVowAction,
+  VengeanceAction,
   TauntAction,
   MarkAction,
   SilenceAction,
@@ -70,6 +74,11 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'shield-wall': ShieldWallAction,
   'splash-heal': SplashHealAction,
   'guardians-vow': GuardiansVowAction,
+  'flank-strike': FlankStrikeAction,
+  'venom-spit': VenomSpitAction,
+  'searing-touch': SearingTouchAction,
+  regenerate: RegenerateAction,
+  vengeance: VengeanceAction,
   'lifesteal-strike': LifestealStrikeAction,
   taunt: TauntAction,
   cleanse: CleanseAction,

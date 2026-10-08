@@ -476,3 +476,41 @@ export const PotionTossEnemyAction: Action = {
     return { type: 'support-debuff', targetId: target.id, stat, amount, durationTurns: POTION_EFFECT_DURATION_TURNS };
   },
 };
+
+/** Percent attackPower the Bone Sentinel's Vengeance grants, and how long it lasts (long enough to cover the rest of most fights). */
+export const VENGEANCE_ATTACK_PERCENT = 50;
+export const VENGEANCE_DURATION_TURNS = 99;
+const VENGEANCE_BUFF_ID = 'vengeance';
+
+/**
+ * The Bone Sentinel's reactive Special (enemy variety pass — fires
+ * 'on-ally-downed', see data/specialActions.ts): when one of its allies
+ * falls, it gains VENGEANCE_ATTACK_PERCENT attackPower for the rest of the
+ * fight. Single-stack (a second fallen ally refreshes, not stacks — see
+ * buffs.ts's applyBuff), so killing its friends first is a real trade-off
+ * rather than a death spiral.
+ */
+export const VengeanceAction: Action = {
+  id: 'vengeance',
+  name: 'Vengeance',
+  reach: 'melee', // unused — always targets the actor itself
+  selectTarget(context: TargetingContext) {
+    return context.actor.hp > 0 ? context.actor : null;
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(
+      context.actor,
+      VENGEANCE_BUFF_ID,
+      { stat: 'attackPower', type: 'percent', amount: VENGEANCE_ATTACK_PERCENT, source: 'buff:vengeance' },
+      VENGEANCE_DURATION_TURNS,
+    );
+    return {
+      type: 'support-buff',
+      targetId: context.actor.id,
+      stat: 'attackPower',
+      amount: VENGEANCE_ATTACK_PERCENT,
+      durationTurns: VENGEANCE_DURATION_TURNS,
+    };
+  },
+};
+

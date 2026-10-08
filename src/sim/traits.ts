@@ -100,3 +100,19 @@ export function rageDamageBonusFraction(hp: number, maxHp: number): number {
   const missingFraction = 1 - Math.max(0, Math.min(1, hp / maxHp));
   return RAGE_MAX_BONUS_FRACTION * missingFraction;
 }
+
+/**
+ * The Troll Warlord's boss Trait (enemy variety pass — see data/enemies.ts):
+ * below ENRAGE_HP_FRACTION of effective max HP, its attacks deal
+ * ENRAGE_BONUS_FRACTION more damage. A step, unlike Rage's linear ramp —
+ * the fight changes phase once it's bloodied. Checked directly by
+ * actions/attack.ts's effectiveAttackPower, same convention as RAGE_TRAIT.
+ */
+export const ENRAGE_TRAIT: Trait = {
+  id: 'enrage',
+  name: 'Enrage',
+  description: 'Hits much harder once below half health.',
+};
+
+export const ENRAGE_HP_FRACTION = 0.5;
+export const ENRAGE_BONUS_FRACTION = 0.5;

@@ -1,9 +1,24 @@
 import { createAdventurer, type Adventurer, type AdventurerTemplate } from '../sim/adventurer';
-import { AttackNearestAction, AttackLowestHpAction, PowerAttackAction, CleaveAction } from '../sim/actions/attack';
+import {
+  AttackNearestAction,
+  AttackLowestHpAction,
+  PowerAttackAction,
+  CleaveAction,
+  FlankStrikeAction,
+  VenomSpitAction,
+  SearingTouchAction,
+} from '../sim/actions/attack';
+import { THORNS_TRAIT, ENRAGE_TRAIT } from '../sim/traits';
 import { HealAction } from '../sim/actions/heal';
 import { plainFaces } from '../sim/dieFace';
 import type { Row } from '../sim/formation';
-import { KOBOLD_SKIRMISHER_EXECUTE_SPECIAL, GRUNT_POWER_ATTACK_SPECIAL, SHAMAN_ATTACK_SPECIAL } from './specialActions';
+import {
+  KOBOLD_SKIRMISHER_EXECUTE_SPECIAL,
+  GRUNT_POWER_ATTACK_SPECIAL,
+  SHAMAN_ATTACK_SPECIAL,
+  SENTINEL_VENGEANCE_SPECIAL,
+  TROLL_REGENERATE_SPECIAL,
+} from './specialActions';
 
 /**
  * Extra weak enemy with a chittering buff. Hit-and-run flavor: Attack
@@ -119,6 +134,111 @@ export const SHAMAN_TEMPLATE: AdventurerTemplate = {
   specialActionPool: [{ kind: 'special-action', specialAction: SHAMAN_ATTACK_SPECIAL }],
 };
 
+// --- Enemy variety pass (docs/roadmap.md item 7): each has an enemy-only mechanic ---
+
+/** Grunt-tier loot — shared by the new light enemies below. */
+const LIGHT_LOOT = [
+  { itemId: 'rusty-dagger', dropChance: 0.3 },
+  { itemId: 'wooden-shield', dropChance: 0.25 },
+  { itemId: 'leather-armor', dropChance: 0.2 },
+  { itemId: 'lucky-ring', dropChance: 0.1 },
+];
+
+/**
+ * Lane-aware skirmisher (rooms 1-3): Flank Strike ignores its own lane and
+ * hits the front of whichever party lane is weakest — a thin lane gets
+ * punished wherever the Flanker stands (see targeting.ts's
+ * selectWeakestLaneFront). Still can't reach past a lane's front unit.
+ */
+export const GOBLIN_FLANKER_TEMPLATE: AdventurerTemplate = {
+  name: 'Goblin Flanker',
+  maxHp: 9,
+  attackPower: 5,
+  speed: 6,
+  actions: ['flank-strike'],
+  dieFaces: plainFaces(FlankStrikeAction),
+  lootTable: LIGHT_LOOT,
+  goldDrop: { chance: 0.75, min: 5, max: 15 },
+  basicAction: FlankStrikeAction,
+};
+
+/** Fragile early fire-starter (rooms 1-3): Searing Touch is a melee hit that also sets the target Burning. */
+export const EMBER_IMP_TEMPLATE: AdventurerTemplate = {
+  name: 'Ember Imp',
+  maxHp: 7,
+  attackPower: 3,
+  speed: 7,
+  actions: ['searing-touch'],
+  dieFaces: plainFaces(SearingTouchAction),
+  lootTable: [{ itemId: 'ring-of-embers', dropChance: 0.08 }, ...LIGHT_LOOT],
+  goldDrop: { chance: 0.75, min: 4, max: 12 },
+  basicAction: SearingTouchAction,
+};
+
+/**
+ * Back-row poisoner (rooms 2-4): Venom Spit is a ranged hit on the weakest
+ * party member — ignoring lanes and ranks, so a back-row healer isn't
+ * automatically safe — that also Poisons them.
+ */
+export const VENOM_SPITTER_TEMPLATE: AdventurerTemplate = {
+  name: 'Venom Spitter',
+  maxHp: 11,
+  attackPower: 3,
+  speed: 5,
+  actions: ['venom-spit'],
+  dieFaces: plainFaces(VenomSpitAction),
+  lootTable: LIGHT_LOOT,
+  goldDrop: { chance: 0.8, min: 8, max: 20 },
+  basicAction: VenomSpitAction,
+};
+
+/**
+ * Reactive tank (rooms 3-5): Spiked Carapace (THORNS_TRAIT) hurts whoever
+ * hits it in melee, and Vengeance (an on-ally-downed Special) makes it
+ * much more dangerous once its friends start falling — so it's a real
+ * question whether to kill it first or last.
+ */
+export const BONE_SENTINEL_TEMPLATE: AdventurerTemplate = {
+  name: 'Bone Sentinel',
+  maxHp: 24,
+  attackPower: 6,
+  speed: 3,
+  actions: ['attack-nearest'],
+  dieFaces: plainFaces(AttackNearestAction),
+  lootTable: [
+    { itemId: 'iron-sword', dropChance: 0.15 },
+    { itemId: 'chainmail', dropChance: 0.12 },
+  ],
+  goldDrop: { chance: 0.9, min: 18, max: 40 },
+  traits: [THORNS_TRAIT],
+  basicAction: AttackNearestAction,
+  innateSpecialActions: [SENTINEL_VENGEANCE_SPECIAL],
+};
+
+/**
+ * The finale boss (room 5, every run): Cleave as its Basic Action, plus two
+ * mechanics — Regenerate (an always-on Special healing a little each
+ * turn, so chip damage loses the race) and Enrage (ENRAGE_TRAIT: much
+ * harder hits below half HP, so the back half of the fight is the
+ * dangerous one).
+ */
+export const TROLL_WARLORD_TEMPLATE: AdventurerTemplate = {
+  name: 'Troll Warlord',
+  maxHp: 40,
+  attackPower: 9,
+  speed: 3,
+  actions: ['cleave'],
+  dieFaces: plainFaces(CleaveAction),
+  lootTable: [
+    { itemId: 'warhammer', dropChance: 0.3 },
+    { itemId: 'berserkers-totem', dropChance: 0.2 },
+  ],
+  goldDrop: { chance: 1, min: 40, max: 80 },
+  traits: [ENRAGE_TRAIT],
+  basicAction: CleaveAction,
+  innateSpecialActions: [TROLL_REGENERATE_SPECIAL],
+};
+
 export type EnemyFactory = (row: Row) => Adventurer;
 
 let nextEnemyInstanceId = 1;
@@ -145,3 +265,24 @@ export function createBrute(row: Row): Adventurer {
 export function createShaman(row: Row): Adventurer {
   return createEnemy(SHAMAN_TEMPLATE, row);
 }
+
+export function createGoblinFlanker(row: Row): Adventurer {
+  return createEnemy(GOBLIN_FLANKER_TEMPLATE, row);
+}
+
+export function createEmberImp(row: Row): Adventurer {
+  return createEnemy(EMBER_IMP_TEMPLATE, row);
+}
+
+export function createVenomSpitter(row: Row): Adventurer {
+  return createEnemy(VENOM_SPITTER_TEMPLATE, row);
+}
+
+export function createBoneSentinel(row: Row): Adventurer {
+  return createEnemy(BONE_SENTINEL_TEMPLATE, row);
+}
+
+export function createTrollWarlord(row: Row): Adventurer {
+  return createEnemy(TROLL_WARLORD_TEMPLATE, row);
+}
+

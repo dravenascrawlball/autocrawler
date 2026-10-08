@@ -200,3 +200,27 @@ export const SplashHealAction: Action = {
     return { type: 'heal', amount, targetId: context.target.id, splashes };
   },
 };
+
+/** Fraction of its effective max HP the Troll Warlord's Regenerate restores each turn. */
+export const REGENERATE_HP_FRACTION = 0.05;
+
+/**
+ * The Troll Warlord's always-on Special (enemy variety pass — see
+ * data/enemies.ts): at the start of each of its turns, heals itself for
+ * REGENERATE_HP_FRACTION of its effective max HP. No target (an idle
+ * trigger) while it's at full HP. Rewards burst damage over chip damage.
+ */
+export const RegenerateAction: Action = {
+  id: 'regenerate',
+  name: 'Regenerate',
+  reach: 'melee', // unused — always targets the actor itself
+  selectTarget(context: TargetingContext) {
+    return isHurt(context.actor) && context.actor.hp > 0 ? context.actor : null;
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const effectiveMaxHp = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
+    const amount = Math.max(1, Math.round(effectiveMaxHp * REGENERATE_HP_FRACTION));
+    context.actor.hp = Math.min(effectiveMaxHp, context.actor.hp + amount);
+    return { type: 'heal', amount, targetId: context.actor.id };
+  },
+};

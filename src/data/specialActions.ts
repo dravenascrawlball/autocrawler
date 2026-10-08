@@ -14,7 +14,7 @@ import {
   ScatterShotAction,
   FearAction,
 } from '../sim/actions/attack';
-import { SelfHealAction, HealAction, CleanseAction, ReviveAction, MendingChargeAction, SplashHealAction } from '../sim/actions/heal';
+import { SelfHealAction, HealAction, CleanseAction, ReviveAction, MendingChargeAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import {
   CommandAction,
   PotionTossAllyAction,
@@ -22,6 +22,7 @@ import {
   EmpowerAction,
   ShieldWallAction,
   GuardiansVowAction,
+  VengeanceAction,
   TauntAction,
   MarkAction,
   SilenceAction,
@@ -437,6 +438,22 @@ export const KOBOLD_SKIRMISHER_EXECUTE_SPECIAL: SpecialAction = {
   action: AttackLowestHpAction,
 };
 
+/** Bone Sentinel's reactive Special (enemy variety pass): gains a big attack buff for the rest of the fight when an ally falls. */
+export const SENTINEL_VENGEANCE_SPECIAL: SpecialAction = {
+  id: 'sentinel-vengeance',
+  name: 'Vengeance',
+  trigger: 'on-ally-downed',
+  action: VengeanceAction,
+};
+
+/** Troll Warlord's always-on Special (enemy variety pass): heals itself a little at the start of each turn. */
+export const TROLL_REGENERATE_SPECIAL: SpecialAction = {
+  id: 'troll-regenerate',
+  name: 'Regenerate',
+  trigger: 'on-turn-start',
+  action: RegenerateAction,
+};
+
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
   id: 'grunt-power-attack',
   name: 'Heavy Swing',
@@ -499,6 +516,8 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'dravena-vanish': DRAVENA_VANISH_SPECIAL,
   'melpomene-hunters-instinct': MELPOMENE_HUNTERS_INSTINCT_SPECIAL,
   'melpomene-scatter-shot': MELPOMENE_SCATTER_SHOT_SPECIAL,
+  'sentinel-vengeance': SENTINEL_VENGEANCE_SPECIAL,
+  'troll-regenerate': TROLL_REGENERATE_SPECIAL,
 };
 
 /**

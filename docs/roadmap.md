@@ -368,12 +368,37 @@ open-questions pass on what "snowballing" should actually feel like
 here before picking a mechanism — this is a design gap, not just a
 missing feature.
 
-## 7. Enemy variety — still open
+## 7. Enemy variety — shipped
 
-Carried over from before the overhaul, now reframed: the 4 enemy
-templates have kit parity with player characters (Basic + Special) but
-no enemy-only mechanic — nothing an enemy does that no player character
-also does. Also no enemy currently has a Trait.
+Five new enemies, each with an enemy-only mechanic (`data/enemies.ts`):
+
+| Enemy | Rooms | Rank | Mechanic |
+|---|---|---|---|
+| Goblin Flanker | 1-3 | front/middle | **Flank Strike**: melee on the front of the weakest party lane (`selectWeakestLaneFront`) — not bound to its own lane, but can't reach past a lane's front unit |
+| Ember Imp | 1-2 | front/middle | **Searing Touch**: melee + Burn |
+| Venom Spitter | 2-4 | back | **Venom Spit**: ranged hit on the weakest party member + Poison |
+| Bone Sentinel | 3-4 | front | **Thorns** Trait + **Vengeance** (`on-ally-downed`: +50% attack rest of fight) |
+| Troll Warlord | 5 (every run) | front | Boss: **Cleave**, **Regenerate** (5% max HP/turn while hurt), **Enrage** Trait (+50% damage below half HP) |
+
+- New sim pieces: an `attack-and-status` outcome (attack + Poison/Burn if
+  damage got through), `ENRAGE_TRAIT`, `RegenerateAction`,
+  `VengeanceAction`; enemies use `innateSpecialActions` too.
+- Room pools: every slot gained mechanic-enemy compositions; room 5 is
+  always the Troll plus support.
+- **Difficulty curve fixed**: `ROOM_SLOT_ENEMY_STAT_SCALE` →
+  `[1.8, 1.9, 2, 2.1, 2.7]`. **53.5% full clear**, and losses now climb
+  room by room (4.5% / 6.8% / 8.7% / 9.6% / 17.0%) instead of almost
+  never happening before room 4.
+- Art: all five use a placeholder sprite (copy of `default_monster.png`)
+  until real art exists.
+
+**Still open:**
+- **Cleanse** stays out of Dawneth's pool for now; revisit if Poison/Burn
+  turn out to matter a lot.
+- **Fallacy (~42%)** is now the weakest pick (field ~54%); Tharavel and
+  Melpomene (~47%) also trail. Nerissa/Gudrun (~64%) lead.
+- A **Summoner** enemy (adds joining mid-fight) was deliberately skipped
+  — needs new plumbing.
 
 ## 8. Second balance pass — shipped
 

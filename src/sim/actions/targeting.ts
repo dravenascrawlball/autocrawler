@@ -190,3 +190,27 @@ export function selectLowestHpHurtAlly(context: TargetingContext): Adventurer | 
   if (hurt.length === 0) return null;
   return hurt.reduce((lowest, candidate) => (candidate.hp < lowest.hp ? candidate : lowest));
 }
+
+/**
+ * The Goblin Flanker's reach (enemy variety pass — see
+ * actions/enemyActions.ts's FlankStrikeAction): a melee attack that isn't
+ * limited to its own lane, but still respects protection — it hits the
+ * frontmost living unit of whichever opposing lane has the lowest total
+ * living HP (ties broken toward the lower lane index). A Taunter still
+ * overrides it, same as every other selector here.
+ */
+export function selectWeakestLaneFront(context: TargetingContext): Adventurer | null {
+  const taunters = livingTaunters(context);
+  if (taunters.length > 0) return taunters[0];
+
+  const living = livingOpponents(context);
+  let best: { total: number; front: Adventurer } | null = null;
+  for (const lane of [0, 1, 2] as const) {
+    const inLane = living.filter((candidate) => candidate.position.lane === lane);
+    if (inLane.length === 0) continue;
+    const total = inLane.reduce((sum, candidate) => sum + candidate.hp, 0);
+    const front = inLane.reduce((frontmost, candidate) => (candidate.position.rank < frontmost.position.rank ? candidate : frontmost));
+    if (!best || total < best.total) best = { total, front };
+  }
+  return best?.front ?? null;
+}

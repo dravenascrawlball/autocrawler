@@ -1,12 +1,12 @@
 import type { Action, ActionContext, ActionId, ActionOutcome, TargetingContext } from '../action';
-import { selectFirstEnemy, selectLowestHpEnemy } from './targeting';
+import { selectFirstEnemy, selectLowestHpEnemy, selectWeakestLaneFront } from './targeting';
 import { getEffectiveStat } from '../stats';
 import { actionLevelPercentBonus } from '../leveling';
-import { RAGE_TRAIT, rageDamageBonusFraction } from '../traits';
+import { RAGE_TRAIT, rageDamageBonusFraction, ENRAGE_TRAIT, ENRAGE_HP_FRACTION, ENRAGE_BONUS_FRACTION } from '../traits';
 import { getOpposingRoster, getOwnRoster, getHealEnergy } from '../battle';
 import { applyBuff } from '../buffs';
 import { rollGold } from '../gold';
-import { applyPoison } from '../statusEffects';
+import { applyPoison, applyBurn, type StatusEffectId } from '../statusEffects';
 import { POISON_DAMAGE_PER_TICK, POISON_TICKS } from '../enchantments';
 import { consumeShield } from '../shields';
 import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE } from '../traits';
@@ -35,6 +35,12 @@ function effectiveAttackPower(context: ActionContext, actionId: ActionId): numbe
   if (hasRage) {
     const effectiveMaxHp = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
     power *= 1 + rageDamageBonusFraction(context.actor.hp, effectiveMaxHp);
+  }
+
+  const hasEnrage = context.actor.traits.some((trait) => trait.id === ENRAGE_TRAIT.id);
+  if (hasEnrage) {
+    const effectiveMaxHp = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
+    if (context.actor.hp < effectiveMaxHp * ENRAGE_HP_FRACTION) power *= 1 + ENRAGE_BONUS_FRACTION;
   }
 
   return power;
@@ -721,3 +727,80 @@ export const ScatterShotAction: Action = {
     return { type: 'attack-multi', hits };
   },
 };
+
+// --- Enemy variety pass (docs/roadmap.md item 7): enemy-only attacks ---
+
+/**
+ * Goblin Flanker's Basic Action: a melee hit that isn't bound to its own
+ * lane — it goes for the front of whichever party lane is weakest (lowest
+ * total HP), so a thin lane gets punished even if nobody stands in front of
+ * the Flanker. Still can't reach past a lane's front unit (see
+ * targeting.ts's selectWeakestLaneFront).
+ */
+export const FlankStrikeAction: Action = {
+  id: 'flank-strike',
+  name: 'Flank Strike',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectWeakestLaneFront(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'flank-strike');
+    return { type: 'attack', ...applyAttackToTarget(context, damage, context.target) };
+  },
+};
+
+/** Damage-over-time magnitudes the enemy status attacks apply — placeholders tuned by the balance sim. */
+export const VENOM_SPIT_POISON_PER_TICK = 2;
+export const VENOM_SPIT_POISON_TICKS = 3;
+export const SEARING_TOUCH_BURN_PER_TICK = 2;
+export const SEARING_TOUCH_BURN_TICKS = 2;
+
+/** Shared by Venom Spit/Searing Touch: a normal attack that also applies a status effect if any damage got through. */
+function resolveAttackAndStatus(
+  context: ActionContext,
+  actionId: ActionId,
+  effectId: StatusEffectId,
+  damagePerTick: number,
+  ticks: number,
+): ActionOutcome {
+  const damage = effectiveAttackPower(context, actionId);
+  const attackHit = applyAttackToTarget(context, damage, context.target);
+  const statusApplied = attackHit.damage > 0 && context.target.hp > 0;
+  if (statusApplied) {
+    if (effectId === 'poison') applyPoison(context.target, damagePerTick, ticks);
+    else applyBurn(context.target, damagePerTick, ticks);
+  }
+  return { type: 'attack-and-status', ...attackHit, effectId, statusApplied };
+}
+
+/**
+ * Venom Spitter's Basic Action: a ranged hit on the weakest reachable party
+ * member (ranged — ignores lanes and ranks) that also poisons them, so a
+ * back-row healer isn't automatically safe from it.
+ */
+export const VenomSpitAction: Action = {
+  id: 'venom-spit',
+  name: 'Venom Spit',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    return resolveAttackAndStatus(context, 'venom-spit', 'poison', VENOM_SPIT_POISON_PER_TICK, VENOM_SPIT_POISON_TICKS);
+  },
+};
+
+/** Ember Imp's Basic Action: a melee hit (lane rules apply) that also sets the target on fire. */
+export const SearingTouchAction: Action = {
+  id: 'searing-touch',
+  name: 'Searing Touch',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    return resolveAttackAndStatus(context, 'searing-touch', 'burn', SEARING_TOUCH_BURN_PER_TICK, SEARING_TOUCH_BURN_TICKS);
+  },
+};
+

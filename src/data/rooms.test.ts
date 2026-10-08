@@ -125,3 +125,12 @@ describe('enemy grid placement', () => {
     expect(lanes.size).toBe(3);
   });
 });
+
+describe('finale boss', () => {
+  it('always puts the Troll Warlord in room 5', () => {
+    for (let seed = 0; seed < 100; seed++) {
+      const finale = createStarterDungeonRooms(createSeededRng(seed))[4];
+      expect(finale.enemies.map((e) => e.name)).toContain('Troll Warlord');
+    }
+  });
+});

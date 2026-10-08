@@ -49,10 +49,16 @@ systems that don't exist yet.
 | Grunt | Attack Nearest | **Heavy Swing** (`on-turn-start`) — bonus Power Attack |
 | Brute | Cleave | — |
 | Shaman | Heal | **Lash Out** (`on-turn-start`) — bonus Attack Nearest |
+| Goblin Flanker | **Flank Strike** — melee on the front of the weakest party lane (ignores its own lane) | — |
+| Ember Imp | **Searing Touch** — melee hit that applies Burn | — |
+| Venom Spitter | **Venom Spit** — ranged hit on the weakest party member that applies Poison | — |
+| Bone Sentinel | Attack Nearest | Always: **Vengeance** (`on-ally-downed`) — +50% attack for the rest of the fight. Trait: **Thorns** |
+| Troll Warlord (boss, every room 5) | Cleave | Always: **Regenerate** (`on-turn-start`) — heals 5% max HP while hurt. Trait: **Enrage** — +50% damage below half HP |
 
-No enemy has a Trait yet — flagged on the roadmap as "enemy variety —
-still open": kit parity with players exists, but nothing an enemy does
-that no player character also does.
+Enemy-only mechanics (enemy variety pass): Flank Strike, Venom Spit,
+Searing Touch, Vengeance, Regenerate and Enrage. Enemy rank rules live in
+`data/rooms.ts`'s `ENEMY_RANK_OPTIONS`; all five new enemies use a
+placeholder sprite (a copy of `default_monster.png`) until real art.
 
 ## What nobody has yet
 

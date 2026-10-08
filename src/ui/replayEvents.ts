@@ -73,6 +73,19 @@ export function outcomeToReplayEvents(
         color: '#ffd700',
       });
     }
+  } else if (outcome.type === 'attack-and-status') {
+    // Venom Spit / Searing Touch (enemy variety pass) — a plain attack, plus an announcement over
+    // the target if the poison/burn actually took hold.
+    events.push({ type: 'attack', actorId, targetId: outcome.targetId, damage: outcome.damage, hit: outcome.hit });
+    if (outcome.statusApplied) {
+      const isPoison = outcome.effectId === 'poison';
+      events.push({
+        type: 'announce',
+        actorId: outcome.targetId,
+        text: isPoison ? 'Poisoned!' : 'Burning!',
+        color: isPoison ? '#88cc44' : '#ff8833',
+      });
+    }
   } else if (outcome.type === 'attack-and-debuff') {
     // Dravena's Blinding Bolt (roadmap item 11) — the attack half plays exactly like a plain
     // 'attack'; a landed hit that also blinded the target gets an announcement over them.

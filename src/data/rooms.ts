@@ -2,7 +2,18 @@ import type { RoomDefinition } from '../sim/dungeonRun';
 import type { RngSource } from '../sim/rng';
 import type { Adventurer } from '../sim/adventurer';
 import { findFreeCell, samePosition, type GridPosition, type Lane, type Rank } from '../sim/formation';
-import { createGrunt, createBrute, createShaman, type EnemyFactory, createKoboldSkirmisher } from './enemies';
+import {
+  createGrunt,
+  createBrute,
+  createShaman,
+  createKoboldSkirmisher,
+  createGoblinFlanker,
+  createEmberImp,
+  createVenomSpitter,
+  createBoneSentinel,
+  createTrollWarlord,
+  type EnemyFactory,
+} from './enemies';
 
 /**
  * Which ranks each enemy archetype may stand in (see placeEnemies): Brute
@@ -14,6 +25,11 @@ export const ENEMY_RANK_OPTIONS: Record<string, Rank[]> = {
   Grunt: [0, 1],
   'Kobold Skirmisher': [0, 1],
   Shaman: [2],
+  'Goblin Flanker': [0, 1],
+  'Ember Imp': [0, 1],
+  'Venom Spitter': [2],
+  'Bone Sentinel': [0],
+  'Troll Warlord': [0],
 };
 
 const BACK_RANK: Rank = 2;
@@ -100,6 +116,11 @@ const grunt = createGrunt;
 const brute = createBrute;
 const shaman = createShaman;
 const kobold = createKoboldSkirmisher;
+const flanker = createGoblinFlanker;
+const imp = createEmberImp;
+const spitter = createVenomSpitter;
+const sentinel = createBoneSentinel;
+const troll = createTrollWarlord;
 
 /**
  * Five difficulty slots (opener -> finale), each a pool of 2-3
@@ -116,33 +137,39 @@ const kobold = createKoboldSkirmisher;
  * with support, and Brute+Brute stays excluded (too swingy for any slot).
  */
 export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
-  // Slot 1 (opener): a single weak enemy, or a pair of weaker ones.
-  [[grunt], [shaman], [kobold, kobold]],
+  // Slot 1 (opener): a single weak enemy, or a pair of weaker ones. The
+  // enemy variety pass added mechanic enemies here so the opener can
+  // actually cost something (it previously almost never ended a run).
+  [[grunt], [shaman], [kobold, kobold], [flanker, kobold], [imp, imp]],
   // Slot 2: a light pair/trio.
   [
     [grunt, grunt],
     [grunt, shaman],
     [kobold, kobold, kobold],
+    [flanker, imp],
+    [grunt, spitter],
   ],
-  // Slot 3 (mid): still Brute-free (see above), but a real trio now rather
-  // than the old support-only pairs — the second balance pass measured this
-  // slot as a breather (parties left it at ~97% HP).
+  // Slot 3 (mid): still Brute-free (see above), but always a real fight.
   [
     [grunt, shaman, shaman],
     [grunt, grunt, shaman],
     [grunt, kobold, kobold, kobold],
+    [sentinel, spitter],
+    [flanker, flanker, imp],
   ],
   // Slot 4: first heavy enemy, now with support.
   [
     [grunt, brute],
     [brute, kobold, kobold],
     [brute, shaman],
+    [sentinel, flanker, spitter],
+    [brute, imp, imp],
   ],
-  // Slot 5 (finale): a Brute plus a full supporting cast.
+  // Slot 5 (finale): always the Troll Warlord boss, plus support.
   [
-    [grunt, brute, shaman],
-    [brute, kobold, kobold, shaman],
-    [grunt, grunt, brute],
+    [troll, shaman],
+    [troll, spitter],
+    [troll, flanker, kobold],
   ],
 ];
 
@@ -155,8 +182,11 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
  * while still escalating. Steep because ROOM_SLOT_CLEAR_GOLD lets the
  * party grow by ~1 member per room (3 at room 1 -> ~7 by the finale), so
  * enemies have to outscale a much bigger board — retune both together.
+ * Rooms 1-2 start well above 1 since the enemy variety pass: at 1 they
+ * almost never ended a run; now losses climb steadily room by room, with
+ * the room-5 boss the biggest single wall.
  */
-export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1.3, 1.7, 2.1, 2.5];
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1.8, 1.9, 2, 2.1, 2.7];
 
 /**
  * Flat gold paid for winning each slot's room (opener -> finale), on top of

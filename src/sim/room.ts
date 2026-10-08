@@ -37,7 +37,8 @@ function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: Bat
     outcome.type === 'attack' ||
     outcome.type === 'attack-and-buff' ||
     outcome.type === 'attack-and-gold' ||
-    outcome.type === 'attack-and-debuff'
+    outcome.type === 'attack-and-debuff' ||
+    outcome.type === 'attack-and-status'
   ) {
     const target = findUnitById(battle, outcome.targetId);
     unit.runDamageDealt += outcome.damage;

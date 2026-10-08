@@ -33,6 +33,11 @@ export type ActionId =
   | 'shield-wall'
   | 'splash-heal'
   | 'guardians-vow'
+  | 'flank-strike'
+  | 'venom-spit'
+  | 'searing-touch'
+  | 'regenerate'
+  | 'vengeance'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
@@ -193,6 +198,19 @@ export type ActionOutcome =
    * `hit` is false), kept as its own field so the replay UI doesn't need
    * to re-derive it.
    */
+  /**
+   * An attack that also inflicts a status effect if any damage got through
+   * (enemy variety pass — Venom Spit's poison, Searing Touch's burn; see
+   * actions/attack.ts's resolveAttackAndStatus).
+   */
+  | {
+      type: 'attack-and-status';
+      damage: number;
+      hit: boolean;
+      targetId: string;
+      effectId: StatusEffectId;
+      statusApplied: boolean;
+    }
   | {
       type: 'attack-and-debuff';
       damage: number;
