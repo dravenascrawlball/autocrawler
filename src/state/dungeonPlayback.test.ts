@@ -39,7 +39,7 @@ function baseSave(overrides: Partial<GameState['activeRun']> = {}): GameState {
     },
     recruitmentPool: [],
     runHistory: { clearedWithIds: [], characterStats: {} },
-    metaProgression: { renown: 0, unlockedKitIds: {} },
+    metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
   };
 }
 

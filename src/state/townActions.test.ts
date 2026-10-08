@@ -25,7 +25,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 describe('townActions', () => {
   beforeEach(() => {
     roster.set({ adventurers: [], recruitedIds: [] });
-    metaProgression.set({ renown: 0, unlockedKitIds: {} });
+    metaProgression.set({ renown: 0, unlockedKitIds: {}, trainingRanks: {} });
   });
 
   describe('recruitAdventurer', () => {
@@ -40,7 +40,7 @@ describe('townActions', () => {
       const other = makeCandidate('candidate-b', 60);
       recruitmentPool.set([candidate, other]);
       roster.set({ adventurers: [candidate.adventurer, other.adventurer], recruitedIds: [] });
-      metaProgression.set({ renown: 100, unlockedKitIds: {} });
+      metaProgression.set({ renown: 100, unlockedKitIds: {}, trainingRanks: {} });
 
       const succeeded = recruitAdventurer('candidate-a');
 
@@ -54,7 +54,7 @@ describe('townActions', () => {
       const candidate = makeCandidate('candidate-a', 50);
       recruitmentPool.set([candidate]);
       roster.set({ adventurers: [candidate.adventurer], recruitedIds: [] });
-      metaProgression.set({ renown: 10, unlockedKitIds: {} });
+      metaProgression.set({ renown: 10, unlockedKitIds: {}, trainingRanks: {} });
 
       const succeeded = recruitAdventurer('candidate-a');
 
@@ -74,7 +74,7 @@ describe('townActions', () => {
     const [firstEntry] = KIT_SHOP_CATALOG;
 
     it('deducts the Kit price and records the unlock when affordable', () => {
-      metaProgression.set({ renown: 100, unlockedKitIds: {} });
+      metaProgression.set({ renown: 100, unlockedKitIds: {}, trainingRanks: {} });
 
       const succeeded = buyKitFromShop(firstEntry.characterName, firstEntry.kit.id);
 
@@ -84,7 +84,7 @@ describe('townActions', () => {
     });
 
     it('fails cleanly when Renown is insufficient', () => {
-      metaProgression.set({ renown: 0, unlockedKitIds: {} });
+      metaProgression.set({ renown: 0, unlockedKitIds: {}, trainingRanks: {} });
 
       const succeeded = buyKitFromShop(firstEntry.characterName, firstEntry.kit.id);
 
@@ -94,7 +94,7 @@ describe('townActions', () => {
     });
 
     it('returns false for a kit/character pairing not in the catalog', () => {
-      metaProgression.set({ renown: 1000, unlockedKitIds: {} });
+      metaProgression.set({ renown: 1000, unlockedKitIds: {}, trainingRanks: {} });
       expect(buyKitFromShop('Nobody', 'nonexistent-kit')).toBe(false);
     });
   });

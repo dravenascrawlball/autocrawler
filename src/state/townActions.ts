@@ -7,6 +7,8 @@ import { recruitAdventurer as simRecruitAdventurer } from '../sim/recruitment';
 import { buyKit as simBuyKit } from '../sim/shop';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { recruitmentPool } from './recruitmentPool';
+import { trainingCost } from '../sim/training';
+import { applyTrainingFromProgress } from './progression';
 
 /**
  * Sim functions mutate the Adventurer/inventory objects in place; Svelte's
@@ -82,3 +84,30 @@ export function buyKitFromShop(characterName: string, kitId: string): boolean {
   touchMetaProgression();
   return true;
 }
+
+/**
+ * Buys the next Training rank for `characterName` with Renown (roadmap item
+ * 5 — see sim/training.ts): deducts trainingCost, bumps the rank, and
+ * applies it to their roster record right away. Returns false (no-op) at
+ * the cap or without enough Renown.
+ */
+export function buyTrainingRank(characterName: string): boolean {
+  const state = get(metaProgression);
+  const rank = state.trainingRanks[characterName] ?? 0;
+  const cost = trainingCost(rank);
+  if (cost === null || state.renown < cost) {
+    return false;
+  }
+
+  metaProgression.set({
+    ...state,
+    renown: state.renown - cost,
+    trainingRanks: { ...state.trainingRanks, [characterName]: rank + 1 },
+  });
+  for (const adventurer of get(roster).adventurers.filter((candidate) => candidate.name === characterName)) {
+    applyTrainingFromProgress(adventurer);
+  }
+  touchRoster();
+  return true;
+}
+

@@ -15,7 +15,8 @@ import { CHARACTER_TEMPLATES } from '../data/characters';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
-import { rerollPoolPicks, type Adventurer } from './adventurer';
+import { rerollPoolPicks, effectiveMaxHp, type Adventurer } from './adventurer';
+import { applyTraining } from './training';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 
 /**
@@ -33,6 +34,8 @@ import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 const RUNS = Number(process.env.BALANCE_SIM_RUNS ?? 2000);
 /** BALANCE_SIM_UNLOCKS=1 simulates a veteran profile: every character's unlock (data/characterUnlocks.ts) already earned and in their pool. */
 const ALL_UNLOCKS = Boolean(process.env.BALANCE_SIM_UNLOCKS);
+/** BALANCE_SIM_TRAINING=<rank> gives every character that Training rank (sim/training.ts) — 5 with BALANCE_SIM_UNLOCKS=1 is a fully grown profile. */
+const TRAINING_RANK = Number(process.env.BALANCE_SIM_TRAINING ?? 0);
 const ROOM_COUNT = 5;
 /** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
 const ECON_ARCHETYPES = new Set(['Nerissa']);
@@ -148,6 +151,12 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
           const template = CHARACTER_TEMPLATES.find((t) => t.name === adventurer.name);
           const unlocks = (CHARACTER_UNLOCK_POOL[adventurer.name] ?? []).map((unlock) => unlock.entry);
           if (template) rerollPoolPicks(adventurer, template, unlocks, [], rng);
+        }
+      }
+      if (TRAINING_RANK > 0) {
+        for (const adventurer of roster) {
+          applyTraining(adventurer, TRAINING_RANK);
+          adventurer.hp = effectiveMaxHp(adventurer);
         }
       }
       const rooms = createStarterDungeonRooms(rng);

@@ -5,6 +5,8 @@
   import { clearUnlocksFor, kitsFor } from '../state/progression';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
   import ShopView from './ShopView.svelte';
+  import { buyTrainingRank } from '../state/townActions';
+  import { MAX_TRAINING_RANK, TRAINING_PERCENT_PER_RANK, trainingCost } from '../sim/training';
 
   /**
    * The Progress screen (roadmap item 3, replacing the Town hub's old
@@ -19,7 +21,17 @@
     const kits = kitsFor(adventurer.name, $metaProgression.unlockedKitIds);
     const goals = unlocks.length + kits.length;
     const earned = unlocks.filter((u) => u.earned).length + kits.filter((k) => k.owned).length;
-    return { adventurer, stats: $runHistory.characterStats[adventurer.id], unlocks, kits, goals, earned };
+    const trainingRank = $metaProgression.trainingRanks[adventurer.name] ?? 0;
+    return {
+      adventurer,
+      stats: $runHistory.characterStats[adventurer.id],
+      unlocks,
+      kits,
+      goals,
+      earned,
+      trainingRank,
+      nextTrainingCost: trainingCost(trainingRank),
+    };
   });
   $: totalGoals = rows.reduce((sum, row) => sum + row.goals, 0);
   $: totalEarned = rows.reduce((sum, row) => sum + row.earned, 0);
@@ -29,7 +41,8 @@
   <h2>Progress <span class="progress__renown">{$metaProgression.renown} Renown</span></h2>
   <p class="progress__summary">
     {totalEarned} of {totalGoals} unlocks earned. Renown comes from every room you clear, plus a bonus for finishing a
-    run.
+    run. Training permanently adds +{TRAINING_PERCENT_PER_RANK}% HP, attack and healing per rank (max
+    {MAX_TRAINING_RANK}).
   </p>
 
   <ul class="progress-list">
@@ -69,6 +82,20 @@
             <li class="goal--none">No unlocks yet</li>
           {/if}
         </ul>
+        <div class="progress-row__training">
+          <span class="training__rank">Training {row.trainingRank}/{MAX_TRAINING_RANK}</span>
+          {#if row.nextTrainingCost !== null}
+            <button
+              type="button"
+              disabled={$metaProgression.renown < row.nextTrainingCost}
+              on:click={() => buyTrainingRank(row.adventurer.name)}
+            >
+              Train — {row.nextTrainingCost} Renown
+            </button>
+          {:else}
+            <span class="training__max">Max</span>
+          {/if}
+        </div>
       </li>
     {/each}
   </ul>
@@ -148,6 +175,22 @@
     gap: 4px 14px;
     font-size: 13px;
     color: var(--text);
+  }
+
+  .progress-row__training {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .training__rank {
+    color: var(--text-muted);
+  }
+
+  .training__max {
+    color: var(--gold-bright);
   }
 
   .goal--locked {

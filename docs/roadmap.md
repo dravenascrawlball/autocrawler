@@ -386,16 +386,24 @@ Every unit now has its own cell, and lanes matter in combat.
 - ~~Dawneth fell further behind~~ — resolved by the healer redesign
   (see item 8's follow-up).
 
-## 5. Permanent stat growth
+## 5. Permanent stat growth — shipped (Training)
 
-Deferred from the meta-progression step — the plan always described
-unlockable pool entries *and* "optionally" permanent stat growth, but
-only the pool-unlock half was built. Still needs: what grants it (a
-Renown purchase? a per-character milestone using
-`runHistory.characterStats`?), how much, how it's capped, and how it
-coexists with in-run level-ups (duplicate recruits, +25% stats each) and
-the balance sim's ~50-60% target without making early runs trivial. Would
-surface naturally on the Progress screen (item 3).
+Renown now has a second use: **Training ranks** per character, bought on
+the Progress screen (`sim/training.ts`, `state/townActions.ts`'s
+`buyTrainingRank`, persisted in `metaProgression.trainingRanks` — older
+saves load with none).
+
+- 5 ranks, each **+2% max HP, attack and heal power** (+10% at max),
+  costing 20 / 30 / 40 / 50 / 60 Renown (200 to max one character).
+- Applied as `source: 'training'` StatModifiers whenever a character is
+  rebuilt in town — after a run's reset, on New Game (Training is profile
+  progress, like Renown), and right on purchase — and HP is topped up to
+  the new effective max.
+- Shown on the Progress screen (rank + Train button per character) and the
+  character sheet.
+- Balance (`BALANCE_SIM_TRAINING=5 BALANCE_SIM_UNLOCKS=1` = fully grown):
+  fresh **~54%** full clear, fully grown **68.9%** — inside the agreed
+  50-55% / 65-70% targets. +4%/rank tested at 82%, +3% at 75.5%.
 
 ## 6. In-run scaling/progression
 

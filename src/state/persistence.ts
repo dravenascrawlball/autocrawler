@@ -243,6 +243,7 @@ function serializeGameState(state: GameState): SerializedGameState {
     metaProgression: {
       renown: state.metaProgression.renown,
       unlockedKitIds: { ...state.metaProgression.unlockedKitIds },
+      trainingRanks: { ...state.metaProgression.trainingRanks },
     },
   };
 }
@@ -264,9 +265,11 @@ function deserializeGameState(raw: SerializedGameState): GameState {
       clearedWithIds: [...raw.runHistory.clearedWithIds],
       characterStats: { ...(raw.runHistory.characterStats ?? {}) },
     },
+    // trainingRanks arrived after v17 (Training — roadmap item 5); an older save has none yet.
     metaProgression: {
       renown: raw.metaProgression.renown,
       unlockedKitIds: { ...raw.metaProgression.unlockedKitIds },
+      trainingRanks: { ...(raw.metaProgression.trainingRanks ?? {}) },
     },
   };
 }

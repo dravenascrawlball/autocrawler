@@ -8,12 +8,12 @@ import { KIT_SHOP_CATALOG } from '../data/kitShop';
 
 describe('ShopView', () => {
   beforeEach(() => {
-    metaProgression.set({ renown: 0, unlockedKitIds: {} });
+    metaProgression.set({ renown: 0, unlockedKitIds: {}, trainingRanks: {} });
   });
 
   it('lists every Kit in the catalog, disabling Buy when Renown is insufficient', () => {
     const [entry] = KIT_SHOP_CATALOG;
-    metaProgression.set({ renown: entry.price - 1, unlockedKitIds: {} });
+    metaProgression.set({ renown: entry.price - 1, unlockedKitIds: {}, trainingRanks: {} });
 
     render(ShopView);
 
@@ -23,7 +23,7 @@ describe('ShopView', () => {
 
   it('buying a Kit deducts Renown and marks it Owned', async () => {
     const [entry] = KIT_SHOP_CATALOG;
-    metaProgression.set({ renown: entry.price, unlockedKitIds: {} });
+    metaProgression.set({ renown: entry.price, unlockedKitIds: {}, trainingRanks: {} });
 
     render(ShopView);
 

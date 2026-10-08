@@ -4,6 +4,7 @@
   import { runHistory } from '../state/runHistory';
   import { metaProgression } from '../state/metaProgression';
   import { clearUnlocksFor, kitsFor } from '../state/progression';
+  import { MAX_TRAINING_RANK, TRAINING_PERCENT_PER_RANK } from '../sim/training';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
   import { portraitAssetPath } from './portraits';
   import ImageReportButton from './ImageReportButton.svelte';
@@ -16,6 +17,7 @@
   $: stats = adventurer ? $runHistory.characterStats[adventurer.id] : undefined;
   $: clearUnlocks = adventurer ? clearUnlocksFor(adventurer.name, adventurer.id, $runHistory) : [];
   $: kits = adventurer ? kitsFor(adventurer.name, $metaProgression.unlockedKitIds) : [];
+  $: trainingRank = adventurer ? ($metaProgression.trainingRanks[adventurer.name] ?? 0) : 0;
 
   function fallbackToIdle(event: Event, archetype: string): void {
     const img = event.currentTarget as HTMLImageElement;
@@ -151,6 +153,9 @@
             {:else}
               Not taken on a run yet.
             {/if}
+            <br />
+            Training {trainingRank}/{MAX_TRAINING_RANK}{#if trainingRank > 0}
+              (+{trainingRank * TRAINING_PERCENT_PER_RANK}% HP, attack, healing){/if}
           </p>
           {#if clearUnlocks.length === 0 && kits.length === 0}
             <p class="empty-state">Nothing to unlock yet.</p>

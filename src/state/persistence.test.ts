@@ -82,7 +82,7 @@ describe('saveGame / loadGame', () => {
       activeRun: null,
       recruitmentPool: [],
       runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
 
     const storage = createMemoryStorage();
@@ -134,7 +134,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 2,
       activeRun,
       recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
 
     const storage = createMemoryStorage();
@@ -205,7 +205,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 3,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
 
     const storage = createMemoryStorage();
@@ -231,7 +231,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 0,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
 
     const storage = createMemoryStorage();
@@ -261,7 +261,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 0,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
 
     expect(() => saveGame(state, throwingStorage)).not.toThrow();
@@ -284,7 +284,7 @@ describe('loadGame: kit drift repair (healer redesign)', () => {
       activeRun: null,
       recruitmentPool: [],
       runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 42, unlockedKitIds: {} },
+      metaProgression: { renown: 42, unlockedKitIds: {}, trainingRanks: {} },
     };
     const storage = createMemoryStorage();
     saveGame(state, storage);
@@ -309,7 +309,7 @@ describe('loadGame: runHistory.characterStats', () => {
       activeRun: null,
       recruitmentPool: [],
       runHistory: { clearedWithIds: ['a'], characterStats: { a: { runs: 2, clears: 1, bestRoomsWon: 5 } } },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
     const storage = createMemoryStorage();
     saveGame(state, storage);
@@ -324,7 +324,7 @@ describe('loadGame: runHistory.characterStats', () => {
       activeRun: null,
       recruitmentPool: [],
       runHistory: { clearedWithIds: [], characterStats: {} },
-      metaProgression: { renown: 0, unlockedKitIds: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {}, trainingRanks: {} },
     };
     const storage = createMemoryStorage();
     saveGame(state, storage);

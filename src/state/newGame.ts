@@ -9,6 +9,7 @@ import { clearOpeningShop } from './openingShop';
 import { createStarterRoster } from '../data/roster';
 import { STARTER_TOWN_ITEMS } from '../data/items';
 import { createTownStorage } from '../sim/townStorage';
+import { applyTrainingFromProgress } from './progression';
 
 /**
  * Wipes the current save and resets every store to exactly what a brand
@@ -26,7 +27,10 @@ import { createTownStorage } from '../sim/townStorage';
  * Game doesn't erase it.
  */
 export function resetGame(): void {
-  roster.set({ adventurers: createStarterRoster(), recruitedIds: [] });
+  const adventurers = createStarterRoster();
+  // Training is profile progress (like Renown and unlocks), so it survives a New Game.
+  adventurers.forEach(applyTrainingFromProgress);
+  roster.set({ adventurers, recruitedIds: [] });
 
   const storage = createTownStorage();
   storage.items.push(...STARTER_TOWN_ITEMS);

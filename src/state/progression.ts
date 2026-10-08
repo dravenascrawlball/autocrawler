@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import type { Adventurer } from '../sim/adventurer';
-import { rerollPoolPicks } from '../sim/adventurer';
+import { rerollPoolPicks, effectiveMaxHp } from '../sim/adventurer';
+import { applyTraining } from '../sim/training';
 import type { ActionId } from '../sim/action';
 import type { CharacterPoolEntry } from '../sim/characterPool';
 import type { DungeonOutcome } from '../sim/dungeonRun';
@@ -157,3 +158,16 @@ export interface RunReward {
 }
 
 export const lastRunReward = writable<RunReward | null>(null);
+
+/**
+ * Re-applies `adventurer`'s Training rank (metaProgression.trainingRanks,
+ * by character name — see sim/training.ts) and tops their HP up to the
+ * new effective max. Called wherever a town-side character is rebuilt:
+ * after a run's reset (dungeonOrchestrator.ts's finishDungeonRun), on New
+ * Game (newGame.ts), and right after buying a rank (townActions.ts).
+ */
+export function applyTrainingFromProgress(adventurer: Adventurer): void {
+  applyTraining(adventurer, get(metaProgression).trainingRanks[adventurer.name] ?? 0);
+  adventurer.hp = effectiveMaxHp(adventurer);
+}
+

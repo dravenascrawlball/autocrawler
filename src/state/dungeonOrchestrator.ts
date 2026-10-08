@@ -21,7 +21,7 @@ import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
 import { levelUpAdventurer } from '../sim/leveling';
 import { applyRelicToAdventurer, applyActiveRelicsToAdventurer, type Relic } from '../sim/relics';
 import { calculateRunRenownBreakdown } from '../sim/renown';
-import { newUnlocksForRun, lastRunReward, unlockedPoolEntriesFor, unlockedKitsFor } from './progression';
+import { newUnlocksForRun, lastRunReward, unlockedPoolEntriesFor, unlockedKitsFor, applyTrainingFromProgress } from './progression';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
 import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
@@ -421,6 +421,7 @@ export function finishDungeonRun(): void {
         undefined,
         unlockedKitsFor(template.name, unlockedKitIds),
       );
+      applyTrainingFromProgress(adventurer);
     }
   }
 

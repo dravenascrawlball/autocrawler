@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createAdventurer, rerollPoolPicks } from '../sim/adventurer';
+import { get } from 'svelte/store';
+import { roster } from './roster';
+import { metaProgression } from './metaProgression';
+import { buyTrainingRank } from './townActions';
+import { createAdventurer, rerollPoolPicks, effectiveMaxHp } from '../sim/adventurer';
 import { THARAVEL_TEMPLATE, GUDRUN_TEMPLATE, FALLACY_TEMPLATE, MIRA_TEMPLATE, CHARACTER_TEMPLATES } from '../data/characters';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
@@ -83,5 +87,21 @@ describe('kitsFor', () => {
     const kits = kitsFor(entry.characterName, { [entry.characterName]: [entry.kit.id] });
     expect(kits).toContainEqual(expect.objectContaining({ kitId: entry.kit.id, owned: true, price: entry.price }));
     expect(kitsFor(entry.characterName, {}).every((kit) => !kit.owned)).toBe(true);
+  });
+});
+
+describe('buyTrainingRank', () => {
+  it('spends Renown, raises the rank, and applies it to the roster character at full HP', () => {
+    const gudrun = createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front');
+    roster.set({ adventurers: [gudrun], recruitedIds: [] });
+    metaProgression.set({ renown: 55, unlockedKitIds: {}, trainingRanks: {} });
+
+    expect(buyTrainingRank('Gudrun')).toBe(true);
+    expect(buyTrainingRank('Gudrun')).toBe(true); // 20 + 30
+    expect(buyTrainingRank('Gudrun')).toBe(false); // 40 more, only 5 left
+
+    expect(get(metaProgression)).toMatchObject({ renown: 5, trainingRanks: { Gudrun: 2 } });
+    expect(gudrun.modifiers.filter((m) => m.source === 'training')).toHaveLength(3);
+    expect(gudrun.hp).toBe(effectiveMaxHp(gudrun));
   });
 });

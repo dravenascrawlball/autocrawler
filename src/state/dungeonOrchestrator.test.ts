@@ -62,7 +62,7 @@ describe('startDungeon / finishDungeonRun', () => {
     dungeonPlayback.set(null);
     activeRun.set(null);
     runHistory.set({ clearedWithIds: [], characterStats: {} });
-    metaProgression.set({ renown: 0, unlockedKitIds: {} });
+    metaProgression.set({ renown: 0, unlockedKitIds: {}, trainingRanks: {} });
   });
 
   it('finishing a run records per-character stats and the reward the town toast shows', () => {

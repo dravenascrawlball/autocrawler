@@ -15,10 +15,12 @@ export interface MetaProgressionState {
   renown: number;
   /** Character name (matches AdventurerTemplate.name) -> ids of Kits bought from the Shop — merged into that character's kitPool at their next creation/reset (see sim/adventurer.ts). */
   unlockedKitIds: Record<string, string[]>;
+  /** Character name -> Training rank bought with Renown (0 when absent) — see sim/training.ts. */
+  trainingRanks: Record<string, number>;
 }
 
 function createInitialMetaProgressionState(): MetaProgressionState {
-  return INITIAL_SAVE?.metaProgression ?? { renown: 0, unlockedKitIds: {} };
+  return INITIAL_SAVE?.metaProgression ?? { renown: 0, unlockedKitIds: {}, trainingRanks: {} };
 }
 
 /** Sourced from a save if one exists, otherwise nobody's earned any Renown yet. */
