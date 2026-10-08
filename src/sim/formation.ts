@@ -70,3 +70,103 @@ export function resolveDefaultRow(template: RowDefaultSource): Row {
 export function isAdjacent(a: GridPosition, b: GridPosition): boolean {
   return Math.abs(a.lane - b.lane) + Math.abs(a.rank - b.rank) === 1;
 }
+
+export type Lane = GridPosition['lane'];
+export type Rank = GridPosition['rank'];
+
+/** Whether `a` and `b` are the same cell. */
+export function samePosition(a: GridPosition, b: GridPosition): boolean {
+  return a.lane === b.lane && a.rank === b.rank;
+}
+
+/** Lane search order for auto-placement within a rank: center first, then left, then right. */
+const AUTO_PLACE_LANE_ORDER: Lane[] = [1, 0, 2];
+
+/**
+ * The first free cell for auto-placing a unit that prefers `preferredRank`:
+ * that rank first (center lane, then left, then right), then the other
+ * ranks nearest-first (ties toward the front). Null only when all 9 cells
+ * are taken.
+ */
+export function findFreeCell(occupied: GridPosition[], preferredRank: Rank): GridPosition | null {
+  const ranks = ([0, 1, 2] as Rank[]).sort(
+    (a, b) => Math.abs(a - preferredRank) - Math.abs(b - preferredRank) || a - b,
+  );
+  for (const rank of ranks) {
+    for (const lane of AUTO_PLACE_LANE_ORDER) {
+      const cell: GridPosition = { lane, rank };
+      if (!occupied.some((position) => samePosition(position, cell))) return cell;
+    }
+  }
+  return null;
+}
+
+/** Minimal shape the placement helpers below need — an Adventurer satisfies it, without this module importing adventurer.ts (which already imports this one). */
+export interface Placeable {
+  id: string;
+  position: GridPosition;
+}
+
+/**
+ * Enforces "one unit per cell" on `units` in place: the first unit in a
+ * cell keeps it, and any later unit sharing it is moved to the nearest free
+ * cell around its own rank (see findFreeCell). Called at the start of every
+ * room (dungeonRun.ts's resolveNextRoom), so a party can never fight
+ * stacked — covers saves from before positions were unique, and any recruit
+ * who joined without being placed. Leaves a unit where it is only if all 9
+ * cells are already taken.
+ */
+export function assignUniquePositions(units: Placeable[]): void {
+  const taken: GridPosition[] = [];
+  for (const unit of units) {
+    if (taken.some((position) => samePosition(position, unit.position))) {
+      const cell = findFreeCell(taken, unit.position.rank);
+      if (cell) unit.position = cell;
+    }
+    taken.push(unit.position);
+  }
+}
+
+/**
+ * Drag-and-drop move: puts unit `id` into `cell`, never stacking two units.
+ * `unplacedIds` is the tray (party members not on the grid yet — their
+ * `position` is ignored until placed). Dropping onto an occupied cell swaps:
+ * a unit dragged from the grid trades cells with the occupant; a unit
+ * dragged from the tray sends the occupant back to the tray. Returns the
+ * updated tray; mutates positions in place.
+ */
+export function moveToCell(units: Placeable[], unplacedIds: string[], id: string, cell: GridPosition): string[] {
+  const unit = units.find((candidate) => candidate.id === id);
+  if (!unit) return unplacedIds;
+
+  const fromTray = unplacedIds.includes(id);
+  const occupant = units.find(
+    (candidate) => candidate.id !== id && !unplacedIds.includes(candidate.id) && samePosition(candidate.position, cell),
+  );
+
+  let tray = unplacedIds.filter((trayId) => trayId !== id);
+  if (occupant) {
+    if (fromTray) tray = [...tray, occupant.id];
+    else occupant.position = unit.position;
+  }
+  unit.position = { ...cell };
+  return tray;
+}
+
+/**
+ * Auto-places every tray unit (in tray order) into the nearest free cell
+ * around its current rank (its role default, or wherever it stood last
+ * run) — what happens to anyone still in the tray when the player hits
+ * Continue/Embark. Returns the now-empty tray.
+ */
+export function placeUnplaced(units: Placeable[], unplacedIds: string[]): string[] {
+  const taken = units.filter((unit) => !unplacedIds.includes(unit.id)).map((unit) => unit.position);
+  for (const id of unplacedIds) {
+    const unit = units.find((candidate) => candidate.id === id);
+    if (!unit) continue;
+    const cell = findFreeCell(taken, unit.position.rank);
+    if (cell) unit.position = cell;
+    taken.push(unit.position);
+  }
+  return [];
+}

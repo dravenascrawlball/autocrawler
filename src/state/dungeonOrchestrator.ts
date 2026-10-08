@@ -24,6 +24,7 @@ import { calculateRunRenown } from '../sim/renown';
 import type { Kit } from '../sim/kits';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
+import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
 import { createStarterDungeonRooms } from '../data/rooms';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
@@ -133,7 +134,7 @@ export function startDungeon(
   rollLootForRoom(runState, record, inventory, rng, lookupItem);
   const shopOffers = outcome === null ? rollShopOffers(runState, rng) : { recruits: [], relics: [], equipment: [] };
 
-  dungeonPlayback.set({ runState, inventory, currentRecord: record, outcome, shopOffers });
+  dungeonPlayback.set({ runState, inventory, currentRecord: record, outcome, shopOffers, unplacedIds: [] });
   touchActiveRun();
   currentView.set('dungeon');
 }
@@ -153,13 +154,16 @@ export function continueDungeonRun(
     return;
   }
 
+  // Anyone still in the placement tray gets auto-placed before the fight — see formation.ts's placeUnplaced.
+  placeUnplaced(playback.runState.party, playback.unplacedIds);
   const outcome = resolveNextRoom(playback.runState, rng);
   const record = playback.runState.roomRecords.at(-1)!;
   rollLootForRoom(playback.runState, record, playback.inventory, rng, lookupItem);
   const shopOffers =
     outcome === null ? rollShopOffers(playback.runState, rng) : { recruits: [], relics: [], equipment: [] };
 
-  dungeonPlayback.set({ ...playback, currentRecord: record, outcome, shopOffers });
+  touchRoster();
+  dungeonPlayback.set({ ...playback, currentRecord: record, outcome, shopOffers, unplacedIds: [] });
   touchActiveRun();
 }
 
@@ -262,6 +266,8 @@ export function buyRecruitOffer(adventurerId: string): void {
     }
     applyActiveRelicsToAdventurer(offer.adventurer, playback.runState.activeRelics);
     playback.runState.party.push(offer.adventurer);
+    // New recruits start in the placement tray — see DungeonPlaybackState.unplacedIds.
+    playback.unplacedIds = [...playback.unplacedIds, offer.adventurer.id];
   }
 
   playback.inventory.gold -= offer.price;
@@ -269,6 +275,38 @@ export function buyRecruitOffer(adventurerId: string): void {
   touchRoster();
   dungeonPlayback.set({ ...playback });
   touchActiveRun();
+}
+
+/**
+ * Drag-and-drop placement during a between-room pause: moves party member
+ * `adventurerId` (from the grid or the tray) into `cell`, swapping rather
+ * than stacking — see sim/formation.ts's moveToCell. No-ops outside a pause.
+ */
+export function placePartyMemberDuringRun(adventurerId: string, cell: GridPosition): void {
+  const playback = get(dungeonPlayback);
+  if (!playback || playback.outcome !== null || !playback.runState.party.some((m) => m.id === adventurerId)) {
+    return;
+  }
+
+  const unplacedIds = moveToCell(playback.runState.party, playback.unplacedIds, adventurerId, cell);
+  touchRoster();
+  dungeonPlayback.set({ ...playback, unplacedIds });
+  touchActiveRun();
+}
+
+/** Drags party member `adventurerId` off the grid and back into the placement tray. No-ops outside a pause. */
+export function returnPartyMemberToTrayDuringRun(adventurerId: string): void {
+  const playback = get(dungeonPlayback);
+  if (
+    !playback ||
+    playback.outcome !== null ||
+    !playback.runState.party.some((m) => m.id === adventurerId) ||
+    playback.unplacedIds.includes(adventurerId)
+  ) {
+    return;
+  }
+
+  dungeonPlayback.set({ ...playback, unplacedIds: [...playback.unplacedIds, adventurerId] });
 }
 
 /**

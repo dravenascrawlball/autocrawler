@@ -18,6 +18,8 @@ import {
   unequipItemDuringRun,
   dismissLootPrompt,
   buyRecruitOffer,
+  placePartyMemberDuringRun,
+  returnPartyMemberToTrayDuringRun,
 } from './dungeonOrchestrator';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
 import { AttackNearestAction } from '../sim/actions/attack';
@@ -558,5 +560,56 @@ describe('startDungeon / finishDungeonRun', () => {
 
       expect(get(runHistory).clearedWithIds).toEqual(['hero']);
     });
+  });
+});
+
+describe('between-room formation placement (tray + drag-and-drop)', () => {
+  beforeEach(() => {
+    roster.set({ adventurers: [], recruitedIds: [] });
+    townStorage.set(createTownStorage());
+    dungeonPlayback.set(null);
+    activeRun.set(null);
+  });
+
+  const threeRooms = () => [
+    { enemies: [createAdventurer('e1', enemyTemplate({ maxHp: 5 }), 'front')] },
+    { enemies: [createAdventurer('e2', enemyTemplate({ maxHp: 5 }), 'front')] },
+    { enemies: [createAdventurer('e3', enemyTemplate({ maxHp: 5 }), 'front')] },
+  ];
+
+  function pauseWithRecruit() {
+    const drafted = hero('hero');
+    const recruit = hero('bench');
+    roster.set({ adventurers: [drafted, recruit], recruitedIds: [] });
+    startDungeon([drafted], threeRooms(), () => 0, lookupItem);
+    const playback = get(dungeonPlayback)!;
+    dungeonPlayback.set({ ...playback, inventory: { ...playback.inventory, gold: 1000 } });
+    buyRecruitOffer('bench');
+    return { drafted, recruit };
+  }
+
+  it('puts a newly bought recruit in the tray', () => {
+    pauseWithRecruit();
+    expect(get(dungeonPlayback)!.unplacedIds).toEqual(['bench']);
+  });
+
+  it('placing from the tray onto an occupied cell sends the occupant to the tray', () => {
+    const { drafted, recruit } = pauseWithRecruit();
+    placePartyMemberDuringRun('bench', drafted.position);
+    expect(recruit.position).toEqual({ lane: 1, rank: 0 });
+    expect(get(dungeonPlayback)!.unplacedIds).toEqual(['hero']);
+  });
+
+  it('can return a placed member to the tray', () => {
+    pauseWithRecruit();
+    returnPartyMemberToTrayDuringRun('hero');
+    expect(get(dungeonPlayback)!.unplacedIds).toEqual(['bench', 'hero']);
+  });
+
+  it('auto-places anyone left in the tray on Continue, never sharing a cell', () => {
+    const { drafted, recruit } = pauseWithRecruit();
+    continueDungeonRun(() => 0, lookupItem);
+    expect(get(dungeonPlayback)!.unplacedIds).toEqual([]);
+    expect(recruit.position).not.toEqual(drafted.position);
   });
 });

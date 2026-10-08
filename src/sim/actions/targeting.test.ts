@@ -141,3 +141,59 @@ describe('selectHighestAttackPowerAlly (Fallacy\'s Empower — roadmap item 11)'
     expect(selectHighestAttackPowerAlly({ actor: fallacy, battle })).toBe(fallacy);
   });
 });
+
+describe('lane-limited melee reach (see targeting.ts\'s meleeEligibleOpponents)', () => {
+  it("only reaches the frontmost unit in the attacker's own lane, even if another lane has a weaker front unit", () => {
+    const actor = createAdventurer('actor', template(), { lane: 0, rank: 0 });
+    const tank = createAdventurer('tank', template(), { lane: 0, rank: 0 });
+    const squishy = createAdventurer('squishy', template(), { lane: 0, rank: 2 });
+    squishy.hp = 1;
+    const otherLane = createAdventurer('other-lane', template(), { lane: 2, rank: 0 });
+    otherLane.hp = 2;
+    const battle = createBattleState([actor], [otherLane, squishy, tank]);
+
+    expect(selectFirstEnemy({ actor, battle }, true)).toBe(tank);
+    expect(selectLowestHpEnemy({ actor, battle }, true)).toBe(tank);
+  });
+
+  it('reaches the unit behind once the one in front of it falls', () => {
+    const actor = createAdventurer('actor', template(), { lane: 0, rank: 0 });
+    const tank = createAdventurer('tank', template(), { lane: 0, rank: 0 });
+    tank.hp = 0;
+    const squishy = createAdventurer('squishy', template(), { lane: 0, rank: 2 });
+    const otherLane = createAdventurer('other-lane', template(), { lane: 1, rank: 0 });
+    const battle = createBattleState([actor], [otherLane, tank, squishy]);
+
+    expect(selectFirstEnemy({ actor, battle }, true)).toBe(squishy);
+  });
+
+  it("moves to the nearest lane's frontmost unit once its own lane is empty", () => {
+    const actor = createAdventurer('actor', template(), { lane: 0, rank: 0 });
+    const far = createAdventurer('far', template(), { lane: 2, rank: 0 });
+    const nearBack = createAdventurer('near-back', template(), { lane: 1, rank: 2 });
+    const battle = createBattleState([actor], [far, nearBack]);
+
+    expect(selectFirstEnemy({ actor, battle }, true)).toBe(nearBack);
+  });
+
+  it('treats both side lanes as equally near for a center-lane attacker', () => {
+    const actor = createAdventurer('actor', template(), { lane: 1, rank: 0 });
+    const left = createAdventurer('left', template(), { lane: 0, rank: 1 });
+    const right = createAdventurer('right', template(), { lane: 2, rank: 0 });
+    right.hp = 3;
+    const battle = createBattleState([actor], [left, right]);
+
+    expect(selectFirstEnemy({ actor, battle }, true)).toBe(left);
+    expect(selectLowestHpEnemy({ actor, battle }, true)).toBe(right);
+  });
+
+  it('ranged reach still ignores lanes', () => {
+    const actor = createAdventurer('actor', template(), { lane: 0, rank: 0 });
+    const tank = createAdventurer('tank', template(), { lane: 0, rank: 0 });
+    const hidden = createAdventurer('hidden', template(), { lane: 2, rank: 2 });
+    hidden.hp = 1;
+    const battle = createBattleState([actor], [tank, hidden]);
+
+    expect(selectLowestHpEnemy({ actor, battle }, false)).toBe(hidden);
+  });
+});

@@ -11,6 +11,9 @@ import { roster } from './roster';
 import { recruitPriceFor } from './dungeonPlayback';
 import { startDungeon } from './dungeonOrchestrator';
 import type { RngSource } from '../sim/rng';
+import type { RoomDefinition } from '../sim/dungeonRun';
+import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
+import { createStarterDungeonRooms } from '../data/rooms';
 import type { ItemLookup } from '../sim/items';
 
 /**
@@ -32,6 +35,15 @@ export interface OpeningShopState {
   /** Equipment bought here, staged until embarkFromOpeningShop seeds the run's RunInventory with it. */
   items: Item[];
   offers: ShopOffers;
+  /**
+   * The run's rooms, rolled as soon as the shop opens rather than on Embark
+   * — so the opening shop can preview room 1's enemy formation while the
+   * player arranges the party against it (ui/FormationBoard.svelte), and
+   * embarkFromOpeningShop then fights exactly what was previewed.
+   */
+  rooms: RoomDefinition[];
+  /** Placement tray: recruits not yet dragged onto the grid — see dungeonPlayback.ts's DungeonPlaybackState.unplacedIds, same convention. */
+  unplacedIds: string[];
 }
 
 export const openingShop = writable<OpeningShopState | null>(null);
@@ -52,6 +64,8 @@ export function startOpeningShop(rng: RngSource = () => Math.random()): void {
     activeRelics: [],
     items: [],
     offers: rollOffers([], [], rng),
+    rooms: createStarterDungeonRooms(rng),
+    unplacedIds: [],
   });
 }
 
@@ -73,6 +87,7 @@ export function buyOpeningRecruit(adventurerId: string): void {
     ...state,
     gold: state.gold - offer.price,
     party: [...state.party, offer.adventurer],
+    unplacedIds: [...state.unplacedIds, offer.adventurer.id],
     offers: { ...state.offers, recruits: state.offers.recruits.filter((candidate) => candidate !== offer) },
   });
 }
@@ -121,6 +136,27 @@ export function buyOpeningEquipment(itemId: string): void {
   });
 }
 
+/** Drag-and-drop placement at the opening shop: moves `adventurerId` into `cell`, swapping rather than stacking — see sim/formation.ts's moveToCell. */
+export function placeOpeningMember(adventurerId: string, cell: GridPosition): void {
+  const state = get(openingShop);
+  if (!state || !state.party.some((member) => member.id === adventurerId)) {
+    return;
+  }
+
+  const unplacedIds = moveToCell(state.party, state.unplacedIds, adventurerId, cell);
+  openingShop.set({ ...state, unplacedIds });
+}
+
+/** Drags `adventurerId` off the grid and back into the opening shop's placement tray. */
+export function returnOpeningMemberToTray(adventurerId: string): void {
+  const state = get(openingShop);
+  if (!state || !state.party.some((member) => member.id === adventurerId) || state.unplacedIds.includes(adventurerId)) {
+    return;
+  }
+
+  openingShop.set({ ...state, unplacedIds: [...state.unplacedIds, adventurerId] });
+}
+
 /** Clears the in-progress opening shop (e.g. once Embark actually starts the run). */
 export function clearOpeningShop(): void {
   openingShop.set(null);
@@ -136,7 +172,9 @@ export function embarkFromOpeningShop(
     return;
   }
 
-  startDungeon(state.party, undefined, rng, lookupItem, {
+  // Anyone still in the tray gets auto-placed — see formation.ts's placeUnplaced.
+  placeUnplaced(state.party, state.unplacedIds);
+  startDungeon(state.party, state.rooms, rng, lookupItem, {
     partyGold: state.gold,
     activeRelics: state.activeRelics,
     items: state.items,

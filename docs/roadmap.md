@@ -292,19 +292,55 @@ that she's grown her kit. Needs some surface (character sheet? a toast at
 run-end? a dedicated unlocks screen?) once there's enough unlocked
 content to be worth showing.
 
-## 4. 3×3 grid: nobody uses the side lanes yet
+## 4. 3×3 grid: lanes and drag-and-drop formation — shipped
 
-Every character and enemy still only ever occupies the center lane (via
-the `'front'`/`'back'` shorthand — see overhaul step 5). The grid is
-real and generalized, but nothing in character/room authoring, the
-mid-run recruit flow, or the UI actually places someone left/right. This
-blocks two things:
-- **Adjacency-filtered triggers** — `isAdjacent` exists but is unused;
-  the original pitch's "when an enemy is downed by an ally adjacent to
-  you" needs real lane diversity to mean anything.
-- **The HUD rework above** benefits from knowing whether lane placement
-  is actually going to be visually meaningful before committing to a
-  layout for it.
+Every unit now has its own cell, and lanes matter in combat.
+
+1. **Lane-limited melee** (`sim/actions/targeting.ts`'s
+   `meleeEligibleOpponents`, applies to both sides): melee only reaches
+   the frontmost living unit in the attacker's own lane. Once that lane is
+   empty it moves to the nearest lane that still has anyone (both side
+   lanes tie for a center-lane attacker), again only that lane's frontmost
+   unit. A fragile character is only fully safe standing *behind* someone.
+   Ranged reach is unchanged (anyone), Taunt still overrides, and Cleave
+   still hits the target's whole rank across lanes.
+2. **One unit per cell**: `sim/formation.ts` gained `findFreeCell`,
+   `assignUniquePositions`, `moveToCell` and `placeUnplaced`.
+   `resolveNextRoom` calls `assignUniquePositions` at every room start, so
+   old saves and unplaced recruits can never fight stacked.
+3. **Enemy placement** (`data/rooms.ts`'s `placeEnemies` /
+   `ENEMY_RANK_OPTIONS`): Brute front; Grunt/Kobold front or middle;
+   Shaman back, preferring a lane with someone in front of it. Lanes are
+   rolled randomly, no stacking. Compositions are now plain factory lists.
+4. **Drag-and-drop formation board** (`ui/FormationBoard.svelte`, replacing
+   `PartyLayoutGrid.svelte`): party members are drawn as their battle
+   sprites and dragged with pointer events (works with touch). Dropping on
+   an occupied cell swaps; dropping from the tray onto an occupied cell
+   sends the occupant to the tray; the tray is also a drop target. New
+   recruits land in the tray (`unplacedIds` on `DungeonPlaybackState` and
+   `OpeningShopState`), and anyone still there on Continue/Embark is
+   auto-placed near their usual rank. Click-to-select-then-click-a-cell
+   still works as a keyboard fallback.
+5. **Placement before room 1**: the opening shop rolls the run's rooms when
+   it opens and shows the board against room 1's enemies; Embark fights
+   exactly the previewed rooms.
+6. **Battle view** (`game/RoomReplayScene.ts`'s `layoutColumn`): units
+   render at their literal lane, falling back to centering only if a
+   column's lanes collide.
+7. **Rebalanced**: the lane rule favored the party (65.5% full clear with
+   the old scaling), so `ROOM_SLOT_ENEMY_STAT_SCALE` became
+   `[1, 1.3, 1.65, 2, 2.35]` → **55.5%** over 6000 runs. The sim player
+   relies on auto-placement (front-row roles across rank 0, back-row roles
+   across rank 2), so a player who deliberately shields squishies will do
+   somewhat better.
+
+**Still open:**
+- **Adjacency triggers** — `isAdjacent` is still unused; lanes are now
+  real, so "when an adjacent ally..." style Specials are unblocked.
+- **Dawneth fell further behind** (~35% opener clear rate vs ~55%
+  average; Mira ~43%). A healer is now protected in back, but the party
+  she joins loses a front-liner to shield her. Still a kit-design
+  question (see item 8).
 
 ## 5. Permanent stat growth
 

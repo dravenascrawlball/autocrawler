@@ -134,12 +134,10 @@ function columnForUnit(unit: ReplayUnit): number {
 
 /**
  * How many lane slots each column actually needs to render `units` without anyone overlapping —
- * GRID_LANES (3) under normal circumstances, but more whenever a single column ends up with more
- * occupants than that. This is the common case today, not an edge case: every character currently
- * defaults to lane 1 or the legacy front/back shorthand (see formation.ts's resolvePosition), so a
- * party of 5+ routinely piles everyone into just 2 of the 6 columns (roadmap item 4 — nothing
- * diversifies lanes/ranks yet). Every column uses this same slot count, not just the crowded one,
- * so lanes stay row-aligned across the whole grid.
+ * GRID_LANES (3) under normal circumstances (one unit per cell — see formation.ts's
+ * assignUniquePositions), but more if a single column somehow ends up with more occupants than
+ * that. Every column uses this same slot count, not just the crowded one, so lanes stay
+ * row-aligned across the whole grid.
  */
 function requiredLaneSlots(units: ReplayUnit[]): number {
   const counts = new Map<number, number>();
@@ -373,13 +371,9 @@ export class RoomReplayScene extends Phaser.Scene {
 
     this.drawLaneDivider();
 
-    // Grouped by column (rank) rather than placed at each unit's raw lane slot: today every
-    // character defaults to lane 1 (center) via the legacy front/back shorthand (see
-    // formation.ts's resolvePosition) — nothing diversifies lanes yet, so two units sharing a rank
-    // would otherwise render stacked exactly on top of each other. Grouping and centering within
-    // the column keeps today's rosters readable, while still placing units at their literal lane
-    // slot once lanes actually differ (see layoutColumn's own doc comment for why this degrades
-    // gracefully either way).
+    // Grouped by column (rank) so layoutColumn can fall back to centering a column whose units share
+    // a lane (old saves, or a party larger than 9) — normally every unit has its own cell (see
+    // formation.ts's assignUniquePositions) and lands at its literal lane.
     const byColumn = new Map<number, ReplayUnit[]>();
     for (const unit of this.sceneData.units) {
       const column = columnForUnit(unit);
@@ -395,17 +389,23 @@ export class RoomReplayScene extends Phaser.Scene {
   }
 
   /**
-   * Places every unit in one column, sorted by lane and centered as a group within
-   * `laneSlotCount` slots — e.g. a single unit lands dead center; 3 units with distinct lanes
-   * 0/1/2 land exactly at their own literal slots once `laneSlotCount` is exactly 3 (the centering
-   * offset is 0 once the group fills every slot). Units sharing the same lane (today's universal
-   * case — see create()'s own comment) are simply the stable sort order at that point, so they
-   * still end up centered and separated rather than overlapping — and `laneSlotCount` itself
-   * already grew to fit this column's actual occupant count if it exceeds the normal 3 (see
-   * requiredLaneSlots), so this never has to overflow past its own slots.
+   * Places every unit in one column at its own literal lane slot — the normal case, since positions
+   * are unique per side (see formation.ts's assignUniquePositions), so a unit in lane 0 and one in
+   * lane 2 render top and bottom with the middle slot empty, exactly as placed on the formation
+   * board. Only if two units share a lane (or the column needs more than 3 slots — see
+   * requiredLaneSlots) does it fall back to sorting by lane and centering the group within
+   * `laneSlotCount`, so nobody overlaps.
    */
   private layoutColumn(column: number, units: ReplayUnit[]): void {
     const sorted = [...units].sort((a, b) => a.position.lane - b.position.lane);
+    const lanesDistinct = new Set(sorted.map((unit) => unit.position.lane)).size === sorted.length;
+    if (lanesDistinct && this.laneSlotCount === GRID_LANES) {
+      for (const unit of sorted) {
+        const pos = this.laneFeetPosition(column, unit.position.lane);
+        this.createGridUnit(unit, pos.x, pos.y);
+      }
+      return;
+    }
     const offset = (this.laneSlotCount - sorted.length) / 2;
     sorted.forEach((unit, index) => {
       const pos = this.laneFeetPosition(column, index + offset);

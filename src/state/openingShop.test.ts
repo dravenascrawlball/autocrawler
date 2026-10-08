@@ -11,6 +11,8 @@ import {
   buyOpeningEquipment,
   embarkFromOpeningShop,
   clearOpeningShop,
+  placeOpeningMember,
+  returnOpeningMemberToTray,
 } from './openingShop';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
 import { AttackNearestAction } from '../sim/actions/attack';
@@ -150,5 +152,51 @@ describe('opening shop (replaces the old single-character Embark draft — see d
     expect(playback.inventory.items.map((item) => item.id)).toContain(equipmentOffer.item.id);
     expect(get(currentView)).toBe('dungeon');
     expect(get(openingShop)).toBeNull();
+  });
+
+  describe('formation placement (tray + drag-and-drop)', () => {
+    function shopWithTwoRecruits() {
+      const heroA = createAdventurer('hero-a', template(), 'front');
+      const heroB = createAdventurer('hero-b', template(), 'front');
+      roster.set({ adventurers: [heroA, heroB], recruitedIds: [] });
+      startOpeningShop(() => 0);
+      buyOpeningRecruit('hero-a');
+      buyOpeningRecruit('hero-b');
+      return { heroA, heroB };
+    }
+
+    it("rolls the run's rooms up front so room 1 can be previewed", () => {
+      shopWithTwoRecruits();
+      expect(get(openingShop)!.rooms).toHaveLength(5);
+    });
+
+    it('puts new recruits in the tray, and placing one takes it out of the tray', () => {
+      const { heroA } = shopWithTwoRecruits();
+      expect(get(openingShop)!.unplacedIds).toEqual(['hero-a', 'hero-b']);
+
+      placeOpeningMember('hero-a', { lane: 2, rank: 1 });
+
+      expect(get(openingShop)!.unplacedIds).toEqual(['hero-b']);
+      expect(heroA.position).toEqual({ lane: 2, rank: 1 });
+    });
+
+    it('can send a placed member back to the tray', () => {
+      shopWithTwoRecruits();
+      placeOpeningMember('hero-a', { lane: 2, rank: 1 });
+      returnOpeningMemberToTray('hero-a');
+      expect(get(openingShop)!.unplacedIds).toEqual(['hero-b', 'hero-a']);
+    });
+
+    it('auto-places anyone left in the tray on Embark, one per cell, and fights the previewed rooms', () => {
+      const { heroA, heroB } = shopWithTwoRecruits();
+      const previewedRooms = get(openingShop)!.rooms;
+      placeOpeningMember('hero-a', { lane: 1, rank: 0 });
+
+      embarkFromOpeningShop(() => 0, lookupItem);
+
+      expect(heroA.position).toEqual({ lane: 1, rank: 0 });
+      expect(heroB.position).toEqual({ lane: 0, rank: 0 });
+      expect(get(dungeonPlayback)!.runState.rooms).toBe(previewedRooms);
+    });
   });
 });

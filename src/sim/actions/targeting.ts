@@ -38,20 +38,37 @@ function livingTaunters(context: TargetingContext): Adventurer[] {
 }
 
 /**
- * Melee's reachable pool: the opposing roster's living members at the
- * frontmost rank (0) that still has anyone alive, falling through to rank
- * 1 then rank 2 once a rank is wiped (the generalization of the old
- * front-row-wipe rule to a 3-rank grid — see formation.ts). Empty only
- * when the whole opposing roster is dead, which shouldn't happen mid-room
- * (the room ends first).
+ * Melee's reachable pool, lane by lane: only the frontmost living unit in
+ * the attacker's own lane is reachable — whoever stands behind it is
+ * protected until it falls. Once the attacker's lane is empty, reach moves
+ * to the nearest lane that still has anyone (both side lanes count as
+ * equally near for a center-lane attacker), again only its frontmost unit.
+ * So a squishy is only fully safe standing *behind* someone. Lane is
+ * measured on each side's own grid (lane 0 faces lane 0). Several units can
+ * come back when lanes tie, or if a lane's front cell is somehow stacked.
+ * Empty only when the whole opposing roster is dead, which shouldn't happen
+ * mid-room (the room ends first).
  */
 function meleeEligibleOpponents(context: TargetingContext): Adventurer[] {
   const living = livingOpponents(context);
-  for (const rank of [0, 1, 2] as const) {
-    const atRank = living.filter((candidate) => candidate.position.rank === rank);
-    if (atRank.length > 0) return atRank;
+  const actorLane = context.actor.position.lane;
+  let bestDistance = Infinity;
+  let exposed: Adventurer[] = [];
+  for (const lane of [0, 1, 2] as const) {
+    const inLane = living.filter((candidate) => candidate.position.lane === lane);
+    if (inLane.length === 0) continue;
+    const frontRank = Math.min(...inLane.map((candidate) => candidate.position.rank));
+    const front = inLane.filter((candidate) => candidate.position.rank === frontRank);
+    const distance = Math.abs(lane - actorLane);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      exposed = front;
+    } else if (distance === bestDistance) {
+      exposed = [...exposed, ...front];
+    }
   }
-  return [];
+  // Keep roster order, so "first eligible" tie-breaks stay stable across lanes.
+  return living.filter((candidate) => exposed.includes(candidate));
 }
 
 /**

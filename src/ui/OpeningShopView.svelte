@@ -6,8 +6,11 @@
     buyOpeningRelic,
     buyOpeningEquipment,
     embarkFromOpeningShop,
+    placeOpeningMember,
+    returnOpeningMemberToTray,
   } from '../state/openingShop';
-  import CharacterCard from './CharacterCard.svelte';
+  import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
+  import type { Adventurer } from '../sim/adventurer';
 
   $: if ($openingShop === null) {
     startOpeningShop();
@@ -17,22 +20,43 @@
   $: party = $openingShop?.party ?? [];
   $: offers = $openingShop?.offers ?? { recruits: [], relics: [], equipment: [] };
   $: canEmbark = party.length > 0;
+
+  const toBoardUnit = (unit: Adventurer): BoardUnit => ({
+    id: unit.id,
+    name: unit.name,
+    archetype: unit.archetype,
+    position: unit.position,
+    hp: unit.hp,
+    maxHp: unit.maxHp,
+  });
+  $: partyUnits = party.map(toBoardUnit);
+  // Room 1 is rolled when the shop opens (see state/openingShop.ts), so its formation can be previewed here.
+  $: firstRoomEnemies = ($openingShop?.rooms[0]?.enemies ?? []).map(toBoardUnit);
+  $: trayIds = $openingShop?.unplacedIds ?? [];
 </script>
 
 <section class="opening-shop">
   <h2>Build Your Party <span class="opening-shop__gold">{gold}g</span></h2>
   <p class="opening-shop__hint">Spend your starting gold on recruits, relics, and equipment, then Embark.</p>
 
-  {#if party.length > 0}
-    <h3>Your Party</h3>
-    <ul class="party-grid">
-      {#each party as adventurer (adventurer.id)}
-        <li>
-          <CharacterCard {adventurer} showDetails={false} />
-        </li>
-      {/each}
-    </ul>
-  {/if}
+  <h3>Prepare for Room 1</h3>
+  <p class="opening-shop__hint">
+    {#if party.length === 0}
+      Recruit someone below, then drag them into position against the first room.
+    {:else}
+      Drag your party into position. Melee attacks only reach the frontmost unit in a lane — keep fragile
+      characters behind someone.
+    {/if}
+  </p>
+  <div class="opening-shop__board">
+    <FormationBoard
+      {partyUnits}
+      enemyUnits={firstRoomEnemies}
+      {trayIds}
+      onPlace={placeOpeningMember}
+      onReturnToTray={returnOpeningMemberToTray}
+    />
+  </div>
 
   <h3>Recruit</h3>
   <ul class="shop-offers">
@@ -88,14 +112,8 @@
     margin-top: 0;
   }
 
-  .party-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    list-style: none;
-    padding: 0;
+  .opening-shop__board {
+    margin-bottom: 16px;
   }
 
   .shop-offers {

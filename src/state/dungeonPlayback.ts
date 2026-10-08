@@ -45,6 +45,15 @@ export interface DungeonPlaybackState {
    * a resumed run just rolls a fresh one, same as a newly-reached pause.
    */
   shopOffers: ShopOffers;
+  /**
+   * The placement tray: ids of party members recruited this pause who
+   * haven't been dragged onto the grid yet (see ui/FormationBoard.svelte and
+   * sim/formation.ts's moveToCell). Their `position` is ignored until
+   * placed; anyone still here on Continue is auto-placed (placeUnplaced).
+   * Not persisted — a resumed run starts with an empty tray, and
+   * resolveNextRoom's assignUniquePositions spreads out anyone stacked.
+   */
+  unplacedIds: string[];
 }
 
 /**
@@ -97,7 +106,7 @@ function resumeFromSave(): DungeonPlaybackState | null {
       ? rollShopOffers(runState, () => Math.random())
       : { recruits: [], relics: [], equipment: [] };
 
-  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers };
+  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers, unplacedIds: [] };
 }
 
 /** Set by startDungeon (or reconstructed from a save at boot — see resumeFromSave), read/advanced by the Phaser replay layer and the between-room pause UI, cleared by finishDungeonRun. */

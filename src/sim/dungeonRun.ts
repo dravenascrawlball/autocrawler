@@ -5,6 +5,7 @@ import { resolveRoom, type RoomResult } from './room';
 import { getEffectiveStat } from './stats';
 import type { Relic } from './relics';
 import type { RngSource } from './rng';
+import { assignUniquePositions } from './formation';
 
 /** How a completed dungeon run ended. */
 export type DungeonOutcome = 'completed' | 'loss' | 'retreat';
@@ -137,6 +138,10 @@ export function resolveNextRoom(state: DungeonRunState, rng: RngSource = () => M
   if (roomIndex > 0) {
     healBetweenRooms(party);
   }
+  // One unit per cell — see formation.ts's assignUniquePositions. Normally a no-op (the player's
+  // placement, or placeUnplaced on Continue, already guarantees it); catches old saves and callers
+  // that never placed anyone.
+  assignUniquePositions(party);
 
   const partyAtRoomStart = snapshotParty(party);
   const battle: BattleState = createBattleState(party, room.enemies, state.partyGold);

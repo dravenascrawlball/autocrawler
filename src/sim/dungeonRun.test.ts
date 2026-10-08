@@ -295,3 +295,18 @@ describe('startDungeonRun / resolveNextRoom', () => {
     expect(outcome.rooms[0].result.outcome).toBe('retreat');
   });
 });
+
+describe('resolveNextRoom: one unit per cell', () => {
+  it('spreads a stacked party across free cells before the fight, keeping the first occupant in place', () => {
+    const a = createAdventurer('a', heroTemplate(), 'front');
+    const b = createAdventurer('b', heroTemplate(), 'front');
+    const c = createAdventurer('c', heroTemplate(), 'back');
+    const state = startDungeonRun([a, b, c], [makeRoom(1)]);
+
+    resolveNextRoom(state, () => 0.5);
+
+    expect(a.position).toEqual({ lane: 1, rank: 0 });
+    expect(b.position).toEqual({ lane: 0, rank: 0 });
+    expect(c.position).toEqual({ lane: 1, rank: 2 });
+  });
+});

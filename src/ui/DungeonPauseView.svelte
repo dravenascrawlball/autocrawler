@@ -9,14 +9,14 @@
     buyRecruitOffer,
     buyRelicOffer,
     buyEquipmentOffer,
+    placePartyMemberDuringRun,
+    returnPartyMemberToTrayDuringRun,
   } from '../state/dungeonOrchestrator';
-  import { setAdventurerPosition } from '../state/townActions';
   import DownedModal from './DownedModal.svelte';
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
-  import PartyLayoutGrid, { type LayoutUnit } from './PartyLayoutGrid.svelte';
+  import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
   import type { EquipmentSlot } from '../sim/items';
-  import type { GridPosition } from '../sim/formation';
 
   export let onContinue: () => void;
 
@@ -39,41 +39,17 @@
     $dungeonPlayback && runOutcome === null && $dungeonPlayback.runState.roomIndex < $dungeonPlayback.runState.rooms.length
       ? $dungeonPlayback.runState.rooms[$dungeonPlayback.runState.roomIndex]
       : null;
-  $: nextRoomEnemyUnits = nextRoom
-    ? nextRoom.enemies.map(
-        (enemy): LayoutUnit => ({
-          id: enemy.id,
-          name: enemy.name,
-          position: enemy.position,
-          side: 'enemy',
-          hp: enemy.hp,
-          maxHp: enemy.maxHp,
-        }),
-      )
-    : [];
-  $: partyLayoutUnits = partyMembers.map(
-    (member): LayoutUnit => ({
-      id: member.id,
-      name: member.name,
-      position: member.position,
-      side: 'party',
-      hp: member.hp,
-      maxHp: member.maxHp,
-    }),
-  );
-  $: battleFormationUnits = [...partyLayoutUnits, ...nextRoomEnemyUnits];
-
-  /** Moves whichever party member is currently selected to `position` — swapping with whoever's already there, if anyone, rather than stacking both in the same cell. Picking a layout is purely a readiness choice; it never fails. */
-  function placeSelectedAt(position: GridPosition): void {
-    if (!selected) return;
-    const occupant = partyMembers.find(
-      (member) => member.id !== selected?.id && member.position.lane === position.lane && member.position.rank === position.rank,
-    );
-    if (occupant) {
-      setAdventurerPosition(occupant.id, selected.position);
-    }
-    setAdventurerPosition(selected.id, position);
-  }
+  const toBoardUnit = (unit: (typeof partyMembers)[number]): BoardUnit => ({
+    id: unit.id,
+    name: unit.name,
+    archetype: unit.archetype,
+    position: unit.position,
+    hp: unit.hp,
+    maxHp: unit.maxHp,
+  });
+  $: nextRoomEnemyUnits = nextRoom ? nextRoom.enemies.map(toBoardUnit) : [];
+  $: partyBoardUnits = partyMembers.map(toBoardUnit);
+  $: trayIds = $dungeonPlayback?.unplacedIds ?? [];
   // Same one-at-a-time gating for a just-downed character's popup (see DownedModal) — resolved
   // before any pending level-up, so the run's story reads in the order it happened.
   $: nextDownedId =
@@ -163,17 +139,17 @@
     <section class="prepare-battle">
       <h3>Prepare for Battle</h3>
       <p class="prepare-battle__hint">
-        {#if selected}
-          Click a cell on <strong>Your Formation</strong> to place {selected.name} there.
-        {:else}
-          Select a party member above, then click a cell on <strong>Your Formation</strong> to place them.
-        {/if}
+        Drag your party into position. Melee attacks only reach the frontmost unit in a lane — keep fragile
+        characters behind someone.
       </p>
-      <PartyLayoutGrid
-        units={battleFormationUnits}
-        interactive
+      <FormationBoard
+        partyUnits={partyBoardUnits}
+        enemyUnits={nextRoomEnemyUnits}
+        {trayIds}
         selectedId={selectedAdventurerId}
-        onCellClick={placeSelectedAt}
+        onPlace={placePartyMemberDuringRun}
+        onReturnToTray={returnPartyMemberToTrayDuringRun}
+        onSelect={(id) => (selectedAdventurerId = id)}
       />
     </section>
   {/if}
@@ -329,10 +305,6 @@
     color: var(--text-muted);
     font-size: 13px;
     margin: 0 0 8px;
-  }
-
-  .prepare-battle :global(.layout-grid) {
-    max-width: 640px;
   }
 
   .shop {

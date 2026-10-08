@@ -31,3 +31,14 @@ export function downedArtPath(archetype: string, killerArchetype: string | null)
 export function downedArtFallbackPath(archetype: string): string {
   return `/downed-art/${slugifyArchetype(archetype)}-downed-general.png`;
 }
+
+/** Grid body sprite (public/sprites/) — same file game/RoomReplayScene.ts's bodyAssetPath loads for the battle view, so the formation board shows exactly the figure that will fight. */
+export function bodySpritePath(side: 'party' | 'enemy', archetype: string): string {
+  const folder = side === 'party' ? 'adventurers' : 'monsters';
+  return `/sprites/${folder}/${slugifyArchetype(archetype)}.png`;
+}
+
+/** The stand-in body sprite for an archetype with no art yet — the `<img onerror>` fallback for bodySpritePath. */
+export function defaultBodySpritePath(side: 'party' | 'enemy'): string {
+  return side === 'party' ? '/sprites/adventurers/default_adventurer.png' : '/sprites/monsters/default_monster.png';
+}

@@ -140,8 +140,8 @@ export function enchantFace(adventurer: Adventurer, faceIndex: number, enchantme
 /**
  * Reassigns `adventurer`'s full grid position (lane + rank) — see
  * formation.ts. Always succeeds; no eligibility rule to fail (the caller
- * decides whether to enforce "one living party member per cell" — see
- * ui/PartyLayoutGrid.svelte's swap-on-occupied-cell convention). Replaces
+ * decides whether to enforce "one unit per cell" — the drag-and-drop
+ * board goes through formation.ts's moveToCell instead, which swaps). Replaces
  * the old front/back-only `setRow` once per-fight full 3x3 placement
  * shipped (the Autobattle Revision Cleanup's "Character Layout Choice"
  * pass — see docs/roadmap.md).
