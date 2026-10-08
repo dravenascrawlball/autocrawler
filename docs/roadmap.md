@@ -341,14 +341,51 @@ templates have kit parity with player characters (Basic + Special) but
 no enemy-only mechanic — nothing an enemy does that no player character
 also does. Also no enemy currently has a Trait.
 
-## 8. Second balance pass
+## 8. Second balance pass — shipped
 
-Every number introduced across the whole overhaul (trigger magnitudes,
-mid-run recruitment pacing, meta-progression unlock pacing) is an
-explicit placeholder, by design (see the overhaul's own "leave numbers
-as-is, defer to balance pass" calls). Needs the existing
-`balanceSim.test.ts`/`combatMagnitudes.test.ts` tooling run once the
-gaps above stop moving the numbers out from under it.
+Target agreed up front: a **~50-60% full-clear rate** for a party that
+shops sensibly, tuned via **enemy stats and room compositions only**
+(economy and inter-room healing deliberately left alone), with
+per-character outliers flagged and only the egregious ones fixed.
+
+1. **Sim harness rebuilt** (`sim/balanceSim.test.ts`, run with
+   `BALANCE_SIM=1 npx vitest run src/sim/balanceSim.test.ts --silent=false --reporter=verbose`;
+   `BALANCE_SIM_RUNS` overrides the 2000-run default). The old harness
+   always bought the 3 cheapest characters from the whole roster (every run
+   was Isilwen/Caladwen/Gudrun), never bought relics/items/level-ups, didn't
+   count Special Actions, and still reported dead XP-level metrics — its
+   99.6% win rate was meaningless. The simulated player now mirrors the
+   real shops: the opening shop's single rolled offer set
+   (`STARTING_SHOP_GOLD`), then a greedy buy at every pause (new recruits
+   → level-ups → relics → equipment, auto-equipped), plus room loot.
+   Reports per-room loss distribution, party size/HP by room, and
+   full-clear rate per character (as an opener and as any party member).
+2. **Difficulty**: honest baseline was 85.5%. `data/rooms.ts` slot 3 is now
+   a real trio (was a breather — parties left it at ~97% HP), slots 4-5
+   field a Brute with support (up to 4 enemies), and a new
+   `ROOM_SLOT_ENEMY_STAT_SCALE` (`[1, 1, 0.9, 1.15, 1.25]`) multiplies
+   enemy maxHp/attackPower/healPower per slot. Result: **54.6% full clear**
+   over 6000 runs, losses escalating toward the finale (room 1→5:
+   0.3% / 4.5% / 6.7% / 15.4% / 18.5%), ~1.2% stalemates.
+3. **Outliers fixed** (spread was 34-73%, now 41-67%):
+   Rallying Strike armor 3 → 2 (party-wide +3 nearly cancelled
+   Kobold/Grunt hits; Glint 73% → 62%); Dawneth healPower 4 → 9,
+   attackPower 3 → 4, maxHp 16 → 18; Mira healPower 4 → 8, attackPower 2 → 3;
+   Fallacy attackPower 2 → 3, maxHp 16 → 18.
+
+**Still open, flagged not fixed:**
+- **Dawneth (~41%) and Mira (~48%) still trail.** Heal numbers move them
+  but don't close the gap — a pure healer in a 3-person opening party
+  displaces a damage dealer. Probably a design question (e.g. give
+  healers a light attack, or make healing scale with party size) rather
+  than more number-pushing.
+- **Top end**: Nerissa (~67%) and Dravena (~64%) are the strongest picks.
+- **Economy is barely used**: parties average 3.0 at room 1 and only ~4.0
+  by room 5, with ~0.05 level-ups bought per run — gold income (~140g/run)
+  vs recruit prices (50-65) means the between-room shop rarely buys more
+  than one thing. Left alone this pass by choice; worth its own look.
+- The sim's player is greedy and positionless (default rows); real players
+  who build formations deliberately will likely clear more often.
 
 ## 9. Ideas from other grid autobattlers (reference, mostly still unscoped)
 

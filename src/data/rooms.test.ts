@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { createAdventurer } from '../sim/adventurer';
 import { runDungeon } from '../sim/dungeonRun';
 import { createSeededRng } from '../sim/rng';
-import { createStarterDungeonRooms, room, ROOM_DIFFICULTY_POOLS } from './rooms';
+import { createStarterDungeonRooms, room, ROOM_DIFFICULTY_POOLS, ROOM_SLOT_ENEMY_STAT_SCALE } from './rooms';
 import { ISILWEN_TEMPLATE } from './characters';
+import { createBrute, BRUTE_TEMPLATE } from './enemies';
 
 describe('createStarterDungeonRooms', () => {
   it('always has exactly 5 rooms', () => {
@@ -67,5 +68,24 @@ describe('createStarterDungeonRooms', () => {
       expect(result.rooms.length).toBeGreaterThanOrEqual(1);
       expect(result.rooms.length).toBeLessThan(5);
     }
+  });
+});
+
+describe('room stat scaling', () => {
+  it('leaves template stats untouched at scale 1', () => {
+    const [brute] = room([{ factory: createBrute, row: 'front' }]).enemies;
+    expect(brute.maxHp).toBe(BRUTE_TEMPLATE.maxHp);
+    expect(brute.attackPower).toBe(BRUTE_TEMPLATE.attackPower);
+  });
+
+  it('scales maxHp (at full HP) and attackPower, rounded', () => {
+    const [brute] = room([{ factory: createBrute, row: 'front' }], 1.25).enemies;
+    expect(brute.maxHp).toBe(Math.round(BRUTE_TEMPLATE.maxHp * 1.25));
+    expect(brute.hp).toBe(brute.maxHp);
+    expect(brute.attackPower).toBe(Math.round(BRUTE_TEMPLATE.attackPower * 1.25));
+  });
+
+  it('has one scale per difficulty slot', () => {
+    expect(ROOM_SLOT_ENEMY_STAT_SCALE).toHaveLength(ROOM_DIFFICULTY_POOLS.length);
   });
 });

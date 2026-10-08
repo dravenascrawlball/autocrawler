@@ -16,67 +16,91 @@ function back(factory: EnemyFactory): EnemySpec {
   return { factory, row: 'back' };
 }
 
-export function room(specs: EnemySpec[]): RoomDefinition {
+/**
+ * Builds a room from `specs`, scaling each enemy's maxHp/attackPower/
+ * healPower by `statScale` (see ROOM_SLOT_ENEMY_STAT_SCALE) — 1 leaves the
+ * template's numbers untouched.
+ */
+export function room(specs: EnemySpec[], statScale = 1): RoomDefinition {
   return {
-    enemies: specs.map((spec) => spec.factory(spec.row)),
+    enemies: specs.map((spec) => {
+      const enemy = spec.factory(spec.row);
+      if (statScale !== 1) {
+        enemy.maxHp = Math.round(enemy.maxHp * statScale);
+        enemy.hp = enemy.maxHp;
+        enemy.attackPower = Math.round(enemy.attackPower * statScale);
+        enemy.healPower = Math.round(enemy.healPower * statScale);
+      }
+      return enemy;
+    }),
   };
 }
 
-/** One room slot's possible enemy compositions, each entry a distinct combination of the 3 current archetypes. */
+/** One room slot's possible enemy compositions, each entry a distinct combination of the current enemy archetypes. */
 type CompositionPool = EnemySpec[][];
 
 /**
- * Five difficulty slots (opener -> finale), each a pool of 2
+ * Five difficulty slots (opener -> finale), each a pool of 2-3
  * comparable-difficulty compositions — createStarterDungeonRooms rolls one
  * per slot per run, so the escalating shape of a run stays intact (weak
  * opener, hard finale) while the actual enemies faced vary run to run.
- * Deliberately reuses only the 3 existing archetypes (Grunt/Brute/Shaman)
- * — new enemy content is a separate pass, not part of this one.
+ * Reuses the 4 existing archetypes (Kobold Skirmisher/Grunt/Brute/Shaman);
+ * new enemy content is a separate pass.
  *
- * Row assignment (front/back — see sim/formation.ts, roadmap item 7's
- * follow-up): Grunt/Brute front (the tough melee threats), Shaman back (a
- * support unit, protected until the front line falls, same as the
- * intent behind a player putting a Healer in back). A "reasonable default"
- * call, easy to retune per composition later.
+ * Row assignment (front/back — see sim/formation.ts): Kobold/Grunt/Brute
+ * front (the melee threats), Shaman back (a support unit, protected until
+ * the front line falls, same as the intent behind a player putting a
+ * Healer in back). A "reasonable default" call, easy to retune per
+ * composition later.
  *
- * Tiers picked from a standalone-difficulty ranking (% of a fresh
- * Fighter/Ranger/Healer party's total HP lost clearing that composition
- * alone, worst first) measured under the old grid/energy system — worth
- * remeasuring now that movement/positioning no longer factors in: Grunt 4%,
- * Shaman 12%, Grunt+Grunt 12%, Grunt+Shaman 12%, Shaman+Shaman 14%, Brute
- * 23%, Grunt+Brute 43%, Brute+Shaman 65%, Brute+Brute 100% (an outright loss
- * even at full HP standalone — excluded entirely, too swingy for any slot).
- * Slots 3-5 deliberately overlap by a tier rather than partition cleanly, so
- * every slot still gets 2 real options without ever reaching Brute+Brute.
+ * Compositions and ROOM_SLOT_ENEMY_STAT_SCALE were retuned together in the
+ * second balance pass (docs/roadmap.md) against src/sim/balanceSim.test.ts:
+ * slot 3 became a real trio instead of a breather, slots 4-5 field a Brute
+ * with support, and Brute+Brute stays excluded (too swingy for any slot).
  */
 export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
-  // Slot 1 (opener): a single weak enemy. ~4-12%
+  // Slot 1 (opener): a single weak enemy, or a pair of weaker ones.
   [
     [front(createGrunt)], [back(createShaman)],
     [front(createKoboldSkirmisher), front(createKoboldSkirmisher)],
   ],
-  // Slot 2: a light pair. ~12%
+  // Slot 2: a light pair/trio.
   [
     [front(createGrunt), front(createGrunt)],
     [front(createGrunt), back(createShaman)],
     [front(createKoboldSkirmisher), front(createKoboldSkirmisher), back(createKoboldSkirmisher)],
   ],
-  // Slot 3 (mid): support-ish pairs — deliberately Brute-free, since Brute
-  // appearing in 3 consecutive slots (exhaustively checked, under the old
-  // grid system) compounds across only-partial inter-room healing into an
-  // unwinnable run. ~12-14%
+  // Slot 3 (mid): still Brute-free (see above), but a real trio now rather
+  // than the old support-only pairs — the second balance pass measured this
+  // slot as a breather (parties left it at ~97% HP).
   [
-    [back(createShaman), back(createShaman)],
-    [front(createGrunt), back(createShaman)],
+    [front(createGrunt), back(createShaman), back(createShaman)],
+    [front(createGrunt), front(createGrunt), back(createShaman)],
+    [front(createGrunt), front(createKoboldSkirmisher), front(createKoboldSkirmisher), back(createKoboldSkirmisher)],
   ],
-  // Slot 4: first heavy enemy. ~23-43%
-  [[front(createBrute)], [front(createGrunt), front(createBrute)]],
-  // Slot 5 (finale): the hardest pairings this roster supports. ~43-65%
+  // Slot 4: first heavy enemy, now with support.
   [
     [front(createGrunt), front(createBrute)],
+    [front(createBrute), front(createKoboldSkirmisher), front(createKoboldSkirmisher)],
     [front(createBrute), back(createShaman)],
   ],
+  // Slot 5 (finale): a Brute plus a full supporting cast.
+  [
+    [front(createGrunt), front(createBrute), back(createShaman)],
+    [front(createBrute), front(createKoboldSkirmisher), front(createKoboldSkirmisher), back(createShaman)],
+    [front(createGrunt), front(createGrunt), front(createBrute)],
+  ],
 ];
+
+/**
+ * Per-slot enemy stat multiplier (opener -> finale), applied on top of the
+ * enemy templates by createStarterDungeonRooms — the main difficulty knob
+ * from the second balance pass (docs/roadmap.md), tuned with
+ * src/sim/balanceSim.test.ts toward a ~50-60% full-clear rate for a party
+ * that shops sensibly. Lets later rooms reuse the same few archetypes
+ * while still escalating.
+ */
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1, 0.9, 1.15, 1.25];
 
 function pickComposition(pool: CompositionPool, rng: RngSource): EnemySpec[] {
   return pool[Math.floor(rng() * pool.length)];
@@ -90,5 +114,5 @@ function pickComposition(pool: CompositionPool, rng: RngSource): EnemySpec[] {
  * and two calls with the same rng produce the same run.
  */
 export function createStarterDungeonRooms(rng: RngSource = () => Math.random()): RoomDefinition[] {
-  return ROOM_DIFFICULTY_POOLS.map((pool) => room(pickComposition(pool, rng)));
+  return ROOM_DIFFICULTY_POOLS.map((pool, slotIndex) => room(pickComposition(pool, rng), ROOM_SLOT_ENEMY_STAT_SCALE[slotIndex]));
 }

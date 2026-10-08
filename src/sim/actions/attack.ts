@@ -263,8 +263,8 @@ export const FearAction: Action = {
   },
 };
 
-/** Flat armor granted by Rallying Strike's buff — placeholder pending the balance pass, same as every other combat number. */
-export const RALLY_ARMOR_BONUS = 3;
+/** Flat armor granted by Rallying Strike's buff — cut from 3 in the second balance pass (docs/roadmap.md): party-wide, it nearly cancelled Kobold/Grunt hits and made Glint the strongest pick by a wide margin. */
+export const RALLY_ARMOR_BONUS = 2;
 /** How many of the buffed unit's own turns the Rallying Strike armor buff lasts before expiring. */
 export const RALLY_BUFF_DURATION_TURNS = 3;
 const RALLY_BUFF_ID = 'rallying-strike-armor';
