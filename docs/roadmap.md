@@ -345,7 +345,8 @@ also does. Also no enemy currently has a Trait.
 
 Target agreed up front: a **~50-60% full-clear rate** for a party that
 shops sensibly, tuned via **enemy stats and room compositions only**
-(economy and inter-room healing deliberately left alone), with
+(economy and inter-room healing left alone at first; gold income was
+raised in a follow-up, step 4), with
 per-character outliers flagged and only the egregious ones fixed.
 
 1. **Sim harness rebuilt** (`sim/balanceSim.test.ts`, run with
@@ -367,23 +368,39 @@ per-character outliers flagged and only the egregious ones fixed.
    enemy maxHp/attackPower/healPower per slot. Result: **54.6% full clear**
    over 6000 runs, losses escalating toward the finale (room 1→5:
    0.3% / 4.5% / 6.7% / 15.4% / 18.5%), ~1.2% stalemates.
-3. **Outliers fixed** (spread was 34-73%, now 41-67%):
+3. **Outliers fixed** (spread was 34-73%, now 41-67% at the time):
    Rallying Strike armor 3 → 2 (party-wide +3 nearly cancelled
    Kobold/Grunt hits; Glint 73% → 62%); Dawneth healPower 4 → 9,
    attackPower 3 → 4, maxHp 16 → 18; Mira healPower 4 → 8, attackPower 2 → 3;
    Fallacy attackPower 2 → 3, maxHp 16 → 18.
+4. **Gold income follow-up.** After step 2, parties only grew 3 → ~4 by
+   room 5 and almost never bought a level-up, since enemy drops (~29g/room)
+   rarely covered one recruit (50-65g). Target: **1-2 recruit-sized
+   choices per pause** for a party with no gold-generating kit. Added a
+   flat per-room payout, `RoomDefinition.clearGold`, paid on a win on top
+   of enemy drops (`state/dungeonOrchestrator.ts`'s rollLootForRoom) and
+   set per slot by `data/rooms.ts`'s `ROOM_SLOT_CLEAR_GOLD`
+   (`[60, 55, 55, 55, 55]`). Sim, runs without Nerissa: ≥1 recruit
+   affordable at 100% of pauses; ≥2 affordable after room 1/2/3/4 at
+   ~5% / 12% / 50% / 80%. Parties now grow 3 → ~7.4 by the finale.
+   That made runs trivial (99.5% clear), so `ROOM_SLOT_ENEMY_STAT_SCALE`
+   was re-tuned to `[1, 1.3, 1.6, 1.9, 2.2]`: **54.8% full clear** over
+   6000 runs, losses by room 0.3% / 1.1% / 3.7% / 14.7% / 25.4%, ~1.4%
+   stalemates. Opener full-clear spread is now 42-69%.
 
 **Still open, flagged not fixed:**
-- **Dawneth (~41%) and Mira (~48%) still trail.** Heal numbers move them
-  but don't close the gap — a pure healer in a 3-person opening party
-  displaces a damage dealer. Probably a design question (e.g. give
-  healers a light attack, or make healing scale with party size) rather
-  than more number-pushing.
-- **Top end**: Nerissa (~67%) and Dravena (~64%) are the strongest picks.
-- **Economy is barely used**: parties average 3.0 at room 1 and only ~4.0
-  by room 5, with ~0.05 level-ups bought per run — gold income (~140g/run)
-  vs recruit prices (50-65) means the between-room shop rarely buys more
-  than one thing. Left alone this pass by choice; worth its own look.
+- **Dawneth (~42%) still trails.** Bigger parties helped the healers
+  (Mira is now mid-pack at ~52%), but Dawneth is still the weakest pick.
+  Probably a kit-design question rather than more number-pushing.
+- **Dravena (~69%) is now the clear top pick**, ~10 points above the
+  next character (Nerissa ~59%).
+- **Rooms 1-3 are now nearly risk-free** (≤4% of runs end there); the
+  difficulty sits in rooms 4-5, because the party snowballs by ~1 member
+  per room and early rooms can't scale much harder without walling the
+  3-member opening party. Worth revisiting if early rooms feel flat.
+- **Difficulty is very sensitive to the finale scale**: 2.15 → 59.7%,
+  2.25 → 52.8%. Any change to gold income or party growth needs the
+  scale re-tuned alongside it.
 - The sim's player is greedy and positionless (default rows); real players
   who build formations deliberately will likely clear more often.
 

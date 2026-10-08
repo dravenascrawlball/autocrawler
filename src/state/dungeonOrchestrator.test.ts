@@ -225,6 +225,21 @@ describe('startDungeon / finishDungeonRun', () => {
     expect(item.promptDismissed).toBeUndefined();
   });
 
+  it("pays a won room's flat clearGold into run gold, on top of enemy drops", () => {
+    const runGoldAfterRoom0 = (clearGold?: number): number => {
+      const drafted = hero('hero');
+      roster.set({ adventurers: [drafted], recruitedIds: [] });
+      const rooms: RoomDefinition[] = [
+        { enemies: [createAdventurer('weak', enemyTemplate({ maxHp: 5 }), 'front')], clearGold },
+        { enemies: [createAdventurer('second', enemyTemplate({ maxHp: 5 }), 'front')] },
+      ];
+      startDungeon([drafted], rooms, () => 0, lookupItem);
+      return get(dungeonPlayback)!.inventory.gold;
+    };
+
+    expect(runGoldAfterRoom0(25)).toBe(runGoldAfterRoom0() + 25);
+  });
+
   describe('activeRun sync (resume snapshot — see state/dungeonPlayback.ts\'s resumeFromSave)', () => {
     it('populates activeRun once a run starts, and keeps it in sync as rooms resolve', () => {
       const drafted = hero('hero');

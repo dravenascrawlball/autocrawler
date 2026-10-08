@@ -17,6 +17,8 @@ export const DOWNED_REVIVE_HP_FRACTION = 0.7;
 export interface RoomDefinition {
   enemies: Adventurer[];
   maxRounds?: number;
+  /** Flat gold paid out for winning this room, on top of enemy goldDrops — see data/rooms.ts's ROOM_SLOT_CLEAR_GOLD. Absent means 0. */
+  clearGold?: number;
 }
 
 export interface PartyMemberSnapshot {

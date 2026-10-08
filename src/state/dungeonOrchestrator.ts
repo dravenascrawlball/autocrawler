@@ -64,7 +64,8 @@ function touchActiveRun(): void {
 
 /**
  * Rolls loot/gold for `record` (the just-resolved room) into `inventory`.
- * Room-clear loot/gold (rollRoomLoot/rollRoomGold) only happens on a win,
+ * Room-clear loot/gold (rollRoomLoot/rollRoomGold, plus the room's flat
+ * clearGold) only happens on a win,
  * same as always; Nerissa's Pickpocket Strike gold (sumGeneratedGold) is
  * added regardless of outcome — see its own doc comment for why. Takes the
  * record directly rather than indexing `runState.roomRecords` by room index
@@ -82,7 +83,7 @@ function rollLootForRoom(
   if (record.result.outcome === 'win') {
     const room = runState.rooms[record.roomIndex];
     inventory.items.push(...rollRoomLoot(room.enemies, lookupItem, rng));
-    inventory.gold += rollRoomGold(room.enemies, rng);
+    inventory.gold += rollRoomGold(room.enemies, rng) + (room.clearGold ?? 0);
   }
   inventory.gold += sumGeneratedGold(record.result);
 }

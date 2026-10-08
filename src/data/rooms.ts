@@ -98,9 +98,23 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
  * from the second balance pass (docs/roadmap.md), tuned with
  * src/sim/balanceSim.test.ts toward a ~50-60% full-clear rate for a party
  * that shops sensibly. Lets later rooms reuse the same few archetypes
- * while still escalating.
+ * while still escalating. Steep because ROOM_SLOT_CLEAR_GOLD lets the
+ * party grow by ~1 member per room (3 at room 1 -> ~7 by the finale), so
+ * enemies have to outscale a much bigger board — retune both together.
  */
-export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1, 0.9, 1.15, 1.25];
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1.3, 1.6, 1.9, 2.2];
+
+/**
+ * Flat gold paid for winning each slot's room (opener -> finale), on top of
+ * enemy goldDrops — the gold-income pass after the second balance pass
+ * (docs/roadmap.md): enemy drops alone (~29g/room) rarely covered even one
+ * recruit (50-65g), so the between-room shop went mostly unused. Sized so a
+ * party with no gold-generating kit (Nerissa's Pickpocket Strike) can make
+ * 1-2 recruit-sized purchases at every pause (sim: >=1 affordable at 100%
+ * of pauses, >=2 rising from ~5% after room 1 to ~80% after room 4). Paid
+ * on the final room too, though there's no shop after it.
+ */
+export const ROOM_SLOT_CLEAR_GOLD: number[] = [60, 55, 55, 55, 55];
 
 function pickComposition(pool: CompositionPool, rng: RngSource): EnemySpec[] {
   return pool[Math.floor(rng() * pool.length)];
@@ -114,5 +128,8 @@ function pickComposition(pool: CompositionPool, rng: RngSource): EnemySpec[] {
  * and two calls with the same rng produce the same run.
  */
 export function createStarterDungeonRooms(rng: RngSource = () => Math.random()): RoomDefinition[] {
-  return ROOM_DIFFICULTY_POOLS.map((pool, slotIndex) => room(pickComposition(pool, rng), ROOM_SLOT_ENEMY_STAT_SCALE[slotIndex]));
+  return ROOM_DIFFICULTY_POOLS.map((pool, slotIndex) => ({
+    ...room(pickComposition(pool, rng), ROOM_SLOT_ENEMY_STAT_SCALE[slotIndex]),
+    clearGold: ROOM_SLOT_CLEAR_GOLD[slotIndex],
+  }));
 }

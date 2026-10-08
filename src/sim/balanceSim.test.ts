@@ -31,6 +31,8 @@ import type { Adventurer } from './adventurer';
  */
 const RUNS = Number(process.env.BALANCE_SIM_RUNS ?? 2000);
 const ROOM_COUNT = 5;
+/** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
+const ECON_ARCHETYPES = new Set(['Nerissa']);
 
 function average(values: number[]): number {
   return values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
@@ -78,7 +80,8 @@ function shopGreedily(
   party: Adventurer[],
   activeRelics: DungeonRunState['activeRelics'],
   inventory: RunInventory,
-): void {
+): number {
+  let recruitSizedBuys = 0;
   const byPrice = <T extends { price: number }>(list: T[]) => [...list].sort((a, b) => a.price - b.price);
 
   for (const offer of byPrice(offers.recruits.filter((o) => !o.alreadyInParty))) {
@@ -86,12 +89,14 @@ function shopGreedily(
       inventory.gold -= offer.price;
       applyActiveRelicsToAdventurer(offer.adventurer, activeRelics);
       party.push(offer.adventurer);
+      recruitSizedBuys += 1;
     }
   }
   for (const offer of byPrice(offers.recruits.filter((o) => o.alreadyInParty))) {
     if (inventory.gold >= offer.price) {
       inventory.gold -= offer.price;
       levelUpAdventurer(offer.adventurer);
+      recruitSizedBuys += 1;
     }
   }
   for (const offer of byPrice(offers.relics)) {
@@ -108,6 +113,7 @@ function shopGreedily(
     }
   }
   autoEquip(party, inventory);
+  return recruitSizedBuys;
 }
 
 describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
@@ -125,6 +131,10 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
     // Per-character: runs they fought in at all (opening or recruited), and how many fully cleared.
     const anyStats: Record<string, { runs: number; clears: number }> = {};
     const actionCountsByArchetype: Record<string, Record<string, number>> = {};
+    // Per pause (index = room just cleared), runs with no ECON_ARCHETYPES member only.
+    const goldAtPause: number[][] = Array.from({ length: ROOM_COUNT - 1 }, () => []);
+    const recruitBuysAtPause: number[][] = Array.from({ length: ROOM_COUNT - 1 }, () => []);
+    const minRecruitPrice = Math.min(...CHARACTER_TEMPLATES.map((t) => t.recruitCost ?? DEFAULT_RECRUIT_PRICE));
     const stalledTurnsByArchetype: Record<string, { stalled: number; total: number }> = {};
 
     for (let seed = 0; seed < RUNS; seed++) {
@@ -157,7 +167,7 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
 
         let roomGold = sumGeneratedGold(record.result);
         if (record.result.outcome === 'win') {
-          roomGold += rollRoomGold(state.rooms[roomIndex].enemies, rng);
+          roomGold += rollRoomGold(state.rooms[roomIndex].enemies, rng) + (state.rooms[roomIndex].clearGold ?? 0);
           inventory.items.push(...rollRoomLoot(state.rooms[roomIndex].enemies, lookupItem, rng).map((item) => ({ ...item })));
           const totalHp = state.party.reduce((sum, m) => sum + Math.max(0, m.hp), 0);
           const totalMax = state.party.reduce((sum, m) => sum + m.maxHp, 0);
@@ -167,7 +177,12 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
         goldEarned += roomGold;
 
         if (outcome === null) {
-          shopGreedily(rollOffers(roster, state.party, state.activeRelics, rng), state.party, state.activeRelics, inventory);
+          const goldBefore = inventory.gold;
+          const buys = shopGreedily(rollOffers(roster, state.party, state.activeRelics, rng), state.party, state.activeRelics, inventory);
+          if (!state.party.some((member) => ECON_ARCHETYPES.has(member.name))) {
+            goldAtPause[roomIndex].push(goldBefore);
+            recruitBuysAtPause[roomIndex].push(buys);
+          }
         } else if (outcome !== 'completed') {
           runEndedAtRoom[roomIndex] += 1;
         }
@@ -234,6 +249,17 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
       `Avg party HP left after a won room: ${hpFractionAfterRoom.map((s, i) => `${i + 1}: ${(100 * average(s)).toFixed(0)}%`).join(', ')}`,
     );
     lines.push(`Avg gold earned per run: ${average(goldEarnedPerRun).toFixed(1)}g, avg level-ups bought: ${average(levelUpsPerRun).toFixed(2)}`);
+
+    lines.push(`\nEconomy at each pause (runs with no ${[...ECON_ARCHETYPES].join('/')}; cheapest recruit ${minRecruitPrice}g):`);
+    for (let i = 0; i < ROOM_COUNT - 1; i++) {
+      const golds = goldAtPause[i];
+      const atLeast = (n: number) => pct(golds.filter((g) => g >= n * minRecruitPrice).length, golds.length);
+      lines.push(
+        `  after room ${i + 1}: avg gold ${average(golds).toFixed(0)}g, ` +
+          `can afford >=1 recruit ${atLeast(1)}, >=2 ${atLeast(2)}, ` +
+          `recruit/level-up buys made ${average(recruitBuysAtPause[i]).toFixed(2)} (n=${golds.length})`,
+      );
+    }
 
     lines.push('\nFull-clear rate by character (opening party | fought in run at all):');
     const names = Object.keys(anyStats).sort(
