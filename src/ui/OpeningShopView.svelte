@@ -10,6 +10,8 @@
     returnOpeningMemberToTray,
   } from '../state/openingShop';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
+  import Tooltip from './Tooltip.svelte';
+  import { recruitTooltip } from './recruitTooltip';
   import type { Adventurer } from '../sim/adventurer';
 
   $: if ($openingShop === null) {
@@ -62,7 +64,9 @@
   <ul class="shop-offers">
     {#each offers.recruits as offer (offer.adventurer.id)}
       <li class="shop-offer">
-        <span class="shop-offer__label">{offer.adventurer.name}</span>
+        <Tooltip text={recruitTooltip(offer.adventurer)}>
+          <span class="shop-offer__label shop-offer__label--hint">{offer.adventurer.name}</span>
+        </Tooltip>
         <button type="button" disabled={gold < offer.price} on:click={() => buyOpeningRecruit(offer.adventurer.id)}>
           Recruit — {offer.price}g
         </button>
@@ -134,6 +138,11 @@
     background: var(--bg-inset);
     border: 1px solid var(--panel-border);
     border-radius: 6px;
+  }
+
+  .shop-offer__label--hint {
+    text-decoration: underline dotted;
+    cursor: help;
   }
 
   .shop-offer__label {

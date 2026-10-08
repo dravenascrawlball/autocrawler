@@ -15,8 +15,7 @@
   export let onOpenCharacter: (adventurerId: string) => void = () => {};
 
   $: rows = [...$roster.adventurers].sort((a, b) => a.name.localeCompare(b.name)).map((adventurer) => {
-    const cleared = $runHistory.clearedWithIds.includes(adventurer.id);
-    const unlocks = clearUnlocksFor(adventurer.name).map((unlock) => ({ ...unlock, earned: cleared }));
+    const unlocks = clearUnlocksFor(adventurer.name, adventurer.id, $runHistory);
     const kits = kitsFor(adventurer.name, $metaProgression.unlockedKitIds);
     const goals = unlocks.length + kits.length;
     const earned = unlocks.filter((u) => u.earned).length + kits.filter((k) => k.owned).length;
@@ -53,7 +52,7 @@
               {#if unlock.earned}
                 ✓ {unlock.name} <span class="goal__hint">in Special pool</span>
               {:else}
-                🔒 {unlock.name} <span class="goal__hint">clear a run with {row.adventurer.name}</span>
+                🔒 {unlock.name} <span class="goal__hint">{unlock.conditionText.toLowerCase()}</span>
               {/if}
             </li>
           {/each}

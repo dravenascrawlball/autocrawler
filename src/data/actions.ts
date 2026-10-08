@@ -23,6 +23,7 @@ import {
   FlankStrikeAction,
   VenomSpitAction,
   SearingTouchAction,
+  VolleyAction,
 } from '../sim/actions/attack';
 import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import { RetreatAction } from '../sim/actions/retreat';
@@ -35,6 +36,7 @@ import {
   ShieldWallAction,
   GuardiansVowAction,
   VengeanceAction,
+  BattleOrdersAction,
   TauntAction,
   MarkAction,
   SilenceAction,
@@ -79,6 +81,8 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'searing-touch': SearingTouchAction,
   regenerate: RegenerateAction,
   vengeance: VengeanceAction,
+  volley: VolleyAction,
+  'battle-orders': BattleOrdersAction,
   'lifesteal-strike': LifestealStrikeAction,
   taunt: TauntAction,
   cleanse: CleanseAction,

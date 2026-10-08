@@ -21,16 +21,13 @@ import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
 import { levelUpAdventurer } from '../sim/leveling';
 import { applyRelicToAdventurer, applyActiveRelicsToAdventurer, type Relic } from '../sim/relics';
 import { calculateRunRenownBreakdown } from '../sim/renown';
-import { newUnlocksForRun, lastRunReward } from './progression';
-import type { Kit } from '../sim/kits';
+import { newUnlocksForRun, lastRunReward, unlockedPoolEntriesFor, unlockedKitsFor } from './progression';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
 import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
 import { createStarterDungeonRooms } from '../data/rooms';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
-import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
-import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { UNIVERSAL_TRAIT_POOL } from '../data/traits';
 import { refreshRecruitmentPool } from './recruitmentPool';
 import { metaProgression } from './metaProgression';
@@ -398,28 +395,32 @@ export function finishDungeonRun(): void {
 
   const party = playback.runState.party;
   const renown = calculateRunRenownBreakdown(playback.runState.roomRecords, playback.outcome);
-  // Computed before runHistory is updated, so it compares against who had cleared *before* this run.
-  const newUnlocks = newUnlocksForRun(party, playback.outcome, get(runHistory).clearedWithIds);
-  runHistory.update((history) =>
-    recordRun(history, party.map((adventurer) => adventurer.id), renown.roomsWon, playback.outcome === 'completed'),
+  const historyBefore = get(runHistory);
+  const historyAfter = recordRun(
+    historyBefore,
+    party.map((adventurer) => adventurer.id),
+    renown.roomsWon,
+    playback.outcome === 'completed',
   );
+  runHistory.set(historyAfter);
   metaProgression.update((state) => ({ ...state, renown: state.renown + renown.total }));
   // Read by the town toast (ui/TownPhase.svelte) — see state/progression.ts.
-  lastRunReward.set({ outcome: playback.outcome, renown, newUnlocks });
+  lastRunReward.set({ outcome: playback.outcome, renown, newUnlocks: newUnlocksForRun(party, historyBefore, historyAfter) });
 
-  // Resolved after runHistory is updated above, so a character who just cleared their first run
-  // this very call already has their unlock available for this reset, not just their next one.
-  const clearedWithIds = new Set(get(runHistory).clearedWithIds);
+  // Resolved against the updated history, so an unlock earned this very run is already in the
+  // pool for this reset, not just the next one.
   const unlockedKitIds = get(metaProgression).unlockedKitIds;
-  for (const adventurer of playback.runState.party) {
+  for (const adventurer of party) {
     const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === adventurer.name);
     if (template) {
-      const unlockedPoolEntries = clearedWithIds.has(adventurer.id) ? (CHARACTER_UNLOCK_POOL[template.name] ?? []) : [];
-      const ownedKitIds = new Set(unlockedKitIds[template.name] ?? []);
-      const unlockedKits: Kit[] = KIT_SHOP_CATALOG.filter(
-        (entry) => entry.characterName === template.name && ownedKitIds.has(entry.kit.id),
-      ).map((entry) => entry.kit);
-      resetToTemplateBaseline(adventurer, template, unlockedPoolEntries, UNIVERSAL_TRAIT_POOL, undefined, unlockedKits);
+      resetToTemplateBaseline(
+        adventurer,
+        template,
+        unlockedPoolEntriesFor(template.name, adventurer.id, historyAfter),
+        UNIVERSAL_TRAIT_POOL,
+        undefined,
+        unlockedKitsFor(template.name, unlockedKitIds),
+      );
     }
   }
 

@@ -88,8 +88,46 @@ export const CommandAction: Action = {
   },
 };
 
-/** Consolidated from two separate bonuses (10 accuracy + 10 crit) into one stronger crit buff once Accuracy was removed (the "pure auto-battler" pass — see docs/roadmap.md). */
-export const INSPIRE_CRIT_CHANCE_BONUS = 20;
+/** How many distinct allies Battle Orders commands at once — one more than Command. */
+export const BATTLE_ORDERS_ALLY_COUNT = 2;
+
+/**
+ * Fallacy's unlock Special (the unlock content pass — deliberately a
+ * little stronger than Command, since she trailed the field): up to
+ * BATTLE_ORDERS_ALLY_COUNT distinct random living allies (never herself)
+ * each make a bonus Attack Nearest right now, same as Command's single one.
+ */
+export const BattleOrdersAction: Action = {
+  id: 'battle-orders',
+  name: 'Battle Orders',
+  reach: 'melee', // unused — targets allies, never the opposing roster directly
+  selectTarget(context: TargetingContext) {
+    return CommandAction.selectTarget(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const pool = getOwnRoster(context.battle, context.actor).filter((unit) => unit.hp > 0 && unit.id !== context.actor.id);
+    const commands = [];
+    for (let i = 0; i < BATTLE_ORDERS_ALLY_COUNT && pool.length > 0; i++) {
+      const [ally] = pool.splice(Math.floor(context.rng() * pool.length), 1);
+      const enemyTarget = AttackNearestAction.selectTarget({ actor: ally, battle: context.battle });
+      const outcome = enemyTarget
+        ? AttackNearestAction.resolve({ actor: ally, target: enemyTarget, rng: context.rng, battle: context.battle })
+        : null;
+      const attackOutcome =
+        outcome?.type === 'attack' ? { damage: outcome.damage, hit: outcome.hit, targetId: outcome.targetId } : null;
+      commands.push({ commandedAllyId: ally.id, attackOutcome });
+    }
+    return { type: 'command-multi', commands };
+  },
+};
+
+/**
+ * Consolidated from two separate bonuses (10 accuracy + 10 crit) into one
+ * stronger crit buff once Accuracy was removed (the "pure auto-battler"
+ * pass — see docs/roadmap.md). Raised 20 → 30 in the unlock content pass
+ * to pull Tharavel (a trailing pick) up toward the field.
+ */
+export const INSPIRE_CRIT_CHANCE_BONUS = 30;
 export const INSPIRE_DURATION_TURNS = 3;
 const INSPIRE_CRIT_BUFF_ID = 'inspire-crit';
 

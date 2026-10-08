@@ -10,7 +10,7 @@ import { rollTraits, UNIVERSAL_TRAIT_ROLL_CAP } from './traits';
 import type { TagId } from './tags';
 import type { Aura, AppliedAura } from './auras';
 import type { Kit } from './kits';
-import { pickKit } from './kits';
+import { pickKit, applyKit } from './kits';
 import type { ActiveShield } from './shields';
 import type { DieFace } from './dieFace';
 import { dominantFaceIndex } from './dieFace';
@@ -287,4 +287,39 @@ export function resetToTemplateBaseline(
       unlockedKits,
     ),
   );
+}
+
+/**
+ * Re-draws `adventurer`'s random pool picks in place — their pool Special
+ * Action/Trait (from the template's specialActionPool plus
+ * `unlockedPoolEntries`) and their Kit (template kitPool plus
+ * `unlockedKits`) — leaving everything else alone (innate Specials, seeded
+ * and universal Traits, stats, level). Used when a character shows up in a
+ * shop's recruit offers without being in the party (the unlock content
+ * pass — see state/progression.ts's rerollOfferedCharacters): passing on
+ * someone and seeing them again later gives a fresh roll, not the same one.
+ * A no-op for a character with no pool and no Kits.
+ */
+export function rerollPoolPicks(
+  adventurer: Adventurer,
+  template: AdventurerTemplate,
+  unlockedPoolEntries: CharacterPoolEntry[],
+  unlockedKits: Kit[],
+  rng: RngSource,
+): void {
+  const pool = [...(template.specialActionPool ?? []), ...unlockedPoolEntries];
+  if (pool.length > 0) {
+    const poolSpecialIds = new Set(pool.flatMap((entry) => (entry.kind === 'special-action' ? [entry.specialAction.id] : [])));
+    const poolTraitIds = new Set(pool.flatMap((entry) => (entry.kind === 'trait' ? [entry.trait.id] : [])));
+    const seededTraitIds = new Set((template.traits ?? []).map((trait) => trait.id));
+    adventurer.activeSpecialActions = adventurer.activeSpecialActions.filter((special) => !poolSpecialIds.has(special.id));
+    adventurer.traits = adventurer.traits.filter((trait) => seededTraitIds.has(trait.id) || !poolTraitIds.has(trait.id));
+
+    const picked = pickPoolEntry(pool, rng);
+    if (picked?.kind === 'special-action') adventurer.activeSpecialActions = [...adventurer.activeSpecialActions, picked.specialAction];
+    if (picked?.kind === 'trait') adventurer.traits = [...adventurer.traits, picked.trait];
+  }
+
+  const kit = pickKit([...(template.kitPool ?? []), ...unlockedKits], rng);
+  if (kit) applyKit(adventurer, template, kit);
 }

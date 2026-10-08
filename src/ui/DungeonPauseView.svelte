@@ -16,7 +16,9 @@
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
-  import { runHistory } from '../state/runHistory';
+  import Tooltip from './Tooltip.svelte';
+  import { recruitTooltip } from './recruitTooltip';
+  import { runHistory, recordRun } from '../state/runHistory';
   import { newUnlocksForRun } from '../state/progression';
   import { calculateRunRenownBreakdown } from '../sim/renown';
   import type { EquipmentSlot } from '../sim/items';
@@ -86,8 +88,17 @@
       ? calculateRunRenownBreakdown($dungeonPlayback.runState.roomRecords, runOutcome)
       : null;
   $: unlockPreview =
-    $dungeonPlayback && runOutcome !== null
-      ? newUnlocksForRun($dungeonPlayback.runState.party, runOutcome, $runHistory.clearedWithIds)
+    $dungeonPlayback && runOutcome !== null && renownPreview
+      ? newUnlocksForRun(
+          $dungeonPlayback.runState.party,
+          $runHistory,
+          recordRun(
+            $runHistory,
+            $dungeonPlayback.runState.party.map((member) => member.id),
+            renownPreview.roomsWon,
+            runOutcome === 'completed',
+          ),
+        )
       : [];
 </script>
 
@@ -189,10 +200,12 @@
       <ul class="shop-offers">
         {#each shopOffers.recruits as offer (offer.adventurer.id)}
           <li class="shop-offer">
-            <span class="shop-offer__label">
-              {offer.adventurer.name}
-              {#if offer.alreadyInParty}<span class="shop-offer__hint">(level up!)</span>{/if}
-            </span>
+            <Tooltip text={recruitTooltip(offer.adventurer)}>
+              <span class="shop-offer__label shop-offer__label--hint">
+                {offer.adventurer.name}
+                {#if offer.alreadyInParty}<span class="shop-offer__hint">(level up!)</span>{/if}
+              </span>
+            </Tooltip>
             <button
               type="button"
               disabled={shopGold < offer.price}
@@ -373,6 +386,11 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+  }
+
+  .shop-offer__label--hint {
+    text-decoration: underline dotted;
+    cursor: help;
   }
 
   .shop-offer__hint {

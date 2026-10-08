@@ -7,6 +7,7 @@ import { RELIC_REGISTRY } from '../data/relics';
 import { rollRecruitOffers, rollRelicOffers, rollEquipmentOffers, type ShopOffers, DEFAULT_RECRUIT_PRICE } from '../sim/shopOffers';
 import { INITIAL_SAVE } from './persistence';
 import { roster } from './roster';
+import { rerollOfferedCharacters } from './progression';
 
 /** Shared by resumeFromSave and dungeonOrchestrator.ts's startDungeon/continueDungeonRun — looks up a character's town recruit price by name, falling back to DEFAULT_RECRUIT_PRICE for anyone without one set. */
 export function recruitPriceFor(name: string): number {
@@ -15,8 +16,11 @@ export function recruitPriceFor(name: string): number {
 
 /** Rolls a fresh ShopOffers for a pause — shared by resumeFromSave (below) and dungeonOrchestrator.ts, which can't import each other (circular). */
 export function rollShopOffers(runState: DungeonRunState, rng: () => number): ShopOffers {
+  const recruits = rollRecruitOffers(get(roster).adventurers, runState.party, (adventurer) => recruitPriceFor(adventurer.name), rng);
+  // Fresh Special/Kit roll for anyone offered who isn't in the party — see progression.ts.
+  rerollOfferedCharacters(recruits, rng);
   return {
-    recruits: rollRecruitOffers(get(roster).adventurers, runState.party, (adventurer) => recruitPriceFor(adventurer.name), rng),
+    recruits,
     relics: rollRelicOffers(RELIC_REGISTRY, runState.activeRelics, rng),
     equipment: rollEquipmentOffers(Object.values(ITEM_REGISTRY), rng),
   };

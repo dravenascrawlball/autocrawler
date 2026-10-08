@@ -728,6 +728,31 @@ export const ScatterShotAction: Action = {
   },
 };
 
+/** How many distinct enemies Volley hits — one more than Scatter Shot. */
+export const VOLLEY_TARGET_COUNT = 3;
+
+/**
+ * Melpomene's unlock Special (the unlock content pass — a deliberately
+ * slightly stronger Scatter Shot, since she trailed the field): full damage
+ * to VOLLEY_TARGET_COUNT distinct random living enemies, any rank.
+ */
+export const VolleyAction: Action = {
+  id: 'volley',
+  name: 'Volley',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'volley');
+    const livingEnemies = getOpposingRoster(context.battle, context.actor).filter((unit) => unit.hp > 0);
+    const hits = pickRandomDistinct(livingEnemies, VOLLEY_TARGET_COUNT, context.rng).map((target) =>
+      applyAttackToTarget(context, damage, target),
+    );
+    return { type: 'attack-multi', hits };
+  },
+};
+
 // --- Enemy variety pass (docs/roadmap.md item 7): enemy-only attacks ---
 
 /**

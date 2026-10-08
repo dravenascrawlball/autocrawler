@@ -306,13 +306,37 @@ rooms won) — written by `recordRun` in `finishDungeonRun`; persisted, and
 older saves load with empty stats (no save wipe).
 
 **Still open:**
-- **Content is thin**: only Tharavel and Drifta have a clear-unlock, and
-  only Gudrun, Nerissa and Caladwen have Kits — most characters show "No
-  unlocks yet". A content pass (an unlock per character) is the natural
-  follow-up; it'll need a balance check.
+- ~~Content is thin~~ — resolved by the unlock content pass below (Kits
+  are still only Gudrun/Nerissa/Caladwen).
 - Clear-unlocks only add a Special to the character's random pool, not a
   guaranteed pick — the UI says "added to their Special pool" for that
   reason.
+
+### Unlock content pass — shipped
+
+Every character but Dee now has one earned Special (`data/characterUnlocks.ts`,
+full list in `docs/character-abilities.md`), with **varied conditions**
+(`UnlockCondition`: clear a run / reach room 4 / take them on 3 runs —
+checked by `state/progression.ts`'s `isUnlockEarned` against
+`runHistory.characterStats`). Weaker picks got the easier "3 runs" goals.
+
+- Most new Specials reuse an existing action on a new trigger
+  (sidegrades). Two are new, slightly stronger actions for trailing picks:
+  **Battle Orders** (Fallacy — two allies each make a bonus attack) and
+  **Volley** (Melpomene — 3-target Scatter Shot). Tharavel already had an
+  unlock, so **Inspire** went 20 → 30% crit instead.
+- **Re-roll on offer**: a character offered in a shop (opening or
+  between rooms) who isn't in the party gets a fresh Special/Kit draw each
+  time they're offered (`sim/adventurer.ts`'s `rerollPoolPicks`, via
+  `rerollOfferedCharacters`).
+- **Recruit tooltip**: hovering a recruit offer shows the Specials, Traits
+  and Kit that character brings this run (`ui/recruitTooltip.ts`).
+- Balance (`BALANCE_SIM_UNLOCKS=1` simulates a veteran profile with every
+  unlock earned): fresh profile **55.6%** full clear (spread 48-65%),
+  veteran **52.2%** (46-61%) — unlocks add variety, not power. Two first
+  drafts were reworked after testing: Gudrun's counter-on-every-hit was far
+  too strong (now **Bloodlust**, on enemy downed), and Isilwen's
+  Wild Card fired too rarely on enemy downed (now on hit landed).
 
 ## 4. 3×3 grid: lanes and drag-and-drop formation — shipped
 

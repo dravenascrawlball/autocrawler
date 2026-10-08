@@ -15,7 +15,8 @@ import { CHARACTER_TEMPLATES } from '../data/characters';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
-import type { Adventurer } from './adventurer';
+import { rerollPoolPicks, type Adventurer } from './adventurer';
+import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 
 /**
  * Not part of the regular suite — a dev tool for the balance pass (see
@@ -30,6 +31,8 @@ import type { Adventurer } from './adventurer';
  * of offers per shop visit, bought greedily — see shopGreedily.
  */
 const RUNS = Number(process.env.BALANCE_SIM_RUNS ?? 2000);
+/** BALANCE_SIM_UNLOCKS=1 simulates a veteran profile: every character's unlock (data/characterUnlocks.ts) already earned and in their pool. */
+const ALL_UNLOCKS = Boolean(process.env.BALANCE_SIM_UNLOCKS);
 const ROOM_COUNT = 5;
 /** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
 const ECON_ARCHETYPES = new Set(['Nerissa']);
@@ -140,6 +143,13 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
     for (let seed = 0; seed < RUNS; seed++) {
       const rng = createSeededRng(seed);
       const roster = createStarterRoster();
+      if (ALL_UNLOCKS) {
+        for (const adventurer of roster) {
+          const template = CHARACTER_TEMPLATES.find((t) => t.name === adventurer.name);
+          const unlocks = (CHARACTER_UNLOCK_POOL[adventurer.name] ?? []).map((unlock) => unlock.entry);
+          if (template) rerollPoolPicks(adventurer, template, unlocks, [], rng);
+        }
+      }
       const rooms = createStarterDungeonRooms(rng);
       const inventory = createRunInventory();
       inventory.gold = STARTING_SHOP_GOLD;

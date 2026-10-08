@@ -31,6 +31,31 @@ function recordDownIfNeeded(
   };
 }
 
+/**
+ * A commanded bonus attack (Command, Battle Orders) — credited to the
+ * commanded ally, not whoever issued the order: she didn't land the hit,
+ * they did.
+ */
+function applyCommandStats(
+  battle: BattleState,
+  commandedAllyId: string,
+  attackOutcome: { damage: number; hit: boolean; targetId: string } | null,
+  roomIndex: number,
+): void {
+  if (!attackOutcome) return;
+  const commandedAlly = findUnitById(battle, commandedAllyId);
+  const target = findUnitById(battle, attackOutcome.targetId);
+  if (commandedAlly) {
+    commandedAlly.runDamageDealt += attackOutcome.damage;
+  }
+  if (target) {
+    target.runDamageTaken += attackOutcome.damage;
+    if (attackOutcome.hit && commandedAlly) {
+      recordDownIfNeeded(battle, target, commandedAlly.archetype, roomIndex);
+    }
+  }
+}
+
 /** The 'action'/'special-action' outcome-handling body shared by both event types — see applyTurnStats. */
 function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: BattleState, roomIndex: number): void {
   if (
@@ -64,18 +89,11 @@ function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: Bat
     if (outcome.type === 'heal') {
       for (const splash of outcome.splashes ?? []) unit.runHealingDone += splash.amount;
     }
-  } else if (outcome.type === 'command' && outcome.attackOutcome) {
-    // Credited to the commanded ally, not `unit` (Fallacy) — she didn't land the hit, they did.
-    const commandedAlly = findUnitById(battle, outcome.commandedAllyId);
-    const target = findUnitById(battle, outcome.attackOutcome.targetId);
-    if (commandedAlly) {
-      commandedAlly.runDamageDealt += outcome.attackOutcome.damage;
-    }
-    if (target) {
-      target.runDamageTaken += outcome.attackOutcome.damage;
-      if (outcome.attackOutcome.hit && commandedAlly) {
-        recordDownIfNeeded(battle, target, commandedAlly.archetype, roomIndex);
-      }
+  } else if (outcome.type === 'command') {
+    applyCommandStats(battle, outcome.commandedAllyId, outcome.attackOutcome, roomIndex);
+  } else if (outcome.type === 'command-multi') {
+    for (const command of outcome.commands) {
+      applyCommandStats(battle, command.commandedAllyId, command.attackOutcome, roomIndex);
     }
   }
 }

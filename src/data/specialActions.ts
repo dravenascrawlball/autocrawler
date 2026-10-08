@@ -13,6 +13,11 @@ import {
   ChainStrikeAction,
   ScatterShotAction,
   FearAction,
+  CardThrowAction,
+  RallyingStrikeAction,
+  PickpocketStrikeAction,
+  SneakStrikeAction,
+  VolleyAction,
 } from '../sim/actions/attack';
 import { SelfHealAction, HealAction, CleanseAction, ReviveAction, MendingChargeAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import {
@@ -29,6 +34,7 @@ import {
   StunAction,
   GuardiansWardAction,
   VanishAction,
+  BattleOrdersAction,
 } from '../sim/actions/support';
 import { EmberBurnAction } from '../sim/actions/itemEffects';
 
@@ -207,6 +213,103 @@ export const DRIFTA_ADRENALINE_RUSH_SPECIAL: SpecialAction = {
   name: 'Adrenaline Rush',
   trigger: 'on-hit-taken',
   action: AttackLowestHpAction,
+};
+
+// --- Unlock content pass (docs/roadmap.md): one earned Special per character ---
+// Conditions live in data/characterUnlocks.ts. Most reuse an existing action on a new trigger
+// (sidegrades); Fallacy's Battle Orders and Melpomene's Volley are slightly stronger new actions
+// for two trailing picks.
+
+/**
+ * Gudrun: when an enemy falls, a bonus Power Attack — feeds her Rage theme.
+ * (A first version countered every hit taken; on a front-line tank that
+ * fired constantly and tested far too strong.)
+ */
+export const GUDRUN_BLOODLUST_SPECIAL: SpecialAction = {
+  id: 'gudrun-bloodlust',
+  name: 'Bloodlust',
+  trigger: 'on-enemy-downed',
+  action: PowerAttackAction,
+};
+
+/** Isilwen: when her attack lands, flings a bonus Card Throw (on-enemy-downed fired too rarely to matter). */
+export const ISILWEN_WILD_CARD_SPECIAL: SpecialAction = {
+  id: 'isilwen-wild-card',
+  name: 'Wild Card',
+  trigger: 'on-hit-landed',
+  action: CardThrowAction,
+};
+
+/** Bodil: when an ally falls, Taunts to draw fire off the rest of the party. */
+export const BODIL_BULWARK_SPECIAL: SpecialAction = {
+  id: 'bodil-bulwark',
+  name: 'Bulwark',
+  trigger: 'on-ally-downed',
+  action: TauntAction,
+};
+
+/** Glint: when an ally falls, a Rallying Strike — a hit plus party-wide armor. */
+export const GLINT_HOLD_THE_LINE_SPECIAL: SpecialAction = {
+  id: 'glint-hold-the-line',
+  name: 'Hold the Line',
+  trigger: 'on-ally-downed',
+  action: RallyingStrikeAction,
+};
+
+/** Fallacy: every turn, two allies make a bonus attack (Command does one). */
+export const FALLACY_BATTLE_ORDERS_SPECIAL: SpecialAction = {
+  id: 'fallacy-battle-orders',
+  name: 'Battle Orders',
+  trigger: 'on-turn-start',
+  action: BattleOrdersAction,
+};
+
+/** Mirka: when hit, Fear on the enemy front — they take more damage for a few turns. */
+export const MIRKA_SHOCKWAVE_SPECIAL: SpecialAction = {
+  id: 'mirka-shockwave',
+  name: 'Shockwave',
+  trigger: 'on-hit-taken',
+  action: FearAction,
+};
+
+/** Nerissa: when an enemy falls, a Pickpocket Strike — damage plus gold. */
+export const NERISSA_FENCE_THE_LOOT_SPECIAL: SpecialAction = {
+  id: 'nerissa-fence-the-loot',
+  name: 'Fence the Loot',
+  trigger: 'on-enemy-downed',
+  action: PickpocketStrikeAction,
+};
+
+/** Dravena: when hit, Vanishes — untargetable for a short while. */
+export const DRAVENA_BLINK_SPECIAL: SpecialAction = {
+  id: 'dravena-blink',
+  name: 'Blink',
+  trigger: 'on-hit-taken',
+  action: VanishAction,
+};
+
+/** Caladwen: when an enemy falls, slips in a Sneak Strike. */
+export const CALADWEN_AMBUSH_SPECIAL: SpecialAction = {
+  id: 'caladwen-ambush',
+  name: 'Ambush',
+  trigger: 'on-enemy-downed',
+  action: SneakStrikeAction,
+};
+
+/** Melpomene: every turn, full damage to three random enemies (Scatter Shot hits two). */
+export const MELPOMENE_VOLLEY_SPECIAL: SpecialAction = {
+  id: 'melpomene-volley',
+  name: 'Volley',
+  trigger: 'on-turn-start',
+  action: VolleyAction,
+};
+
+/** Mira: the moment an ally falls, Revives them. */
+export const MIRA_SECOND_CHANCE_SPECIAL: SpecialAction = {
+  id: 'mira-second-chance',
+  name: 'Second Chance',
+  trigger: 'on-ally-downed',
+  action: ReviveAction,
 };
 
 /**
@@ -518,6 +621,17 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'melpomene-scatter-shot': MELPOMENE_SCATTER_SHOT_SPECIAL,
   'sentinel-vengeance': SENTINEL_VENGEANCE_SPECIAL,
   'troll-regenerate': TROLL_REGENERATE_SPECIAL,
+  'gudrun-bloodlust': GUDRUN_BLOODLUST_SPECIAL,
+  'isilwen-wild-card': ISILWEN_WILD_CARD_SPECIAL,
+  'bodil-bulwark': BODIL_BULWARK_SPECIAL,
+  'glint-hold-the-line': GLINT_HOLD_THE_LINE_SPECIAL,
+  'fallacy-battle-orders': FALLACY_BATTLE_ORDERS_SPECIAL,
+  'mirka-shockwave': MIRKA_SHOCKWAVE_SPECIAL,
+  'nerissa-fence-the-loot': NERISSA_FENCE_THE_LOOT_SPECIAL,
+  'dravena-blink': DRAVENA_BLINK_SPECIAL,
+  'caladwen-ambush': CALADWEN_AMBUSH_SPECIAL,
+  'melpomene-volley': MELPOMENE_VOLLEY_SPECIAL,
+  'mira-second-chance': MIRA_SECOND_CHANCE_SPECIAL,
 };
 
 /**

@@ -13,8 +13,7 @@
   $: adventurer = adventurerId ? ($roster.adventurers.find((a) => a.id === adventurerId) ?? null) : null;
   // Progression (roadmap item 3): run stats, clear-unlocks and Kits — see state/progression.ts.
   $: stats = adventurer ? $runHistory.characterStats[adventurer.id] : undefined;
-  $: hasCleared = adventurer ? $runHistory.clearedWithIds.includes(adventurer.id) : false;
-  $: clearUnlocks = adventurer ? clearUnlocksFor(adventurer.name) : [];
+  $: clearUnlocks = adventurer ? clearUnlocksFor(adventurer.name, adventurer.id, $runHistory) : [];
   $: kits = adventurer ? kitsFor(adventurer.name, $metaProgression.unlockedKitIds) : [];
 
   function fallbackToIdle(event: Event, archetype: string): void {
@@ -157,11 +156,11 @@
           {:else}
             <ul class="trait-list">
               {#each clearUnlocks as unlock (unlock.name)}
-                <li class="trait-row" class:trait-row--locked={!hasCleared}>
-                  <span class="trait-row__name">{hasCleared ? '✓' : '🔒'} {unlock.name}</span>
+                <li class="trait-row" class:trait-row--locked={!unlock.earned}>
+                  <span class="trait-row__name">{unlock.earned ? '✓' : '🔒'} {unlock.name}</span>
                   <span class="trait-row__description">
                     {(unlock.actionId ? ACTION_DESCRIPTIONS[unlock.actionId] : unlock.description) ?? ''}
-                    {hasCleared ? 'In their Special pool.' : `Clear a run with ${adventurer.name} to add it to their Special pool.`}
+                    {unlock.earned ? 'In their Special pool.' : `${unlock.conditionText} to add it to their Special pool.`}
                   </span>
                 </li>
               {/each}

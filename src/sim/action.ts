@@ -38,6 +38,8 @@ export type ActionId =
   | 'searing-touch'
   | 'regenerate'
   | 'vengeance'
+  | 'volley'
+  | 'battle-orders'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
@@ -168,6 +170,11 @@ export type ActionOutcome =
    * valid enemy target (shouldn't happen mid-room).
    */
   | { type: 'command'; commandedAllyId: string; attackOutcome: { damage: number; hit: boolean; targetId: string } | null }
+  /** Fallacy's Battle Orders (unlock content pass): Command for several distinct allies at once — see actions/support.ts. */
+  | {
+      type: 'command-multi';
+      commands: { commandedAllyId: string; attackOutcome: { damage: number; hit: boolean; targetId: string } | null }[];
+    }
   /**
    * Mirka's Fear (roadmap item 11): no attack of her own — applies a timed
    * positive 'vulnerability' StatModifier (the Mark ability type) to every

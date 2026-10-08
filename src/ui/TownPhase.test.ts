@@ -44,7 +44,15 @@ describe('TownPhase', () => {
     lastRunReward.set({
       outcome: 'completed',
       renown: { roomsWon: 5, roomRenown: 15, completionBonus: 15, total: 30 },
-      newUnlocks: [{ characterName: 'Drifta', name: 'Adrenaline Rush' }],
+      newUnlocks: [
+        {
+          characterName: 'Drifta',
+          name: 'Adrenaline Rush',
+          condition: { kind: 'clear-run' },
+          conditionText: 'Clear a run with Drifta',
+          earned: true,
+        },
+      ],
     });
     render(TownPhase);
 

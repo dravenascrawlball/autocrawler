@@ -23,6 +23,8 @@ export const ACTION_DESCRIPTIONS: Partial<Record<ActionId, string>> = {
   'self-heal': 'Heals self once below half health.',
   'mending-charge': 'Every turn, heals the ally standing in front of her (or the lowest-HP hurt ally) and banks energy.',
   'splash-heal': 'Every turn, heals the lowest-HP hurt ally and splashes half as much onto allies next to them.',
+  volley: 'Ranged hit on three random enemies at once, at full damage.',
+  'battle-orders': 'Two allies each make a bonus attack right now.',
   'guardians-vow': 'Shields the ally standing in front of her; the shield grows with her banked energy.',
   empower: "Grants the ally currently hitting hardest a temporary attack boost.",
   command: 'Grants a random ally a bonus attack right now.',

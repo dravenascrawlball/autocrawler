@@ -8,6 +8,7 @@ import { MAX_PARTY_SIZE } from '../sim/draft';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
 import { roster } from './roster';
+import { rerollOfferedCharacters } from './progression';
 import { recruitPriceFor } from './dungeonPlayback';
 import { startDungeon } from './dungeonOrchestrator';
 import type { RngSource } from '../sim/rng';
@@ -49,8 +50,11 @@ export interface OpeningShopState {
 export const openingShop = writable<OpeningShopState | null>(null);
 
 function rollOffers(party: Adventurer[], activeRelics: Relic[], rng: RngSource): ShopOffers {
+  const recruits = rollRecruitOffers(get(roster).adventurers, party, (adventurer) => recruitPriceFor(adventurer.name), rng);
+  // Fresh Special/Kit roll for everyone offered — see progression.ts's rerollOfferedCharacters.
+  rerollOfferedCharacters(recruits, rng);
   return {
-    recruits: rollRecruitOffers(get(roster).adventurers, party, (adventurer) => recruitPriceFor(adventurer.name), rng),
+    recruits,
     relics: rollRelicOffers(RELIC_REGISTRY, activeRelics, rng),
     equipment: rollEquipmentOffers(Object.values(ITEM_REGISTRY), rng),
   };

@@ -191,6 +191,21 @@ export function outcomeToReplayEvents(
         hit: outcome.attackOutcome.hit,
       });
     }
+  } else if (outcome.type === 'command-multi') {
+    // Fallacy's Battle Orders (unlock content pass) — one announcement, then each commanded ally's
+    // bonus attack plays like a plain 'attack' from them.
+    events.push({ type: 'announce', actorId, text: `${actionName}!`, color: '#ff9966' });
+    for (const command of outcome.commands) {
+      if (command.attackOutcome) {
+        events.push({
+          type: 'attack',
+          actorId: command.commandedAllyId,
+          targetId: command.attackOutcome.targetId,
+          damage: command.attackOutcome.damage,
+          hit: command.attackOutcome.hit,
+        });
+      }
+    }
   } else if (outcome.type === 'party-buff') {
     // Tharavel's Inspire (roadmap item 11) — no attack of her own, one announcement over her
     // summarizing the whole-party crit buff (consolidated from a separate accuracy + crit
