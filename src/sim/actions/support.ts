@@ -1,8 +1,8 @@
 import type { Action, ActionContext, ActionOutcome, TargetingContext } from '../action';
-import { getOwnRoster, getOpposingRoster } from '../battle';
+import { getOwnRoster, getOpposingRoster, getHealEnergy } from '../battle';
 import { applyBuff } from '../buffs';
 import { applyShield } from '../shields';
-import { selectHighestAttackPowerAlly, selectFirstEnemy, selectLowestHpAlly } from './targeting';
+import { selectHighestAttackPowerAlly, selectFirstEnemy, selectLowestHpAlly, selectGuardAlly } from './targeting';
 import { AttackNearestAction } from './attack';
 
 /** Percent attackPower bonus Empower grants — placeholder pending the balance pass, same as every other combat number. */
@@ -160,6 +160,39 @@ export const ShieldWallAction: Action = {
       amount: SHIELD_WALL_AMOUNT,
       durationTurns: SHIELD_WALL_DURATION_TURNS,
     };
+  },
+};
+
+/** Guardian's Vow shield before any Mending Charge energy is added. */
+export const GUARDIANS_VOW_BASE_SHIELD = 2;
+/** Extra Guardian's Vow shield per point of Dawneth's stored Mending Charge energy (see actions/heal.ts). */
+export const GUARDIANS_VOW_SHIELD_PER_ENERGY = 1;
+/** Cap on Guardian's Vow's shield, however much energy is banked. */
+export const GUARDIANS_VOW_MAX_SHIELD = 10;
+export const GUARDIANS_VOW_DURATION_TURNS = 2;
+const GUARDIANS_VOW_ID = 'guardians-vow';
+
+/**
+ * Dawneth's lane-guardian Special (the healer redesign, replacing Cleanse —
+ * see docs/roadmap.md): shields her guard (the ally directly in front of
+ * her in her lane — see targeting.ts's selectGuardAlly), or the lowest-HP
+ * ally if nobody stands in front of her. The shield grows with her stored
+ * Mending Charge energy (capped), without spending it — so it's the
+ * defensive counterpart to Mourning Strike's energy-scaled damage.
+ * Single-stack: re-casting refreshes rather than stacks (see shields.ts).
+ */
+export const GuardiansVowAction: Action = {
+  id: 'guardians-vow',
+  name: "Guardian's Vow",
+  reach: 'ranged', // unused — targets an ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectGuardAlly(context) ?? selectLowestHpAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const energy = getHealEnergy(context.battle, context.actor.id);
+    const amount = Math.min(GUARDIANS_VOW_MAX_SHIELD, GUARDIANS_VOW_BASE_SHIELD + energy * GUARDIANS_VOW_SHIELD_PER_ENERGY);
+    applyShield(context.target, GUARDIANS_VOW_ID, amount, GUARDIANS_VOW_DURATION_TURNS);
+    return { type: 'support-shield', targetId: context.target.id, amount, durationTurns: GUARDIANS_VOW_DURATION_TURNS };
   },
 };
 

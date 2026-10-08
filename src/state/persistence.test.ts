@@ -8,6 +8,9 @@ import type { RoomDefinition } from '../sim/dungeonRun';
 import { createRunInventory } from '../sim/items';
 import { createTownStorage } from '../sim/townStorage';
 import { IRON_SWORD_ITEM, SAGES_CHARM_ITEM } from '../data/items';
+import { DAWNETH_TEMPLATE } from '../data/characters';
+import { DAWNETH_CLEANSE_SPECIAL } from '../data/specialActions';
+import { MendingChargeAction } from '../sim/actions/heal';
 import { saveGame, loadGame, type GameState } from './persistence';
 import type { ActiveDungeonRunState } from './activeRun';
 import type { RosterState } from './roster';
@@ -264,5 +267,35 @@ describe('saveGame / loadGame', () => {
     expect(() => saveGame(state, throwingStorage)).not.toThrow();
     expect(() => loadGame(throwingStorage)).not.toThrow();
     expect(loadGame(throwingStorage)).toBeNull();
+  });
+});
+
+describe('loadGame: kit drift repair (healer redesign)', () => {
+  it("updates a saved pre-redesign Dawneth to her current kit without discarding the save", () => {
+    const dawneth = createAdventurer('dawneth', DAWNETH_TEMPLATE, 'back', [], [], [], () => 0.99);
+    // Shape of a Dawneth saved before the redesign: healer Basic Action, Cleanse as her only Special.
+    dawneth.basicAction = MendingChargeAction;
+    dawneth.activeSpecialActions = [DAWNETH_CLEANSE_SPECIAL];
+
+    const state: GameState = {
+      roster: { adventurers: [dawneth], recruitedIds: [] },
+      townStorage: createTownStorage(),
+      dayCount: 1,
+      activeRun: null,
+      recruitmentPool: [],
+      runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 42, unlockedKitIds: {} },
+    };
+    const storage = createMemoryStorage();
+    saveGame(state, storage);
+    const loaded = loadGame(storage)!;
+
+    expect(loaded.metaProgression.renown).toBe(42);
+    const repaired = loaded.roster.adventurers[0];
+    expect(repaired.basicAction.id).toBe('attack-nearest');
+    expect(repaired.activeSpecialActions.map((special) => special.id)).toEqual([
+      'dawneth-mending-charge',
+      'dawneth-guardians-vow',
+    ]);
   });
 });

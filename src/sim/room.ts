@@ -60,6 +60,9 @@ function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: Bat
     }
   } else if (outcome.type === 'heal' || outcome.type === 'heal-and-charge') {
     unit.runHealingDone += outcome.amount;
+    if (outcome.type === 'heal') {
+      for (const splash of outcome.splashes ?? []) unit.runHealingDone += splash.amount;
+    }
   } else if (outcome.type === 'command' && outcome.attackOutcome) {
     // Credited to the commanded ally, not `unit` (Fallacy) — she didn't land the hit, they did.
     const commandedAlly = findUnitById(battle, outcome.commandedAllyId);

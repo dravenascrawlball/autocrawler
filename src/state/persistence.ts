@@ -3,7 +3,8 @@ import type { ActionId } from '../sim/action';
 import type { DieFace } from '../sim/dieFace';
 import type { EnchantmentId } from '../sim/enchantments';
 import { ACTION_REGISTRY } from '../data/actions';
-import { SPECIAL_ACTION_REGISTRY } from '../data/specialActions';
+import { SPECIAL_ACTION_REGISTRY, RETIRED_SPECIAL_REPLACEMENTS } from '../data/specialActions';
+import { CHARACTER_TEMPLATES } from '../data/characters';
 import type { RoomDefinition } from '../sim/dungeonRun';
 import type { TownStorage } from '../sim/townStorage';
 import type { RecruitCandidate } from '../sim/recruitment';
@@ -175,13 +176,37 @@ function serializeAdventurer(adventurer: Adventurer): SerializedAdventurer {
 
 function deserializeAdventurer(serialized: SerializedAdventurer): Adventurer {
   const { dieFaces, ownedFaces, basicActionId, activeSpecialActionIds, equipment, ...rest } = serialized;
-  return {
+  return repairKitDrift({
     ...rest,
     dieFaces: dieFaces.map(deserializeDieFace),
     ownedFaces: ownedFaces.map((id) => ACTION_REGISTRY[id]),
     basicAction: ACTION_REGISTRY[basicActionId],
-    activeSpecialActions: activeSpecialActionIds.map((id) => SPECIAL_ACTION_REGISTRY[id]),
+    activeSpecialActions: activeSpecialActionIds.map(
+      (id) => RETIRED_SPECIAL_REPLACEMENTS[id] ?? SPECIAL_ACTION_REGISTRY[id],
+    ),
     equipment: deserializeEquipment(equipment),
+  });
+}
+
+/**
+ * Brings a saved player character's kit up to date with its current
+ * template, without discarding the save (no CURRENT_SAVE_VERSION bump):
+ * the template's Basic Action wins, and any always-on Special
+ * (innateSpecialActions) the save predates is added. Retired pool Specials
+ * are swapped via RETIRED_SPECIAL_REPLACEMENTS above. Introduced with the
+ * healer redesign (Dawneth/Mira moved their heal from Basic Action to an
+ * innate Special). Enemies (no matching template here) pass through as-is.
+ */
+function repairKitDrift(adventurer: Adventurer): Adventurer {
+  const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === adventurer.name);
+  if (!template) return adventurer;
+  const innate = (template.innateSpecialActions ?? []).filter(
+    (special) => !adventurer.activeSpecialActions.some((active) => active.id === special.id),
+  );
+  return {
+    ...adventurer,
+    basicAction: template.basicAction ?? adventurer.basicAction,
+    activeSpecialActions: [...innate, ...adventurer.activeSpecialActions],
   };
 }
 

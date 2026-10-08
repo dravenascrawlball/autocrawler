@@ -154,6 +154,8 @@ export interface AdventurerTemplate {
   basicAction?: Action;
   /** Candidates this character can be granted at join time — see characterPool.ts. Omit (or leave empty) for a character with no Special Action/Trait yet; a future meta-progression unlock grows this list over time. */
   specialActionPool?: CharacterPoolEntry[];
+  /** Special Actions this character always has, on top of the one drawn from specialActionPool — e.g. a healer's every-turn heal alongside an attacking Basic Action (the healer redesign, docs/roadmap.md). */
+  innateSpecialActions?: SpecialAction[];
   startingLevel?: number;
   xpReward?: number;
   lootTable?: LootTableEntry[];
@@ -225,7 +227,10 @@ export function createAdventurer(
       ...(poolEntry?.kind === 'trait' ? [poolEntry.trait] : []),
       ...rolledTraits,
     ],
-    activeSpecialActions: poolEntry?.kind === 'special-action' ? [poolEntry.specialAction] : [],
+    activeSpecialActions: [
+      ...(template.innateSpecialActions ?? []),
+      ...(poolEntry?.kind === 'special-action' ? [poolEntry.specialAction] : []),
+    ],
     tags: [...(template.tags ?? []), ...(activeKit?.tags ?? [])],
     auras: [...(template.auras ?? [])],
     appliedAuras: [],

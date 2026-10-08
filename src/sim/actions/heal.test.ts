@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { plainFaces } from '../dieFace';
 import { createAdventurer, type AdventurerTemplate } from '../adventurer';
-import { HealAction, SelfHealAction, MendingChargeAction, MENDING_CHARGE_ENERGY_PER_ROLL, CleanseAction, ReviveAction, REVIVE_HP_FRACTION } from './heal';
+import {
+  HealAction,
+  SelfHealAction,
+  MendingChargeAction,
+  MENDING_CHARGE_ENERGY_PER_ROLL,
+  CleanseAction,
+  ReviveAction,
+  REVIVE_HP_FRACTION,
+  SplashHealAction,
+  SPLASH_HEAL_FRACTION,
+} from './heal';
+import { GuardiansVowAction, GUARDIANS_VOW_BASE_SHIELD, GUARDIANS_VOW_SHIELD_PER_ENERGY, GUARDIANS_VOW_MAX_SHIELD } from './support';
 import { AttackNearestAction } from './attack';
 import { createBattleState, getHealEnergy } from '../battle';
 import { resolveTurn } from '../turnEngine';
@@ -275,5 +286,99 @@ describe("ReviveAction (Mira's second signature mechanic)", () => {
     const battle = createBattleState([mira, healthyAlly], []);
 
     expect(ReviveAction.selectTarget({ actor: mira, battle })).toBeNull();
+  });
+});
+
+describe("Dawneth's lane-guardian kit (healer redesign)", () => {
+  it('Mending Charge heals her guard (the ally in front of her in her lane) over a lower-HP ally elsewhere', () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), { lane: 0, rank: 2 });
+    const guard = createAdventurer('guard', allyTemplate(), { lane: 0, rank: 0 });
+    guard.hp = 15;
+    const elsewhere = createAdventurer('elsewhere', allyTemplate(), { lane: 2, rank: 0 });
+    elsewhere.hp = 3;
+    const battle = createBattleState([dawneth, guard, elsewhere], []);
+
+    expect(MendingChargeAction.selectTarget({ actor: dawneth, battle })).toBe(guard);
+  });
+
+  it('picks the nearest ally in front when two stand ahead in her lane', () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), { lane: 1, rank: 2 });
+    const front = createAdventurer('front', allyTemplate(), { lane: 1, rank: 0 });
+    const middle = createAdventurer('middle', allyTemplate(), { lane: 1, rank: 1 });
+    front.hp = 5;
+    middle.hp = 10;
+    const battle = createBattleState([dawneth, front, middle], []);
+
+    expect(MendingChargeAction.selectTarget({ actor: dawneth, battle })).toBe(middle);
+  });
+
+  it('Mending Charge falls back to the lowest-HP hurt ally when her guard is at full HP, with no 50% gate', () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), { lane: 0, rank: 2 });
+    const guard = createAdventurer('guard', allyTemplate(), { lane: 0, rank: 0 });
+    const elsewhere = createAdventurer('elsewhere', allyTemplate(), { lane: 2, rank: 0 });
+    elsewhere.hp = 18; // only slightly hurt — the old 50% gate would have skipped this
+    const battle = createBattleState([dawneth, guard, elsewhere], []);
+
+    const target = MendingChargeAction.selectTarget({ actor: dawneth, battle })!;
+    expect(target).toBe(elsewhere);
+    const outcome = MendingChargeAction.resolve({ actor: dawneth, target, battle, rng: () => 0.5 });
+    expect(outcome).toMatchObject({ type: 'heal-and-charge', amount: 5 });
+    expect(elsewhere.hp).toBe(20);
+  });
+
+  it("Guardian's Vow shields her guard, growing with banked energy up to the cap", () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), { lane: 0, rank: 2 });
+    const guard = createAdventurer('guard', allyTemplate(), { lane: 0, rank: 0 });
+    const battle = createBattleState([dawneth, guard], []);
+    battle.healEnergyByUnitId[dawneth.id] = 3;
+
+    const target = GuardiansVowAction.selectTarget({ actor: dawneth, battle })!;
+    expect(target).toBe(guard);
+    const outcome = GuardiansVowAction.resolve({ actor: dawneth, target, battle, rng: () => 0.5 });
+    expect(outcome).toMatchObject({ type: 'support-shield', amount: GUARDIANS_VOW_BASE_SHIELD + 3 * GUARDIANS_VOW_SHIELD_PER_ENERGY });
+
+    battle.healEnergyByUnitId[dawneth.id] = 100;
+    expect(GuardiansVowAction.resolve({ actor: dawneth, target, battle, rng: () => 0.5 })).toMatchObject({
+      amount: GUARDIANS_VOW_MAX_SHIELD,
+    });
+  });
+
+  it("Guardian's Vow shields the lowest-HP ally when nobody stands in front of her", () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), { lane: 0, rank: 0 });
+    const hurt = createAdventurer('hurt', allyTemplate(), { lane: 2, rank: 0 });
+    hurt.hp = 4;
+    const battle = createBattleState([dawneth, hurt], []);
+
+    expect(GuardiansVowAction.selectTarget({ actor: dawneth, battle })).toBe(hurt);
+  });
+});
+
+describe("Mira's Splash Heal (healer redesign)", () => {
+  it('heals the lowest-HP hurt ally and splashes a fraction onto orthogonally adjacent allies only', () => {
+    const mira = createAdventurer('mira', allyTemplate({ healPower: 8 }), { lane: 2, rank: 2 });
+    const target = createAdventurer('target', allyTemplate(), { lane: 1, rank: 0 });
+    target.hp = 2;
+    const adjacent = createAdventurer('adjacent', allyTemplate(), { lane: 0, rank: 0 });
+    adjacent.hp = 10;
+    const diagonal = createAdventurer('diagonal', allyTemplate(), { lane: 0, rank: 1 });
+    diagonal.hp = 10;
+    const battle = createBattleState([mira, target, adjacent, diagonal], []);
+
+    expect(SplashHealAction.selectTarget({ actor: mira, battle })).toBe(target);
+    const outcome = SplashHealAction.resolve({ actor: mira, target, battle, rng: () => 0.5 });
+
+    const splash = Math.round(8 * SPLASH_HEAL_FRACTION);
+    expect(outcome).toEqual({ type: 'heal', amount: 8, targetId: 'target', splashes: [{ targetId: 'adjacent', amount: splash }] });
+    expect(target.hp).toBe(10);
+    expect(adjacent.hp).toBe(10 + splash);
+    expect(diagonal.hp).toBe(10);
+  });
+
+  it('selects no target (no wasted overheal) when nobody is hurt', () => {
+    const mira = createAdventurer('mira', allyTemplate(), 'back');
+    const ally = createAdventurer('ally', allyTemplate(), 'front');
+    const battle = createBattleState([mira, ally], []);
+
+    expect(SplashHealAction.selectTarget({ actor: mira, battle })).toBeNull();
   });
 });

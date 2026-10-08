@@ -14,13 +14,14 @@ import {
   ScatterShotAction,
   FearAction,
 } from '../sim/actions/attack';
-import { SelfHealAction, HealAction, CleanseAction, ReviveAction } from '../sim/actions/heal';
+import { SelfHealAction, HealAction, CleanseAction, ReviveAction, MendingChargeAction, SplashHealAction } from '../sim/actions/heal';
 import {
   CommandAction,
   PotionTossAllyAction,
   InspireAction,
   EmpowerAction,
   ShieldWallAction,
+  GuardiansVowAction,
   TauntAction,
   MarkAction,
   SilenceAction,
@@ -45,15 +46,45 @@ export const DAWNETH_MOURNING_STRIKE_SPECIAL: SpecialAction = {
 };
 
 /**
- * Dawneth's second Special (docs/kit-trait-tag-framework.md's
- * second-Special pass — the Cleanse ability type): clears status effects
- * from whoever's lowest-HP, distinct from Mourning Strike's damage flavor.
+ * Dawneth's former second Special (docs/kit-trait-tag-framework.md's
+ * second-Special pass — the Cleanse ability type). Replaced in her pool by
+ * Guardian's Vow in the healer redesign (enemies inflict too few status
+ * effects for it to matter yet); kept registered so saves that still
+ * reference it load, and for a future kit once enemy variety adds statuses.
  */
 export const DAWNETH_CLEANSE_SPECIAL: SpecialAction = {
   id: 'dawneth-cleanse',
   name: 'Cleanse',
   trigger: 'on-turn-start',
   action: CleanseAction,
+};
+
+/**
+ * Dawneth's always-on heal (the healer redesign — an innate Special, see
+ * AdventurerTemplate.innateSpecialActions): Mending Charge every turn,
+ * alongside her attacking Basic Action and her pool Special.
+ */
+export const DAWNETH_MENDING_CHARGE_SPECIAL: SpecialAction = {
+  id: 'dawneth-mending-charge',
+  name: 'Mending Charge',
+  trigger: 'on-turn-start',
+  action: MendingChargeAction,
+};
+
+/** Dawneth's lane-guardian pool Special (the healer redesign, replacing Cleanse): shields the ally in front of her, scaled by her energy. */
+export const DAWNETH_GUARDIANS_VOW_SPECIAL: SpecialAction = {
+  id: 'dawneth-guardians-vow',
+  name: "Guardian's Vow",
+  trigger: 'on-turn-start',
+  action: GuardiansVowAction,
+};
+
+/** Mira's always-on heal (the healer redesign — an innate Special): Splash Heal every turn, alongside her attacking Basic Action and her pool Special. */
+export const MIRA_SPLASH_HEAL_SPECIAL: SpecialAction = {
+  id: 'mira-splash-heal',
+  name: 'Splash Heal',
+  trigger: 'on-turn-start',
+  action: SplashHealAction,
 };
 
 /** Bodil's Self-Heal reframed as reactive — fires when she's hit, not on a fixed schedule, matching SelfHealAction's own "only when hurt" targeting. */
@@ -432,6 +463,8 @@ export const RING_OF_EMBERS_BURN_SPECIAL: SpecialAction = {
 export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'dawneth-mourning-strike': DAWNETH_MOURNING_STRIKE_SPECIAL,
   'dawneth-cleanse': DAWNETH_CLEANSE_SPECIAL,
+  'dawneth-mending-charge': DAWNETH_MENDING_CHARGE_SPECIAL,
+  'dawneth-guardians-vow': DAWNETH_GUARDIANS_VOW_SPECIAL,
   'bodil-second-wind': BODIL_SECOND_WIND_SPECIAL,
   'bodil-taunt': BODIL_TAUNT_SPECIAL,
   'fallacy-empower': FALLACY_EMPOWER_SPECIAL,
@@ -441,6 +474,7 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'nerissa-chain-strike': NERISSA_CHAIN_STRIKE_SPECIAL,
   'mira-potion-toss-ally': MIRA_POTION_TOSS_ALLY_SPECIAL,
   'mira-revive': MIRA_REVIVE_SPECIAL,
+  'mira-splash-heal': MIRA_SPLASH_HEAL_SPECIAL,
   'ring-of-embers-burn': RING_OF_EMBERS_BURN_SPECIAL,
   'tharavel-rally-cry': THARAVEL_RALLY_CRY_SPECIAL,
   'drifta-adrenaline-rush': DRIFTA_ADRENALINE_RUSH_SPECIAL,
@@ -465,4 +499,14 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'dravena-vanish': DRAVENA_VANISH_SPECIAL,
   'melpomene-hunters-instinct': MELPOMENE_HUNTERS_INSTINCT_SPECIAL,
   'melpomene-scatter-shot': MELPOMENE_SCATTER_SHOT_SPECIAL,
+};
+
+/**
+ * Pool Specials removed from a character's kit, mapped to what replaces
+ * them — applied when loading a save that still references the old one
+ * (see state/persistence.ts's deserializeAdventurer), so an existing
+ * character picks up the new kit without a save wipe.
+ */
+export const RETIRED_SPECIAL_REPLACEMENTS: Record<string, SpecialAction> = {
+  'dawneth-cleanse': DAWNETH_GUARDIANS_VOW_SPECIAL,
 };

@@ -337,10 +337,8 @@ Every unit now has its own cell, and lanes matter in combat.
 **Still open:**
 - **Adjacency triggers** — `isAdjacent` is still unused; lanes are now
   real, so "when an adjacent ally..." style Specials are unblocked.
-- **Dawneth fell further behind** (~35% opener clear rate vs ~55%
-  average; Mira ~43%). A healer is now protected in back, but the party
-  she joins loses a front-liner to shield her. Still a kit-design
-  question (see item 8).
+- ~~Dawneth fell further behind~~ — resolved by the healer redesign
+  (see item 8's follow-up).
 
 ## 5. Permanent stat growth
 
@@ -424,13 +422,39 @@ per-character outliers flagged and only the egregious ones fixed.
    6000 runs, losses by room 0.3% / 1.1% / 3.7% / 14.7% / 25.4%, ~1.4%
    stalemates. Opener full-clear spread is now 42-69%.
 
+5. **Healer redesign.** Mira and Dawneth were the only two characters
+   with no damage at all (deliberately left pure-healer by the "All
+   Characters Must Attack" cleanup), and trailed every pass. Now every
+   character attacks:
+   - **Both** have Attack Nearest as their Basic Action, and their heal
+     moved to a new always-on Special (`AdventurerTemplate.innateSpecialActions`,
+     fired every turn alongside the random pool Special).
+   - **Dawneth, lane guardian**: Mending Charge heals her *guard* (the ally
+     directly in front of her in her lane — `targeting.ts`'s
+     `selectGuardAlly`), else the lowest-HP hurt ally, with no 50% gate.
+     **Guardian's Vow** replaced Cleanse in her pool: shields her guard for
+     2 + 1 per banked energy (max 10).
+   - **Mira, splash potions**: Splash Heal heals the lowest-HP hurt ally
+     and half as much onto allies orthogonally adjacent to them (first use
+     of `isAdjacent`); skips the turn's heal when nobody is hurt.
+   - Saves aren't wiped: `state/persistence.ts`'s `repairKitDrift` updates
+     an existing Dawneth/Mira on load (`RETIRED_SPECIAL_REPLACEMENTS` maps
+     Cleanse → Guardian's Vow).
+   - **Bug fixed along the way**: the battle replay
+     (`ui/DungeonPhaseView.svelte`) never animated *any* Special Action's
+     effect; its outcome handling is now shared by Basic and Special
+     Actions (`pushOutcome`).
+   - Result: healers went from ~35-43% to ~53-55% opener clear rate
+     (field average ~55%). `ROOM_SLOT_ENEMY_STAT_SCALE` re-tuned to
+     `[1, 1.3, 1.7, 2.1, 2.5]` → **55.4%** full clear; character spread is
+     now 49-63%, the tightest so far.
+
 **Still open, flagged not fixed:**
-- **Dawneth (~42%) still trails.** Bigger parties helped the healers
-  (Mira is now mid-pack at ~52%), but Dawneth is still the weakest pick.
-  Probably a kit-design question rather than more number-pushing.
-- **Dravena (~69%) is now the clear top pick**, ~10 points above the
-  next character (Nerissa ~59%).
-- **Rooms 1-3 are now nearly risk-free** (≤4% of runs end there); the
+- ~~Dawneth (~42%) still trails~~ — resolved by the healer redesign (step 5).
+- **Top picks** after the healer redesign: Gudrun (~63%), Dravena and
+  Nerissa (~62%) — within ~8 points of the average, no longer an outlier.
+- **Rooms 1-3 are now nearly risk-free** (≤5% of runs end there; rooms 1-2
+  essentially never); the
   difficulty sits in rooms 4-5, because the party snowballs by ~1 member
   per room and early rooms can't scale much harder without walling the
   3-member opening party. Worth revisiting if early rooms feel flat.

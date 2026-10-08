@@ -156,7 +156,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
  * party grow by ~1 member per room (3 at room 1 -> ~7 by the finale), so
  * enemies have to outscale a much bigger board — retune both together.
  */
-export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1.3, 1.65, 2, 2.35];
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1, 1.3, 1.7, 2.1, 2.5];
 
 /**
  * Flat gold paid for winning each slot's room (opener -> finale), on top of

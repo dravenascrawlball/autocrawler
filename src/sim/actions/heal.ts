@@ -1,8 +1,9 @@
 import type { Action, ActionContext, ActionId, ActionOutcome, TargetingContext } from '../action';
-import { selectLowestHpAlly, selectDownedAlly } from './targeting';
+import { selectLowestHpAlly, selectDownedAlly, selectGuardAlly, selectLowestHpHurtAlly } from './targeting';
+import { isAdjacent } from '../formation';
 import { getEffectiveStat } from '../stats';
 import { actionLevelPercentBonus } from '../leveling';
-import { getHealEnergy } from '../battle';
+import { getHealEnergy, getOwnRoster } from '../battle';
 
 const HEAL_THRESHOLD_FRACTION = 0.5;
 
@@ -125,25 +126,27 @@ export const ReviveAction: Action = {
 export const MENDING_CHARGE_ENERGY_PER_ROLL = 1;
 
 /**
- * Dawneth's signature mechanic (roadmap item 11): unlike plain Heal, this
- * always resolves — selectTarget picks the lowest-HP living ally
- * unconditionally (never null just because nobody's hurt), so the face is
- * never an idle roll. Actual healing only happens if that ally is below
- * HEAL_THRESHOLD_FRACTION (amount is 0 otherwise); Mending Charge energy
- * is granted every time regardless — see battle.ts's healEnergyByUnitId.
+ * Dawneth's lane-guardian heal (the healer redesign — see docs/roadmap.md),
+ * an always-on Special for her (data/specialActions.ts): heals her *guard*
+ * — the ally standing directly in front of her in her lane (see
+ * targeting.ts's selectGuardAlly) — whenever they're hurt, otherwise the
+ * lowest-HP hurt ally; with nobody hurt it still resolves (on her guard, or
+ * the lowest-HP ally) for 0, since Mending Charge energy is granted every
+ * time regardless — see battle.ts's healEnergyByUnitId. No 50%-HP gate any
+ * more: the old gate left her idle on most turns.
  */
 export const MendingChargeAction: Action = {
   id: 'mending-charge',
   name: 'Mending Charge',
   reach: 'ranged', // unused — targets an ally, never the opposing roster
   selectTarget(context: TargetingContext) {
-    return selectLowestHpAlly(context);
+    const guard = selectGuardAlly(context);
+    if (guard && isHurt(guard)) return guard;
+    return selectLowestHpHurtAlly(context) ?? guard ?? selectLowestHpAlly(context);
   },
   resolve(context: ActionContext): ActionOutcome {
-    const effectiveMaxHp = getEffectiveStat(context.target.maxHp, 'maxHp', context.target.modifiers);
-    const needsHealing = context.target.hp / effectiveMaxHp < HEAL_THRESHOLD_FRACTION;
     let amount = 0;
-    if (needsHealing) {
+    if (isHurt(context.target)) {
       const heal = resolveHeal(context, 'mending-charge');
       amount = heal.type === 'heal' ? heal.amount : 0;
     }
@@ -158,5 +161,42 @@ export const MendingChargeAction: Action = {
       energyGained: MENDING_CHARGE_ENERGY_PER_ROLL,
       totalEnergy,
     };
+  },
+};
+
+function isHurt(unit: ActionContext['target']): boolean {
+  return unit.hp < getEffectiveStat(unit.maxHp, 'maxHp', unit.modifiers);
+}
+
+/** Fraction of Splash Heal's main heal that also lands on each ally adjacent to the target. */
+export const SPLASH_HEAL_FRACTION = 0.5;
+
+/**
+ * Mira's always-on Splash Heal (the healer redesign — see docs/roadmap.md):
+ * heals the lowest-HP hurt ally like plain Heal, and splashes
+ * SPLASH_HEAL_FRACTION of that onto every living ally orthogonally adjacent
+ * to them on the grid (formation.ts's isAdjacent) — so it grows with party
+ * size and rewards clustering. Null (no turn wasted on overheal) when
+ * nobody is hurt.
+ */
+export const SplashHealAction: Action = {
+  id: 'splash-heal',
+  name: 'Splash Heal',
+  reach: 'ranged', // unused — targets an ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpHurtAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const main = resolveHeal(context, 'splash-heal');
+    const amount = main.type === 'heal' ? main.amount : 0;
+    const splashAmount = Math.round(amount * SPLASH_HEAL_FRACTION);
+    const splashes = getOwnRoster(context.battle, context.actor)
+      .filter((ally) => ally !== context.target && ally.hp > 0 && isAdjacent(ally.position, context.target.position))
+      .map((ally) => {
+        const effectiveMaxHp = getEffectiveStat(ally.maxHp, 'maxHp', ally.modifiers);
+        ally.hp = Math.min(effectiveMaxHp, ally.hp + splashAmount);
+        return { targetId: ally.id, amount: splashAmount };
+      });
+    return { type: 'heal', amount, targetId: context.target.id, splashes };
   },
 };

@@ -36,15 +36,19 @@ describe('character templates retheme (Basic Action + Special Action/Trait pool)
     expect(gudrun.activeSpecialActions).toEqual([]);
   });
 
-  it("Dawneth's Basic Action is Mending Charge; her pool draws either Mourning Strike or Cleanse, both on-turn-start", () => {
+  it("Dawneth attacks as her Basic Action, always has Mending Charge, and draws Mourning Strike or Guardian's Vow", () => {
     const withMourningStrike = createAdventurer('dawneth', DAWNETH_TEMPLATE, 'front', [], [], [], () => 0);
-    expect(withMourningStrike.basicAction.id).toBe('mending-charge');
+    expect(withMourningStrike.basicAction.id).toBe('attack-nearest');
     expect(withMourningStrike.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'dawneth-mending-charge', trigger: 'on-turn-start' }),
       expect.objectContaining({ id: 'dawneth-mourning-strike', trigger: 'on-turn-start' }),
     ]);
 
-    const withCleanse = createAdventurer('dawneth', DAWNETH_TEMPLATE, 'front', [], [], [], () => 0.99);
-    expect(withCleanse.activeSpecialActions).toEqual([expect.objectContaining({ id: 'dawneth-cleanse', trigger: 'on-turn-start' })]);
+    const withVow = createAdventurer('dawneth', DAWNETH_TEMPLATE, 'front', [], [], [], () => 0.99);
+    expect(withVow.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'dawneth-mending-charge' }),
+      expect.objectContaining({ id: 'dawneth-guardians-vow', trigger: 'on-turn-start' }),
+    ]);
   });
 
   it("Bodil's Basic Action is Cleave; her pool draws either Second Wind (on-hit-taken) or Taunt (on-turn-start)", () => {
@@ -81,15 +85,19 @@ describe('character templates retheme (Basic Action + Special Action/Trait pool)
     ]);
   });
 
-  it("Mira's Basic Action is Heal; her pool draws either Potion Toss (Ally) or Revive, both on-turn-start", () => {
+  it("Mira attacks as her Basic Action, always has Splash Heal, and draws Potion Toss (Ally) or Revive", () => {
     const withPotionToss = createAdventurer('mira', MIRA_TEMPLATE, 'front', [], [], [], () => 0);
-    expect(withPotionToss.basicAction.id).toBe('heal');
+    expect(withPotionToss.basicAction.id).toBe('attack-nearest');
     expect(withPotionToss.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'mira-splash-heal', trigger: 'on-turn-start' }),
       expect.objectContaining({ id: 'mira-potion-toss-ally', trigger: 'on-turn-start' }),
     ]);
 
     const withRevive = createAdventurer('mira', MIRA_TEMPLATE, 'front', [], [], [], () => 0.99);
-    expect(withRevive.activeSpecialActions).toEqual([expect.objectContaining({ id: 'mira-revive', trigger: 'on-turn-start' })]);
+    expect(withRevive.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'mira-splash-heal' }),
+      expect.objectContaining({ id: 'mira-revive', trigger: 'on-turn-start' }),
+    ]);
   });
 
   it('Dee (intentionally blank) has an empty base pool', () => {

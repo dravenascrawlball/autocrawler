@@ -15,7 +15,7 @@ hand-edit.
 | Character | Role | Basic Action | Special Action (trigger) | Trait | Meta-progression unlock |
 |---|---|---|---|---|---|
 | Gudrun | Fighter | Power Attack | — (Traits only) | **Rage** (more damage the lower her HP, always seeded) + **Thorns** (reflects a % of incoming melee damage, single-entry pool) | — |
-| Dawneth | Healer | Mending Charge | **Mourning Strike** (`on-turn-start`) — damage scales with built-up heal energy, OR **Cleanse** (`on-turn-start`) — clears status effects from whoever's weakest | — | — |
+| Dawneth | Healer | Attack Nearest | Always: **Mending Charge** (`on-turn-start`) — heals the ally in front of her in her lane (else the lowest-HP hurt ally) and banks energy. Plus **Mourning Strike** (`on-turn-start`) — damage scales with banked energy, OR **Guardian's Vow** (`on-turn-start`) — shields the ally in front of her, scaled by energy | — | — |
 | Isilwen | Rogue | Card Throw | **Lucky Draw** (`on-turn-start`) — bonus Ranged Shot, OR **Mark** (`on-turn-start`) — target takes +% damage for a duration | — | — |
 | Tharavel | Tactician | Attack Nearest | **Inspire** (`on-turn-start`) — party-wide crit buff, OR **Coordinated Strike** (`on-turn-start`) — Command, a bonus attack for an ally, OR **Guardian's Ward** (`on-turn-start`) — full damage immunity for whoever's weakest | — | **Rally Cry** (`on-ally-downed`) — Inspire again when someone falls |
 | Bodil | Fighter | Cleave | **Second Wind** (`on-hit-taken`) — Self-Heal, OR **Taunt** (`on-turn-start`) — locks enemy targeting onto her | — | — |
@@ -27,7 +27,7 @@ hand-edit.
 | Dravena | Mage | Blinding Bolt | **Arcane Barrage** (`on-hit-landed`) — bonus Ranged Shot, OR **Vanish** (`on-turn-start`) — removes her from enemy targeting for a duration | — | — |
 | Caladwen | Rogue | Sneak Strike | **Venom Sting** (`on-hit-landed`) — applies Poison (restored, see roadmap), OR **Lifesteal Strike** (`on-turn-start`) — heals her for a % of damage dealt | — | — |
 | Melpomene | Ranger | Focused Shot | **Hunter's Instinct** (`on-enemy-downed`) — bonus Focused Shot, OR **Scatter Shot** (`on-turn-start`) — full damage to 2 random living enemies, any rank | — | — |
-| Mira | Healer | Heal | **Potion Toss (Ally)** (`on-turn-start`) — random buff to a random ally, OR **Revive** (`on-turn-start`) — brings a Downed ally back at partial HP | — | — |
+| Mira | Healer | Attack Nearest | Always: **Splash Heal** (`on-turn-start`) — heals the lowest-HP hurt ally and half as much to allies adjacent to them. Plus **Potion Toss (Ally)** (`on-turn-start`) — random buff to a random ally, OR **Revive** (`on-turn-start`) — brings a Downed ally back at partial HP | — | — |
 | Dee | — (joke/secret character) | Attack Nearest | — | — | — |
 
 **Dee** is the only character with no Special Action/Trait by design —
@@ -68,10 +68,15 @@ empty:
   are always-on and don't need a trigger at all, which makes them a
   comparatively cheap way to give a character a defining passive (see
   traits.ts) — this axis is used by exactly two characters.
-- **Dawneth's Cleanse is the only reaction to Burn/Poison/status
-  effects** — every other status interaction is still only something a
-  kit *inflicts* (Venom Sting, Ring of Embers), never reacts to (e.g.
-  "bonus damage to a poisoned target" is still unclaimed).
+- **Nothing reacts to Burn/Poison/status effects any more** — Dawneth's
+  Cleanse was the only one, and the healer redesign swapped it for
+  Guardian's Vow (Cleanse is still registered, unused). Every status
+  interaction is only something a kit *inflicts* (Venom Sting, Ring of
+  Embers).
+- **Dawneth and Mira are the only characters with an always-on Special**
+  (`innateSpecialActions` — fires every turn on top of the pool draw),
+  which is how they heal every turn and still attack as their Basic
+  Action.
 - **`on-hit-landed` and `on-hit-taken` skew toward Rogues/Fighters** —
   makes sense thematically, but means Healers/Mages/Tacticians have
   almost no reactive kit, only proactive (`on-turn-start`) or

@@ -31,6 +31,8 @@ export type ActionId =
   | 'ember-burn'
   | 'venom-sting'
   | 'shield-wall'
+  | 'splash-heal'
+  | 'guardians-vow'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
@@ -86,7 +88,12 @@ export type ActionOutcome =
       armorAmount: number;
       durationTurns: number;
     }
-  | { type: 'heal'; amount: number; targetId: string }
+  /**
+   * A heal on `targetId`. `splashes` (Mira's Splash Heal — see
+   * actions/heal.ts's SplashHealAction) lists the smaller heals that also
+   * landed on allies adjacent to the target; absent for a plain heal.
+   */
+  | { type: 'heal'; amount: number; targetId: string; splashes?: { targetId: string; amount: number }[] }
   /**
    * Fallacy's Empower (roadmap item 11): a timed StatModifier buff granted
    * to a single ally (no attack of her own) — see actions/support.ts and

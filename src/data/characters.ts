@@ -21,7 +21,8 @@ import { plainFaces } from '../sim/dieFace';
 import { RAGE_TRAIT, THORNS_TRAIT, DODGE_TRAIT } from '../sim/traits';
 import {
   DAWNETH_MOURNING_STRIKE_SPECIAL,
-  DAWNETH_CLEANSE_SPECIAL,
+  DAWNETH_GUARDIANS_VOW_SPECIAL,
+  DAWNETH_MENDING_CHARGE_SPECIAL,
   BODIL_SECOND_WIND_SPECIAL,
   BODIL_TAUNT_SPECIAL,
   FALLACY_EMPOWER_SPECIAL,
@@ -31,6 +32,7 @@ import {
   NERISSA_CHAIN_STRIKE_SPECIAL,
   MIRA_POTION_TOSS_ALLY_SPECIAL,
   MIRA_REVIVE_SPECIAL,
+  MIRA_SPLASH_HEAL_SPECIAL,
   CALADWEN_VENOM_STING_SPECIAL,
   CALADWEN_LIFESTEAL_SPECIAL,
   ISILWEN_LUCKY_DRAW_SPECIAL,
@@ -105,17 +107,15 @@ export const GUDRUN_TEMPLATE: AdventurerTemplate = {
 };
 
 /**
- * Dawneth — Healer (roadmap item 11's eleventh bespoke kit). Primary
- * healer with a build-and-release signature: Mending Charge always
- * resolves (heals the lowest-HP ally if anyone qualifies, grants Mending
- * Charge energy regardless — see actions/heal.ts's MendingChargeAction),
- * and Mourning Strike is a ranged attack that scales continuously with
- * however much energy she's built up this room (see actions/attack.ts's
- * MourningStrikeAction) — energy resets every room (see battle.ts's
- * healEnergyByUnitId), so she can't walk into a room already charged.
- * Second Special (docs/kit-trait-tag-framework.md's second-Special pass):
- * Cleanse, clearing status effects — distinct from Mourning Strike's
- * damage flavor.
+ * Dawneth — Healer, a "lane guardian" (the healer redesign — see
+ * docs/roadmap.md). Basic Action is a plain Attack Nearest, so she always
+ * contributes damage like everyone else; her heal is an always-on Special
+ * instead (innateSpecialActions): Mending Charge every turn heals her
+ * guard — the ally standing directly in front of her in her lane — or the
+ * lowest-HP hurt ally, and banks energy (see actions/heal.ts). Pool
+ * Special, one drawn at join: Mourning Strike (spends that energy as
+ * damage) or Guardian's Vow (shields her guard, scaled by energy —
+ * replaced Cleanse). Best placed directly behind a tank.
  */
 export const DAWNETH_TEMPLATE: AdventurerTemplate = {
   name: 'Dawneth',
@@ -128,10 +128,11 @@ export const DAWNETH_TEMPLATE: AdventurerTemplate = {
   dieFaces: [...plainFaces(MendingChargeAction, 4), ...plainFaces(MourningStrikeAction, 2)],
   recruitCost: 65,
   unlocked: true,
-  basicAction: MendingChargeAction,
+  basicAction: AttackNearestAction,
+  innateSpecialActions: [DAWNETH_MENDING_CHARGE_SPECIAL],
   specialActionPool: [
     { kind: 'special-action', specialAction: DAWNETH_MOURNING_STRIKE_SPECIAL },
-    { kind: 'special-action', specialAction: DAWNETH_CLEANSE_SPECIAL },
+    { kind: 'special-action', specialAction: DAWNETH_GUARDIANS_VOW_SPECIAL },
   ],
 };
 
@@ -498,15 +499,14 @@ export const MELEMNOPE_TEMPLATE: AdventurerTemplate = {
 };
 
 /**
- * Mira — Healer (roadmap item 3's final target-roster kit; the last new
- * recruitable character on the list). "Chaotic healer/support": Potion
- * Toss (Ally) throws a random buff (attackPower or critChance) at a random
- * living ally; Potion Toss (Enemy) throws a random debuff (attackPower or
- * vulnerability) at a random living enemy — see actions/support.ts's PotionTossAllyAction/
- * PotionTossEnemyAction. A plain Heal face keeps her usable as an actual
- * healer alongside the chaos, per the earlier open-questions discussion.
- * Second Special (docs/kit-trait-tag-framework.md's second-Special pass):
- * Revive, bringing a Downed ally back into the fight.
+ * Mira — Healer, "splash potions" (the healer redesign — see
+ * docs/roadmap.md). Basic Action is a plain Attack Nearest, so she always
+ * contributes damage like everyone else; her heal is an always-on Special
+ * instead (innateSpecialActions): Splash Heal heals the lowest-HP hurt
+ * ally and splashes half as much onto every ally adjacent to them on the
+ * grid (see actions/heal.ts) — stronger the bigger and tighter the party.
+ * Pool Special, one drawn at join: Potion Toss (Ally) (a random buff on a
+ * random ally) or Revive (brings a Downed ally back).
  */
 export const MIRA_TEMPLATE: AdventurerTemplate = {
   name: 'Mira',
@@ -523,7 +523,8 @@ export const MIRA_TEMPLATE: AdventurerTemplate = {
   ],
   recruitCost: 65,
   unlocked: true,
-  basicAction: HealAction,
+  basicAction: AttackNearestAction,
+  innateSpecialActions: [MIRA_SPLASH_HEAL_SPECIAL],
   specialActionPool: [
     { kind: 'special-action', specialAction: MIRA_POTION_TOSS_ALLY_SPECIAL },
     { kind: 'special-action', specialAction: MIRA_REVIVE_SPECIAL },

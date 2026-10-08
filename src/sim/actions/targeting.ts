@@ -160,3 +160,33 @@ export function selectHighestAttackPowerAlly(context: TargetingContext): Adventu
       : highest,
   );
 }
+
+/**
+ * The actor's "guard": the nearest living ally standing directly in front
+ * of it in its own lane (same lane, lower rank, closest rank first) — the
+ * unit that shields it under the lane-limited melee rule (see
+ * meleeEligibleOpponents). Null if the actor is frontmost in its lane or
+ * nobody living stands ahead of it. Used by Dawneth's lane-guardian kit
+ * (Mending Charge, Guardian's Vow — see actions/heal.ts / support.ts).
+ */
+export function selectGuardAlly(context: TargetingContext): Adventurer | null {
+  const { actor } = context;
+  const ahead = getOwnRoster(context.battle, actor).filter(
+    (candidate) =>
+      candidate !== actor &&
+      candidate.hp > 0 &&
+      candidate.position.lane === actor.position.lane &&
+      candidate.position.rank < actor.position.rank,
+  );
+  if (ahead.length === 0) return null;
+  return ahead.reduce((nearest, candidate) => (candidate.position.rank > nearest.position.rank ? candidate : nearest));
+}
+
+/** The lowest-HP living ally (including the actor) who is actually below effective max HP — null when nobody is hurt. */
+export function selectLowestHpHurtAlly(context: TargetingContext): Adventurer | null {
+  const hurt = getOwnRoster(context.battle, context.actor).filter(
+    (candidate) => candidate.hp > 0 && candidate.hp < getEffectiveStat(candidate.maxHp, 'maxHp', candidate.modifiers),
+  );
+  if (hurt.length === 0) return null;
+  return hurt.reduce((lowest, candidate) => (candidate.hp < lowest.hp ? candidate : lowest));
+}
