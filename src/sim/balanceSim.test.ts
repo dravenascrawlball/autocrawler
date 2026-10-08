@@ -15,7 +15,9 @@ import { CHARACTER_TEMPLATES } from '../data/characters';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
-import { rerollPoolPicks, effectiveMaxHp, type Adventurer } from './adventurer';
+import { rerollPoolPicks, effectiveMaxHp, grantSecondPoolSpecial, type Adventurer } from './adventurer';
+import { SYNERGIES } from '../data/synergies';
+import { evaluateSynergies } from './synergies';
 import { applyTraining } from './training';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 
@@ -36,6 +38,8 @@ const RUNS = Number(process.env.BALANCE_SIM_RUNS ?? 2000);
 const ALL_UNLOCKS = Boolean(process.env.BALANCE_SIM_UNLOCKS);
 /** BALANCE_SIM_TRAINING=<rank> gives every character that Training rank (sim/training.ts) — 5 with BALANCE_SIM_UNLOCKS=1 is a fully grown profile. */
 const TRAINING_RANK = Number(process.env.BALANCE_SIM_TRAINING ?? 0);
+/** BALANCE_SIM_SYNERGY_PLAYER=1 recruits toward role synergies (data/synergies.ts) instead of purely cheapest-first. */
+const SYNERGY_PLAYER = Boolean(process.env.BALANCE_SIM_SYNERGY_PLAYER);
 const ROOM_COUNT = 5;
 /** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
 const ECON_ARCHETYPES = new Set(['Nerissa']);
@@ -90,7 +94,19 @@ function shopGreedily(
   let recruitSizedBuys = 0;
   const byPrice = <T extends { price: number }>(list: T[]) => [...list].sort((a, b) => a.price - b.price);
 
-  for (const offer of byPrice(offers.recruits.filter((o) => !o.alreadyInParty))) {
+  // A synergy-seeking player (BALANCE_SIM_SYNERGY_PLAYER=1) looks at offers that build toward a role
+  // synergy first; otherwise (and as the tie-break) cheapest first.
+  const synergyValue = (candidate: Adventurer) => {
+    if (!SYNERGY_PLAYER) return 0;
+    const synergy = SYNERGIES.find((s) => s.roles.includes(candidate.role));
+    if (!synergy) return 0;
+    // Value a recruit by how far it pushes its synergy's member count (bigger synergies score higher).
+    return 1 + party.filter((member) => synergy.roles.includes(member.role)).length;
+  };
+  const newRecruits = offers.recruits
+    .filter((o) => !o.alreadyInParty)
+    .sort((a, b) => synergyValue(b.adventurer) - synergyValue(a.adventurer) || a.price - b.price);
+  for (const offer of newRecruits) {
     if (party.length < MAX_PARTY_SIZE && inventory.gold >= offer.price) {
       inventory.gold -= offer.price;
       applyActiveRelicsToAdventurer(offer.adventurer, activeRelics);
@@ -102,6 +118,10 @@ function shopGreedily(
     if (inventory.gold >= offer.price) {
       inventory.gold -= offer.price;
       levelUpAdventurer(offer.adventurer);
+      const template = CHARACTER_TEMPLATES.find((t) => t.name === offer.adventurer.name);
+      if (offer.adventurer.level === 2 && template) {
+        grantSecondPoolSpecial(offer.adventurer, template.specialActionPool ?? [], () => 0.5);
+      }
       recruitSizedBuys += 1;
     }
   }
@@ -136,6 +156,10 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
     const openerStats: Record<string, { runs: number; clears: number }> = {};
     // Per-character: runs they fought in at all (opening or recruited), and how many fully cleared.
     const anyStats: Record<string, { runs: number; clears: number }> = {};
+    // Among runs that reach room 4, full-clear rate bucketed by the best synergy tier the party had
+    // at that point — how much a completed build pays off, independent of how well the sim player
+    // steers (and without the "parties that died early were small" confound).
+    const clearsBySynergyTier: Record<string, { runs: number; clears: number }> = {};
     const actionCountsByArchetype: Record<string, Record<string, number>> = {};
     // Per pause (index = room just cleared), runs with no ECON_ARCHETYPES member only.
     const goldAtPause: number[][] = Array.from({ length: ROOM_COUNT - 1 }, () => []);
@@ -173,14 +197,18 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
       openingPartySizes.push(party.length);
       const openers = party.map((member) => member.name);
 
-      const state = startDungeonRun(party, rooms, inventory.gold);
+      const state = startDungeonRun(party, rooms, inventory.gold, SYNERGIES);
       state.activeRelics = activeRelics;
       let outcome: DungeonOutcome | null = null;
       let goldEarned = 0;
+      let tierAtRoom4: number | null = null;
 
       while (outcome === null) {
         const roomIndex = state.roomIndex;
         partySizeAtRoomStart[roomIndex].push(state.party.length);
+        if (roomIndex === 3) {
+          tierAtRoom4 = Math.max(0, ...evaluateSynergies(state.party, SYNERGIES).map((entry) => (entry.tier ? entry.tier.count : 0)));
+        }
         outcome = resolveNextRoom(state, rng);
         const record = state.roomRecords[roomIndex];
 
@@ -214,6 +242,12 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
       levelUpsPerRun.push(state.party.reduce((sum, m) => sum + (m.level - 1), 0));
 
       const won = outcome === 'completed' ? 1 : 0;
+      if (tierAtRoom4 !== null) {
+        const tierKey = tierAtRoom4 === 0 ? 'none' : `${tierAtRoom4}-member tier`;
+        const tierEntry = (clearsBySynergyTier[tierKey] ??= { runs: 0, clears: 0 });
+        tierEntry.runs += 1;
+        tierEntry.clears += won;
+      }
       for (const name of openers) {
         const entry = (openerStats[name] ??= { runs: 0, clears: 0 });
         entry.runs += 1;
@@ -279,6 +313,13 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
           `recruit/level-up buys made ${average(recruitBuysAtPause[i]).toFixed(2)} (n=${golds.length})`,
       );
     }
+
+    lines.push(
+      `\nAmong runs reaching room 4, full-clear rate by best synergy tier then: ${Object.entries(clearsBySynergyTier)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, entry]) => `${key} ${pct(entry.clears, entry.runs)} (n=${entry.runs})`)
+        .join(', ')}`,
+    );
 
     lines.push('\nFull-clear rate by character (opening party | fought in run at all):');
     const names = Object.keys(anyStats).sort(

@@ -42,4 +42,21 @@ export const RELIC_REGISTRY: Relic[] = [
     modifiers: [{ stat: 'speed', type: 'percent', amount: 10, source: 'relic:relic-swift-boots' }],
     price: 10,
   },
+  // --- Scaling relics (roadmap item 6, in-run snowballing): bonuses that grow over the run ---
+  {
+    id: 'relic-war-trophy',
+    name: 'War Trophy',
+    description: '+3% Attack Power for the whole party per room cleared this run.',
+    modifiers: [],
+    price: 20,
+    scaling: { stat: 'attackPower', percentPerUnit: 3, per: 'room-cleared' },
+  },
+  {
+    id: 'relic-strength-in-numbers',
+    name: 'Strength in Numbers',
+    description: '+2% Max HP for the whole party per party member.',
+    modifiers: [],
+    price: 20,
+    scaling: { stat: 'maxHp', percentPerUnit: 2, per: 'party-member' },
+  },
 ];

@@ -405,18 +405,36 @@ saves load with none).
   fresh **~54%** full clear, fully grown **68.9%** — inside the agreed
   50-55% / 65-70% targets. +4%/rank tested at 82%, +3% at 75.5%.
 
-## 6. In-run scaling/progression
+## 6. In-run snowballing — shipped
 
-Partly addressed since this was written: the old XP/level-up system is
-gone, and gold-funded recruiting (the gold income follow-up, item 8) now
-grows the party ~1 member per room (3 → ~7), with duplicate recruits
-leveling a character up (+25% stats). What's still missing is anything
-that *compounds* — an early pick that snowballs into a dramatically
-stronger late-run board, as in TFT or Order Automatica. Candidate levers
-(see item 9's research): role/Tag synergy bonuses that scale as more of a
-role joins the party, a charge-meter trigger that rewards long fights, or
-relics that scale with party size. Needs its own open-questions pass on
-what "snowballing" should feel like before picking a mechanism.
+Three things now compound over a run:
+
+1. **Role synergies** (`sim/synergies.ts`, `data/synergies.ts`), recomputed
+   at every room start in `resolveNextRoom`:
+   - Vanguard (Fighters): 2 / 3 / 4 → +6% / +20% / +40% max HP (Fighters)
+   - Cutthroats (Rogues): 2 / 3 → +8 / +30 crit chance (Rogues)
+   - Menders (Healers): 2 → +20% healing (whole party)
+   - Strategists (Tacticians): 2 → +8% attack (whole party)
+   - Marksmen (Mage + Ranger): 2 → +15% attack (members)
+   The payoff sits in the higher tiers on purpose: random parties reach
+   2-member tiers on their own, so only bigger builds should stand out.
+   Shown in a synergy panel (`ui/SynergyPanel.svelte`) on the opening shop
+   and between rooms; recruit tooltips say which synergy a recruit adds to.
+2. **Scaling relics** (`Relic.scaling`, `applyRelicScaling`): **War Trophy**
+   (+3% party attack per room cleared) and **Strength in Numbers** (+2%
+   party max HP per party member). Rooms cleared comes from `roomIndex`, so
+   it survives a save/resume.
+3. **Duplicate stars**: reaching 2★ via a duplicate recruit also draws a
+   second, different Special from the character's pool
+   (`grantSecondPoolSpecial`).
+
+Balance (`ROOM_SLOT_ENEMY_STAT_SCALE` → `[1.85, 1.95, 2.1, 2.2, 2.85]`):
+fresh **55.0%** full clear, fully grown 68.9%. **Build payoff** — among
+runs that reach room 4, full-clear rate by best synergy tier at that point:
+2-member 61%, 3-member 75%, 4-member 85%. The sim's "synergy player"
+(`BALANCE_SIM_SYNERGY_PLAYER=1`) only gains ~2 points because it can't
+steer much with 3 random offers per shop and buys everything anyway — the
+tier-bucketed number is the better measure of what a build is worth.
 
 ## 7. Enemy variety — shipped
 

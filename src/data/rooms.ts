@@ -186,7 +186,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
  * almost never ended a run; now losses climb steadily room by room, with
  * the room-5 boss the biggest single wall.
  */
-export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1.8, 1.9, 2, 2.1, 2.7];
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1.85, 1.95, 2.1, 2.2, 2.85];
 
 /**
  * Flat gold paid for winning each slot's room (opener -> finale), on top of

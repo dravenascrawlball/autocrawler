@@ -18,6 +18,7 @@
   import CharacterCard from './CharacterCard.svelte';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
   import Tooltip from './Tooltip.svelte';
+  import SynergyPanel from './SynergyPanel.svelte';
   import { recruitTooltip } from './recruitTooltip';
   import { runHistory, recordRun } from '../state/runHistory';
   import { newUnlocksForRun } from '../state/progression';
@@ -181,6 +182,7 @@
         Drag your party into position. Melee attacks only reach the frontmost unit in a lane — keep fragile
         characters behind someone.
       </p>
+      <SynergyPanel party={partyMembers} />
       <FormationBoard
         partyUnits={partyBoardUnits}
         enemyUnits={nextRoomEnemyUnits}
@@ -201,7 +203,7 @@
       <ul class="shop-offers">
         {#each shopOffers.recruits as offer (offer.adventurer.id)}
           <li class="shop-offer">
-            <Tooltip text={recruitTooltip(offer.adventurer)}>
+            <Tooltip text={recruitTooltip(offer.adventurer, partyMembers)}>
               <span class="shop-offer__label shop-offer__label--hint">
                 {offer.adventurer.name}
                 {#if offer.alreadyInParty}<span class="shop-offer__hint">(level up!)</span>{/if}

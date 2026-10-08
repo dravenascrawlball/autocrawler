@@ -16,6 +16,13 @@ export interface Relic {
   modifiers: StatModifier[];
   /** Gold cost in the between-room shop. */
   price: number;
+  /**
+   * A relic that grows over the run (roadmap item 6, in-run snowballing):
+   * every party member gets `percentPerUnit`% of `stat` per room cleared so
+   * far, or per current party member. Recomputed at each room start (see
+   * applyRelicScaling) rather than granted once on purchase.
+   */
+  scaling?: { stat: string; percentPerUnit: number; per: 'room-cleared' | 'party-member' };
 }
 
 /** Grants `relic`'s modifiers to `adventurer` — called once per party member when a relic is bought, and again for anyone who joins the party afterward (see dungeonOrchestrator.ts's buyRelicOffer/buyRecruitOffer). */
@@ -29,3 +36,27 @@ export function applyActiveRelicsToAdventurer(adventurer: Adventurer, activeReli
     applyRelicToAdventurer(adventurer, relic);
   }
 }
+
+const RELIC_SCALING_SOURCE_PREFIX = 'relic-scaling:';
+
+/**
+ * Re-applies every scaling relic's current bonus to the whole party (see
+ * Relic.scaling) — called at each room start (dungeonRun.ts's
+ * resolveNextRoom) with the number of rooms cleared so far, so the bonus
+ * keeps growing as the run goes on and covers anyone recruited since.
+ */
+export function applyRelicScaling(party: Adventurer[], activeRelics: Relic[], roomsCleared: number): void {
+  const scaling = activeRelics.filter((relic) => relic.scaling);
+  for (const member of party) {
+    const earned = scaling.map((relic) => {
+      const { stat, percentPerUnit, per } = relic.scaling!;
+      const units = per === 'room-cleared' ? roomsCleared : party.length;
+      return { stat, type: 'percent' as const, amount: units * percentPerUnit, source: `${RELIC_SCALING_SOURCE_PREFIX}${relic.id}` };
+    });
+    member.modifiers = [
+      ...member.modifiers.filter((modifier) => !modifier.source.startsWith(RELIC_SCALING_SOURCE_PREFIX)),
+      ...earned,
+    ];
+  }
+}
+

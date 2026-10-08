@@ -330,3 +330,26 @@ export function effectiveMaxHp(adventurer: Adventurer): number {
   return getEffectiveStat(adventurer.maxHp, 'maxHp', adventurer.modifiers);
 }
 
+
+/**
+ * Duplicate stars (roadmap item 6, in-run snowballing): when a duplicate
+ * recruit takes `adventurer` to 2★ (see leveling.ts's levelUpAdventurer and
+ * state/dungeonOrchestrator.ts's buyRecruitOffer), they draw a second,
+ * different Special Action from `pool` (their template pool plus earned
+ * unlocks) and keep both for the rest of the run. Returns the Special
+ * gained, or null if the pool has no other Special to give.
+ */
+export function grantSecondPoolSpecial(
+  adventurer: Adventurer,
+  pool: CharacterPoolEntry[],
+  rng: RngSource,
+): SpecialAction | null {
+  const activeIds = new Set(adventurer.activeSpecialActions.map((special) => special.id));
+  const candidates = pool.flatMap((entry) =>
+    entry.kind === 'special-action' && !activeIds.has(entry.specialAction.id) ? [entry.specialAction] : [],
+  );
+  if (candidates.length === 0) return null;
+  const picked = candidates[Math.floor(rng() * candidates.length)];
+  adventurer.activeSpecialActions = [...adventurer.activeSpecialActions, picked];
+  return picked;
+}

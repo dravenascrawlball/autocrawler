@@ -1,5 +1,6 @@
 import type { Adventurer } from '../sim/adventurer';
 import { ACTION_DESCRIPTIONS } from './actionDescriptions';
+import { recruitSynergyLine } from './synergyText';
 
 /**
  * Tooltip text for a recruit offer (the unlock content pass): exactly what
@@ -8,7 +9,7 @@ import { ACTION_DESCRIPTIONS } from './actionDescriptions';
  * Accurate because the pool draw already happened when the offer was
  * rolled (see state/progression.ts's rerollOfferedCharacters).
  */
-export function recruitTooltip(adventurer: Adventurer): string {
+export function recruitTooltip(adventurer: Adventurer, party: Adventurer[] = []): string {
   const lines = adventurer.activeSpecialActions.map((special) => {
     const description = ACTION_DESCRIPTIONS[special.action.id];
     return description ? `Special: ${special.name} — ${description}` : `Special: ${special.name}`;
@@ -19,5 +20,7 @@ export function recruitTooltip(adventurer: Adventurer): string {
   if (adventurer.activeKit) {
     lines.push(`Kit: ${adventurer.activeKit.name}`);
   }
+  const synergyLine = recruitSynergyLine(adventurer, party);
+  if (synergyLine) lines.push(synergyLine);
   return lines.length > 0 ? lines.join('\n') : 'No Special Action.';
 }

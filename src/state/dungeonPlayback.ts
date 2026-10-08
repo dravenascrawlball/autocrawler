@@ -4,6 +4,7 @@ import type { RunInventory } from '../sim/items';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
 import { RELIC_REGISTRY } from '../data/relics';
+import { SYNERGIES } from '../data/synergies';
 import { rollRecruitOffers, rollRelicOffers, rollEquipmentOffers, type ShopOffers, DEFAULT_RECRUIT_PRICE } from '../sim/shopOffers';
 import { INITIAL_SAVE } from './persistence';
 import { roster } from './roster';
@@ -103,6 +104,7 @@ function resumeFromSave(): DungeonPlaybackState | null {
     roomRecords: [],
     partyGold: saved.partyGold,
     activeRelics: saved.activeRelics ?? [],
+    synergies: SYNERGIES,
   };
 
   const shopOffers: ShopOffers =

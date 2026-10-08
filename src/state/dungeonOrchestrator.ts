@@ -14,7 +14,7 @@ import {
   type DungeonRoomRecord,
 } from '../sim/dungeonRun';
 import { equipItem as simEquipItem, unequipItem as simUnequipItem } from '../sim/partyManagement';
-import { resetToTemplateBaseline, type Adventurer } from '../sim/adventurer';
+import { resetToTemplateBaseline, grantSecondPoolSpecial, type Adventurer } from '../sim/adventurer';
 import { createRunInventory, type Item, type EquipmentSlot, type ItemLookup, type RunInventory } from '../sim/items';
 import { rollRoomLoot } from '../sim/loot';
 import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
@@ -26,6 +26,7 @@ import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
 import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
 import { createStarterDungeonRooms } from '../data/rooms';
+import { SYNERGIES } from '../data/synergies';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
 import { UNIVERSAL_TRAIT_POOL } from '../data/traits';
@@ -115,7 +116,7 @@ export function startDungeon(
 
   const actualRooms = rooms ?? createStarterDungeonRooms(rng);
   const partyGold = seed?.partyGold ?? get(townStorage).gold;
-  const runState = startDungeonRun(party, actualRooms, partyGold);
+  const runState = startDungeonRun(party, actualRooms, partyGold, SYNERGIES);
   if (seed?.activeRelics) {
     runState.activeRelics = seed.activeRelics;
   }
@@ -241,7 +242,7 @@ export function acknowledgeDowned(adventurerId: string): void {
  * current, there isn't enough gold, or (for a new recruit) the party is
  * already full.
  */
-export function buyRecruitOffer(adventurerId: string): void {
+export function buyRecruitOffer(adventurerId: string, rng: RngSource = () => Math.random()): void {
   const playback = get(dungeonPlayback);
   if (!playback || playback.outcome !== null) {
     return;
@@ -258,6 +259,15 @@ export function buyRecruitOffer(adventurerId: string): void {
       return;
     }
     levelUpAdventurer(member);
+    // Duplicate stars: reaching 2★ also draws a second Special from their pool — see sim/adventurer.ts.
+    const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === member.name);
+    if (member.level === 2 && template) {
+      const pool = [
+        ...(template.specialActionPool ?? []),
+        ...unlockedPoolEntriesFor(template.name, member.id, get(runHistory)),
+      ];
+      grantSecondPoolSpecial(member, pool, rng);
+    }
   } else {
     if (playback.runState.party.length >= MAX_PARTY_SIZE) {
       return;

@@ -6,6 +6,8 @@ import { getEffectiveStat } from './stats';
 import type { Relic } from './relics';
 import type { RngSource } from './rng';
 import { assignUniquePositions } from './formation';
+import { applySynergies, type Synergy } from './synergies';
+import { applyRelicScaling } from './relics';
 
 /** How a completed dungeon run ended. */
 export type DungeonOutcome = 'completed' | 'loss' | 'retreat';
@@ -61,6 +63,8 @@ export interface DungeonRunState {
   partyGold: number;
   /** Relics bought from the between-room shop so far this run — see state/dungeonOrchestrator.ts's buyRelicOffer. Granted to every current party member on purchase, and to anyone who joins afterward (see buyRecruitOffer). */
   activeRelics: Relic[];
+  /** Role synergy definitions (data/synergies.ts), injected — re-evaluated against the party at every room start. See sim/synergies.ts. */
+  synergies: Synergy[];
 }
 
 function snapshotParty(party: Adventurer[]): PartyMemberSnapshot[] {
@@ -103,12 +107,17 @@ function healBetweenRooms(party: Adventurer[]): void {
  * either freshly reset via resetToTemplateBaseline, or has simply never
  * been on a run yet) — there's no cross-run injury to carry in anymore.
  */
-export function startDungeonRun(party: Adventurer[], rooms: RoomDefinition[], partyGold = 0): DungeonRunState {
+export function startDungeonRun(
+  party: Adventurer[],
+  rooms: RoomDefinition[],
+  partyGold = 0,
+  synergies: Synergy[] = [],
+): DungeonRunState {
   if (rooms.length === 0) {
     throw new Error('startDungeonRun requires at least one room');
   }
 
-  return { party, rooms, roomIndex: 0, downedDuringRun: new Set(), roomRecords: [], partyGold, activeRelics: [] };
+  return { party, rooms, roomIndex: 0, downedDuringRun: new Set(), roomRecords: [], partyGold, activeRelics: [], synergies };
 }
 
 /**
@@ -142,6 +151,11 @@ export function resolveNextRoom(state: DungeonRunState, rng: RngSource = () => M
   // placement, or placeUnplaced on Continue, already guarantees it); catches old saves and callers
   // that never placed anyone.
   assignUniquePositions(party);
+  // In-run snowballing (roadmap item 6): synergies and scaling relics are recomputed for the party
+  // as it stands now. Every room before this one was won (a loss ends the run), so roomIndex is
+  // the rooms-cleared count — and unlike roomRecords, it survives a save/resume.
+  applySynergies(party, state.synergies);
+  applyRelicScaling(party, state.activeRelics, roomIndex);
 
   const partyAtRoomStart = snapshotParty(party);
   const battle: BattleState = createBattleState(party, room.enemies, state.partyGold);

@@ -12,6 +12,7 @@
   } from '../state/openingShop';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
   import Tooltip from './Tooltip.svelte';
+  import SynergyPanel from './SynergyPanel.svelte';
   import { recruitTooltip } from './recruitTooltip';
   import type { Adventurer } from '../sim/adventurer';
 
@@ -51,6 +52,7 @@
       characters behind someone.
     {/if}
   </p>
+  <SynergyPanel {party} />
   <div class="opening-shop__board">
     <FormationBoard
       {partyUnits}
@@ -65,7 +67,7 @@
   <ul class="shop-offers">
     {#each offers.recruits as offer (offer.adventurer.id)}
       <li class="shop-offer">
-        <Tooltip text={recruitTooltip(offer.adventurer)}>
+        <Tooltip text={recruitTooltip(offer.adventurer, party)}>
           <span class="shop-offer__label shop-offer__label--hint">{offer.adventurer.name}</span>
         </Tooltip>
         <button type="button" disabled={gold < offer.price} on:click={() => buyOpeningRecruit(offer.adventurer.id)}>
