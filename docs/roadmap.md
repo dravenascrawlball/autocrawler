@@ -390,29 +390,25 @@ Every unit now has its own cell, and lanes matter in combat.
 
 Deferred from the meta-progression step — the plan always described
 unlockable pool entries *and* "optionally" permanent stat growth, but
-only the pool-unlock half was built. Still needs: what grants it (same
-first-clear trigger? a separate milestone?), how much, how it's capped,
-and how it coexists with in-run leveling without making early runs
-trivial.
+only the pool-unlock half was built. Still needs: what grants it (a
+Renown purchase? a per-character milestone using
+`runHistory.characterStats`?), how much, how it's capped, and how it
+coexists with in-run level-ups (duplicate recruits, +25% stats each) and
+the balance sim's ~50-60% target without making early runs trivial. Would
+surface naturally on the Progress screen (item 3).
 
-## 6. In-run scaling/progression is thin
+## 6. In-run scaling/progression
 
-Scaling and growth *within a single run* is one of the genre's bigger
-levers (see item 9 below) and we have essentially none of it today.
-What exists: XP/level-ups (`sim/leveling.ts` — a passive, an
-action-level bump, or a new Face; the last of those three is currently
-dead, see item 2), loot found mid-run, and the party growing 1→9 via
-recruitment. None of it *compounds* — there's no mechanic where an
-early pick snowballs into a dramatically stronger late-run board, which
-is the thing that makes a run's back half feel different from its front
-half in games like TFT or Order Automatica. Candidate levers, several
-pulled directly from item 9's research: role synergy bonuses scaling up
-as the party grows (more roles active = more stacked bonuses, for
-free, as recruitment already happens), a charge-meter trigger type that
-rewards a long fight, or duplicate-recruit merging. Needs its own
-open-questions pass on what "snowballing" should actually feel like
-here before picking a mechanism — this is a design gap, not just a
-missing feature.
+Partly addressed since this was written: the old XP/level-up system is
+gone, and gold-funded recruiting (the gold income follow-up, item 8) now
+grows the party ~1 member per room (3 → ~7), with duplicate recruits
+leveling a character up (+25% stats). What's still missing is anything
+that *compounds* — an early pick that snowballs into a dramatically
+stronger late-run board, as in TFT or Order Automatica. Candidate levers
+(see item 9's research): role/Tag synergy bonuses that scale as more of a
+role joins the party, a charge-meter trigger that rewards long fights, or
+relics that scale with party size. Needs its own open-questions pass on
+what "snowballing" should feel like before picking a mechanism.
 
 ## 7. Enemy variety — shipped
 
@@ -574,8 +570,10 @@ section above) rather than pure gap-analysis:
 - **UI-level test coverage.** Keep adding thin coverage as the UI grows
   (`@testing-library/svelte` + jsdom infra already in place), rather than
   after it already has.
-- **Minor bug spotted, not yet fixed:** the between-room heal
-  (`DungeonPauseView`'s party list) can display HP as a long float (e.g.
-  "27.500000000000004/25") instead of a clean integer — a
-  floating-point display artifact in the inter-room heal math, cosmetic
-  only. Noticed live while verifying item 1, out of scope for that fix.
+- ~~HP displayed as a long float ("27.500000000000004/25")~~ — fixed:
+  `sim/stats.ts`'s `getEffectiveStat` rounds effective maxHp (a percent
+  maxHp modifier was leaking fractions into HP via heal caps), and HP
+  displays now show the effective max (`sim/adventurer.ts`'s
+  `effectiveMaxHp`) rather than the base value.
+- **Type-check command**: use `npm run check`. The root `tsconfig.json` has
+  `"files": []`, so `tsc -p .` checks nothing.

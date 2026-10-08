@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { effectiveMaxHp } from '../sim/adventurer';
   import type { Adventurer } from '../sim/adventurer';
   import { portraitAssetPath, downedArtPath, downedArtFallbackPath } from './portraits';
 
@@ -56,10 +57,10 @@
       <span class="char-card__hp-bar" role="presentation">
         <span
           class="char-card__hp-fill"
-          style="width: {Math.max(0, (adventurer.hp / adventurer.maxHp) * 100)}%"
+          style="width: {Math.max(0, (adventurer.hp / effectiveMaxHp(adventurer)) * 100)}%"
         ></span>
       </span>
-      <span class="char-card__hp-text">HP {adventurer.hp}/{adventurer.maxHp}</span>
+      <span class="char-card__hp-text">HP {Math.round(adventurer.hp)}/{effectiveMaxHp(adventurer)}</span>
     {/if}
     <span class="char-card__tags">
       <slot name="tags" />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { effectiveMaxHp } from '../sim/adventurer';
   import { dungeonPlayback } from '../state/dungeonPlayback';
   import { roster } from '../state/roster';
   import {
@@ -50,7 +51,7 @@
     archetype: unit.archetype,
     position: unit.position,
     hp: unit.hp,
-    maxHp: unit.maxHp,
+    maxHp: effectiveMaxHp(unit),
   });
   $: nextRoomEnemyUnits = nextRoom ? nextRoom.enemies.map(toBoardUnit) : [];
   $: partyBoardUnits = partyMembers.map(toBoardUnit);

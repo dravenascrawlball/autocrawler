@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { effectiveMaxHp } from '../sim/adventurer';
   import {
     openingShop,
     startOpeningShop,
@@ -29,7 +30,7 @@
     archetype: unit.archetype,
     position: unit.position,
     hp: unit.hp,
-    maxHp: unit.maxHp,
+    maxHp: effectiveMaxHp(unit),
   });
   $: partyUnits = party.map(toBoardUnit);
   // Room 1 is rolled when the shop opens (see state/openingShop.ts), so its formation can be previewed here.

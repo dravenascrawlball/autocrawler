@@ -23,3 +23,15 @@ describe('getEffectiveStat', () => {
     expect(getEffectiveStat(1, 'range', modifiers)).toBeCloseTo(5.25);
   });
 });
+
+describe('getEffectiveStat: maxHp rounding', () => {
+  it('rounds effective maxHp to a whole number (e.g. +15% on 25 base), so heal caps never leak fractions into HP', () => {
+    const relic: StatModifier = { stat: 'maxHp', type: 'percent', amount: 15, source: 'relic:test' };
+    expect(getEffectiveStat(25, 'maxHp', [relic])).toBe(29); // 28.75 unrounded
+  });
+
+  it('leaves other stats unrounded', () => {
+    const boost: StatModifier = { stat: 'attackPower', type: 'percent', amount: 15, source: 'test' };
+    expect(getEffectiveStat(25, 'attackPower', [boost])).toBeCloseTo(28.75);
+  });
+});

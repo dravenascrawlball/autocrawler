@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { effectiveMaxHp } from '../sim/adventurer';
   import { roster } from '../state/roster';
   import { runHistory } from '../state/runHistory';
   import { metaProgression } from '../state/metaProgression';
@@ -78,8 +79,8 @@
         <section class="sheet-box sheet-box--stats">
           <h3>Stats</h3>
           <div class="hp-bar" role="presentation">
-            <span class="hp-fill" style="width: {Math.max(0, (adventurer.hp / adventurer.maxHp) * 100)}%"></span>
-            <span class="hp-label">{adventurer.hp} / {adventurer.maxHp} HP</span>
+            <span class="hp-fill" style="width: {Math.max(0, (adventurer.hp / effectiveMaxHp(adventurer)) * 100)}%"></span>
+            <span class="hp-label">{Math.round(adventurer.hp)} / {effectiveMaxHp(adventurer)} HP</span>
           </div>
           <dl class="stat-grid">
             <dt>Attack</dt>

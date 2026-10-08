@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { effectiveMaxHp } from '../sim/adventurer';
   import { onDestroy, tick } from 'svelte';
   import { get } from 'svelte/store';
   import Phaser from 'phaser';
@@ -67,7 +68,7 @@
         name: adventurer?.name ?? snapshot.id,
         archetype: adventurer?.archetype ?? '',
         hp: snapshot.hp,
-        maxHp: adventurer?.maxHp ?? snapshot.hp,
+        maxHp: adventurer ? effectiveMaxHp(adventurer) : snapshot.hp,
         side: 'party',
         position: adventurer?.position ?? { lane: 1, rank: 0 },
         hasRageTrait: adventurer?.traits.some((trait) => trait.id === RAGE_TRAIT.id) ?? false,

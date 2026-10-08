@@ -23,5 +23,8 @@ export function getEffectiveStat(base: number, stat: string, modifiers: StatModi
     .filter((m) => m.type === 'percent')
     .reduce((sum, m) => sum + m.amount, 0);
 
-  return (base + flatSum) * (1 + percentSum / 100);
+  const value = (base + flatSum) * (1 + percentSum / 100);
+  // HP is always a whole number — an unrounded percent maxHp modifier (e.g. a +15% relic on 25 base)
+  // used to leak fractions into HP via heal caps, showing up as "27.500000000000004/25".
+  return stat === 'maxHp' ? Math.round(value) : value;
 }

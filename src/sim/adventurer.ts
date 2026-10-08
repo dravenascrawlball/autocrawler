@@ -2,6 +2,7 @@ import type { Action, ActionId } from './action';
 import type { Row, RowOrPosition, GridPosition } from './formation';
 import { resolvePosition } from './formation';
 import type { StatModifier } from './stats';
+import { getEffectiveStat } from './stats';
 import type { EquipmentSlots, LootTableEntry } from './items';
 import { createEmptyEquipmentSlots } from './items';
 import type { GoldDropTable } from './gold';
@@ -323,3 +324,9 @@ export function rerollPoolPicks(
   const kit = pickKit([...(template.kitPool ?? []), ...unlockedKits], rng);
   if (kit) applyKit(adventurer, template, kit);
 }
+
+/** `adventurer`'s max HP with every modifier applied (Kit, gear, relics, buffs) — what HP is actually capped at, and what HP displays should show as the max. */
+export function effectiveMaxHp(adventurer: Adventurer): number {
+  return getEffectiveStat(adventurer.maxHp, 'maxHp', adventurer.modifiers);
+}
+
