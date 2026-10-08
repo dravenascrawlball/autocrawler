@@ -239,7 +239,7 @@ function serializeGameState(state: GameState): SerializedGameState {
       ? { ...state.activeRun, rooms: state.activeRun.rooms.map(serializeRoom), inventory: serializeItemBag(state.activeRun.inventory) }
       : null,
     recruitmentPool: state.recruitmentPool.map(serializeCandidate),
-    runHistory: { clearedWithIds: [...state.runHistory.clearedWithIds] },
+    runHistory: { clearedWithIds: [...state.runHistory.clearedWithIds], characterStats: { ...state.runHistory.characterStats } },
     metaProgression: {
       renown: state.metaProgression.renown,
       unlockedKitIds: { ...state.metaProgression.unlockedKitIds },
@@ -259,7 +259,11 @@ function deserializeGameState(raw: SerializedGameState): GameState {
       ? { ...raw.activeRun, rooms: raw.activeRun.rooms.map(deserializeRoom), inventory: deserializeItemBag(raw.activeRun.inventory) }
       : null,
     recruitmentPool: raw.recruitmentPool.map(deserializeCandidate),
-    runHistory: { clearedWithIds: [...raw.runHistory.clearedWithIds] },
+    // characterStats arrived after v17 (Progress screen) — an older save simply has none yet.
+    runHistory: {
+      clearedWithIds: [...raw.runHistory.clearedWithIds],
+      characterStats: { ...(raw.runHistory.characterStats ?? {}) },
+    },
     metaProgression: {
       renown: raw.metaProgression.renown,
       unlockedKitIds: { ...raw.metaProgression.unlockedKitIds },

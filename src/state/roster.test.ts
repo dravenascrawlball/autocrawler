@@ -24,7 +24,7 @@ function baseSave(roster: GameState['roster']): GameState {
     dayCount: 0,
     activeRun: null,
     recruitmentPool: [],
-    runHistory: { clearedWithIds: [] },
+    runHistory: { clearedWithIds: [], characterStats: {} },
     metaProgression: { renown: 0, unlockedKitIds: {} },
   };
 }

@@ -16,6 +16,9 @@
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
+  import { runHistory } from '../state/runHistory';
+  import { newUnlocksForRun } from '../state/progression';
+  import { calculateRunRenownBreakdown } from '../sim/renown';
   import type { EquipmentSlot } from '../sim/items';
 
   export let onContinue: () => void;
@@ -76,6 +79,16 @@
   $: totalRooms = $dungeonPlayback?.runState.rooms.length ?? 0;
   $: roomsReached = $dungeonPlayback?.runState.roomIndex ?? 0;
   $: runGold = $dungeonPlayback?.inventory.gold ?? 0;
+  // What finishDungeonRun is about to bank (roadmap item 3) — previewed here with the same pure
+  // helpers it uses, so the recap and the town toast always agree.
+  $: renownPreview =
+    $dungeonPlayback && runOutcome !== null
+      ? calculateRunRenownBreakdown($dungeonPlayback.runState.roomRecords, runOutcome)
+      : null;
+  $: unlockPreview =
+    $dungeonPlayback && runOutcome !== null
+      ? newUnlocksForRun($dungeonPlayback.runState.party, runOutcome, $runHistory.clearedWithIds)
+      : [];
 </script>
 
 <section>
@@ -95,6 +108,20 @@
     <section class="run-recap">
       <p>Rooms reached: {roomsReached} / {totalRooms}</p>
       <p>Gold gained: {runGold}g</p>
+      {#if renownPreview}
+        <p class="run-recap__renown">
+          Renown earned: <strong>+{renownPreview.total}</strong>
+          <span class="run-recap__breakdown">
+            ({renownPreview.roomsWon} room{renownPreview.roomsWon === 1 ? '' : 's'} × {renownPreview.roomsWon > 0
+              ? renownPreview.roomRenown / renownPreview.roomsWon
+              : 0}{#if renownPreview.completionBonus > 0}
+              + {renownPreview.completionBonus} completion bonus{/if})
+          </span>
+        </p>
+      {/if}
+      {#each unlockPreview as unlock (unlock.characterName + unlock.name)}
+        <p class="run-recap__unlock">✦ {unlock.characterName} unlocked <strong>{unlock.name}</strong> — added to their Special pool</p>
+      {/each}
       {#if inventoryItems.length > 0}
         <p>Loot found: {inventoryItems.map((item) => item.name).join(', ')}</p>
       {/if}
@@ -251,6 +278,19 @@
     margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--panel-border);
+  }
+
+  .run-recap__renown strong {
+    color: var(--gold-bright);
+  }
+
+  .run-recap__breakdown {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .run-recap__unlock {
+    color: var(--text-heading);
   }
 
   .run-recap p {

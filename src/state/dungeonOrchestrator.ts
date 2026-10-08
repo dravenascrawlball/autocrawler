@@ -4,7 +4,7 @@ import { townStorage } from './townStorage';
 import { currentView } from './view';
 import { dungeonPlayback, rollShopOffers } from './dungeonPlayback';
 import { activeRun } from './activeRun';
-import { runHistory } from './runHistory';
+import { runHistory, recordRun } from './runHistory';
 import {
   startDungeonRun,
   resolveNextRoom,
@@ -20,7 +20,8 @@ import { rollRoomLoot } from '../sim/loot';
 import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
 import { levelUpAdventurer } from '../sim/leveling';
 import { applyRelicToAdventurer, applyActiveRelicsToAdventurer, type Relic } from '../sim/relics';
-import { calculateRunRenown } from '../sim/renown';
+import { calculateRunRenownBreakdown } from '../sim/renown';
+import { newUnlocksForRun, lastRunReward } from './progression';
 import type { Kit } from '../sim/kits';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
@@ -395,17 +396,16 @@ export function finishDungeonRun(): void {
     return;
   }
 
-  if (playback.outcome === 'completed') {
-    const history = get(runHistory);
-    const clearedWithIds = new Set(history.clearedWithIds);
-    for (const adventurer of playback.runState.party) {
-      clearedWithIds.add(adventurer.id);
-    }
-    runHistory.set({ clearedWithIds: [...clearedWithIds] });
-  }
-
-  const renownEarned = calculateRunRenown(playback.runState.roomRecords, playback.outcome);
-  metaProgression.update((state) => ({ ...state, renown: state.renown + renownEarned }));
+  const party = playback.runState.party;
+  const renown = calculateRunRenownBreakdown(playback.runState.roomRecords, playback.outcome);
+  // Computed before runHistory is updated, so it compares against who had cleared *before* this run.
+  const newUnlocks = newUnlocksForRun(party, playback.outcome, get(runHistory).clearedWithIds);
+  runHistory.update((history) =>
+    recordRun(history, party.map((adventurer) => adventurer.id), renown.roomsWon, playback.outcome === 'completed'),
+  );
+  metaProgression.update((state) => ({ ...state, renown: state.renown + renown.total }));
+  // Read by the town toast (ui/TownPhase.svelte) — see state/progression.ts.
+  lastRunReward.set({ outcome: playback.outcome, renown, newUnlocks });
 
   // Resolved after runHistory is updated above, so a character who just cleared their first run
   // this very call already has their unlock available for this reset, not just their next one.

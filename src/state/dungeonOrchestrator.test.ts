@@ -7,6 +7,7 @@ import { currentView } from './view';
 import { dungeonPlayback } from './dungeonPlayback';
 import { activeRun } from './activeRun';
 import { runHistory } from './runHistory';
+import { lastRunReward } from './progression';
 import { metaProgression } from './metaProgression';
 import { ROOM_CLEAR_RENOWN, RUN_COMPLETION_BONUS_RENOWN } from '../sim/renown';
 import {
@@ -60,8 +61,23 @@ describe('startDungeon / finishDungeonRun', () => {
     currentView.set('town');
     dungeonPlayback.set(null);
     activeRun.set(null);
-    runHistory.set({ clearedWithIds: [] });
+    runHistory.set({ clearedWithIds: [], characterStats: {} });
     metaProgression.set({ renown: 0, unlockedKitIds: {} });
+  });
+
+  it('finishing a run records per-character stats and the reward the town toast shows', () => {
+    const drafted = hero('hero');
+    roster.set({ adventurers: [drafted], recruitedIds: [] });
+    const room: RoomDefinition = { enemies: [createAdventurer('enemy', enemyTemplate(), 'front')] };
+
+    startDungeon([drafted], [room], () => 0, lookupItem);
+    finishDungeonRun();
+
+    expect(get(runHistory).characterStats.hero).toEqual({ runs: 1, clears: 1, bestRoomsWon: 1 });
+    expect(get(lastRunReward)).toMatchObject({
+      outcome: 'completed',
+      renown: { roomsWon: 1, roomRenown: ROOM_CLEAR_RENOWN, completionBonus: RUN_COMPLETION_BONUS_RENOWN },
+    });
   });
 
   it('wins a run, then resets the party to template baseline and returns to town', () => {

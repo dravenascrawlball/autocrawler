@@ -3,9 +3,10 @@
   import OpeningShopView from './OpeningShopView.svelte';
   import CharacterSheetView from './CharacterSheetView.svelte';
   import RecruitmentView from './RecruitmentView.svelte';
-  import ShopView from './ShopView.svelte';
+  import ProgressView from './ProgressView.svelte';
   import SettingsView from './SettingsView.svelte';
   import { metaProgression } from '../state/metaProgression';
+  import { lastRunReward } from '../state/progression';
 
   type View = 'hub' | 'roster' | 'shop' | 'recruit' | 'embark' | 'settings';
 
@@ -19,15 +20,15 @@
   /**
    * The Town's front screen (Town Storage Cleanup, see docs/roadmap.md) —
    * replaces the old top tab bar with a Hub of large card-buttons. The
-   * Meta Progression card (ui/ShopView.svelte) now spends Renown — see
-   * state/metaProgression.ts/sim/renown.ts — on Kits instead of the old
-   * gold-priced Items.
+   * Progress card (ui/ProgressView.svelte — roadmap item 3) shows Renown,
+   * per-character stats and unlock goals, with the Renown-priced Kit shop
+   * (ui/ShopView.svelte) underneath.
    */
   const HUB_CARDS: HubCard[] = [
     { id: 'roster', label: 'Roster', description: 'Review your characters, their Kits, and their Traits.' },
     { id: 'recruit', label: 'Recruit', description: 'Permanently unlock a new character for future runs.' },
     { id: 'embark', label: 'Embark', description: 'Spend gold to build your party, then head into the dungeon.' },
-    { id: 'shop', label: 'Meta Progression', description: 'Spend Renown on Kits for your characters.' },
+    { id: 'shop', label: 'Progress', description: 'Your Renown, unlocks and goals — and the Kit shop.' },
   ];
 
   let activeView: View = 'hub';
@@ -50,6 +51,34 @@
     <h1>The Town</h1>
     <span class="renown">{$metaProgression.renown} Renown</span>
   </header>
+
+  {#if $lastRunReward}
+    <!-- Return-to-town toast (roadmap item 3): what the run just earned, once — see state/progression.ts. -->
+    <div class="reward-toast" role="status">
+      <div class="reward-toast__body">
+        <strong>+{$lastRunReward.renown.total} Renown</strong>
+        <span class="reward-toast__detail">
+          {$lastRunReward.renown.roomsWon} room{$lastRunReward.renown.roomsWon === 1 ? '' : 's'} cleared{#if $lastRunReward.renown.completionBonus > 0}
+            · +{$lastRunReward.renown.completionBonus} completion bonus{/if}
+        </span>
+        {#each $lastRunReward.newUnlocks as unlock (unlock.characterName + unlock.name)}
+          <span class="reward-toast__unlock">✦ {unlock.characterName} unlocked {unlock.name}</span>
+        {/each}
+      </div>
+      <div class="reward-toast__actions">
+        <button
+          type="button"
+          on:click={() => {
+            activeView = 'shop';
+            lastRunReward.set(null);
+          }}
+        >
+          View Progress
+        </button>
+        <button type="button" class="reward-toast__close" aria-label="Dismiss" on:click={() => lastRunReward.set(null)}>✕</button>
+      </div>
+    </div>
+  {/if}
 
   {#if activeView !== 'hub'}
     <button type="button" class="back-to-hub" on:click={() => (activeView = 'hub')}>← Back to Town</button>
@@ -78,7 +107,7 @@
     {:else if activeView === 'roster'}
       <BenchView {selectedAdventurerId} onSelect={openSheet} onGoToRecruit={() => (activeView = 'recruit')} />
     {:else if activeView === 'shop'}
-      <ShopView />
+      <ProgressView onOpenCharacter={openSheet} />
     {:else if activeView === 'recruit'}
       <RecruitmentView />
     {:else if activeView === 'embark'}
@@ -94,6 +123,54 @@
 </div>
 
 <style>
+  .reward-toast {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--bg-inset);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .reward-toast__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .reward-toast__body strong {
+    font-family: var(--font-heading);
+    color: var(--gold-bright);
+  }
+
+  .reward-toast__detail {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .reward-toast__unlock {
+    font-size: 13px;
+    color: var(--text-heading);
+  }
+
+  .reward-toast__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .reward-toast__close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
   .renown {
     font-family: var(--font-heading);
     font-size: 20px;

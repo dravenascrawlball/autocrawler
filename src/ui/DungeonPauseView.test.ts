@@ -56,7 +56,7 @@ describe('DungeonPauseView run recap (roadmap item 6)', () => {
     inventory.items.push({ id: 'ring', name: 'Lucky Ring', slot: 'trinket', modifiers: [], price: 0 });
 
     dungeonPlayback.set({
-      runState: { party: [hero], rooms: [{ enemies: [] }, { enemies: [] }], roomIndex: 2 },
+      runState: { party: [hero], rooms: [{ enemies: [] }, { enemies: [] }], roomIndex: 2, roomRecords: [] },
       inventory,
       outcome: 'completed',
     } as unknown as DungeonPlaybackState);
@@ -80,7 +80,7 @@ describe('DungeonPauseView run recap (roadmap item 6)', () => {
     roster.set({ adventurers: [hero], recruitedIds: [] });
 
     dungeonPlayback.set({
-      runState: { party: [hero], rooms: [{ enemies: [] }], roomIndex: 1 },
+      runState: { party: [hero], rooms: [{ enemies: [] }], roomIndex: 1, roomRecords: [] },
       inventory: createRunInventory(),
       outcome: 'loss',
     } as unknown as DungeonPlaybackState);

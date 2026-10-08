@@ -67,7 +67,7 @@ describe('recruitmentPool createInitialPool (module init)', () => {
       dayCount: 0,
       activeRun: null,
       recruitmentPool: [gudrunCandidate, envyCandidate],
-      runHistory: { clearedWithIds: [] },
+      runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 

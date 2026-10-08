@@ -283,14 +283,36 @@ game already uses for missing art). Needs its own open-questions pass
 before any code gets written.
 
 
-## 3. Meta-progression has no UI
+## 3. Meta-progression UI — shipped
 
-`state/runHistory.ts`'s `clearedWithIds` and the character pool unlocks
-it now gates (`data/characterUnlocks.ts`) are both pure background
-tracking — a player who clears a run with Drifta gets no in-game signal
-that she's grown her kit. Needs some surface (character sheet? a toast at
-run-end? a dedicated unlocks screen?) once there's enough unlocked
-content to be worth showing.
+Progression is now visible in four places, all reading the same helpers
+(`state/progression.ts`: `clearUnlocksFor`, `newUnlocksForRun`, `kitsFor`,
+`lastRunReward`):
+
+1. **Run-end recap** (`ui/DungeonPauseView.svelte`): Renown earned with its
+   breakdown (rooms × 3 + completion bonus — `sim/renown.ts`'s
+   `calculateRunRenownBreakdown`) and any clear-unlocks this run earns.
+2. **Town toast** (`ui/TownPhase.svelte`): on returning to town, "+N
+   Renown" plus new unlocks, with a "View Progress" button; shown once.
+3. **Progress screen** (`ui/ProgressView.svelte`, the hub card formerly
+   called "Meta Progression"): Renown total, every character's run stats
+   and unlock goals — earned ones checked, locked ones with how to get them
+   — and the Kit shop underneath. Character names open their sheet.
+4. **Character sheet** "Unlocks & Progress" box: run stats, clear-unlocks
+   and Kits, earned or locked with conditions.
+
+**Per-character stats**: `runHistory.characterStats` (runs, clears, best
+rooms won) — written by `recordRun` in `finishDungeonRun`; persisted, and
+older saves load with empty stats (no save wipe).
+
+**Still open:**
+- **Content is thin**: only Tharavel and Drifta have a clear-unlock, and
+  only Gudrun, Nerissa and Caladwen have Kits — most characters show "No
+  unlocks yet". A content pass (an unlock per character) is the natural
+  follow-up; it'll need a balance check.
+- Clear-unlocks only add a Special to the character's random pool, not a
+  guaranteed pick — the UI says "added to their Special pool" for that
+  reason.
 
 ## 4. 3×3 grid: lanes and drag-and-drop formation — shipped
 

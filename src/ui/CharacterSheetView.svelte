@@ -1,5 +1,8 @@
 <script lang="ts">
   import { roster } from '../state/roster';
+  import { runHistory } from '../state/runHistory';
+  import { metaProgression } from '../state/metaProgression';
+  import { clearUnlocksFor, kitsFor } from '../state/progression';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
   import { portraitAssetPath } from './portraits';
   import ImageReportButton from './ImageReportButton.svelte';
@@ -8,6 +11,11 @@
   export let onClose: () => void = () => {};
 
   $: adventurer = adventurerId ? ($roster.adventurers.find((a) => a.id === adventurerId) ?? null) : null;
+  // Progression (roadmap item 3): run stats, clear-unlocks and Kits — see state/progression.ts.
+  $: stats = adventurer ? $runHistory.characterStats[adventurer.id] : undefined;
+  $: hasCleared = adventurer ? $runHistory.clearedWithIds.includes(adventurer.id) : false;
+  $: clearUnlocks = adventurer ? clearUnlocksFor(adventurer.name) : [];
+  $: kits = adventurer ? kitsFor(adventurer.name, $metaProgression.unlockedKitIds) : [];
 
   function fallbackToIdle(event: Event, archetype: string): void {
     const img = event.currentTarget as HTMLImageElement;
@@ -134,12 +142,57 @@
             <p class="empty-state">No Special Action yet.</p>
           {/if}
         </section>
+
+        <section class="sheet-box sheet-box--progress">
+          <h3>Unlocks &amp; Progress</h3>
+          <p class="progress-stats">
+            {#if stats}
+              {stats.runs} run{stats.runs === 1 ? '' : 's'} · {stats.clears} clear{stats.clears === 1 ? '' : 's'} · best {stats.bestRoomsWon}/5 rooms
+            {:else}
+              Not taken on a run yet.
+            {/if}
+          </p>
+          {#if clearUnlocks.length === 0 && kits.length === 0}
+            <p class="empty-state">Nothing to unlock yet.</p>
+          {:else}
+            <ul class="trait-list">
+              {#each clearUnlocks as unlock (unlock.name)}
+                <li class="trait-row" class:trait-row--locked={!hasCleared}>
+                  <span class="trait-row__name">{hasCleared ? '✓' : '🔒'} {unlock.name}</span>
+                  <span class="trait-row__description">
+                    {(unlock.actionId ? ACTION_DESCRIPTIONS[unlock.actionId] : unlock.description) ?? ''}
+                    {hasCleared ? 'In their Special pool.' : `Clear a run with ${adventurer.name} to add it to their Special pool.`}
+                  </span>
+                </li>
+              {/each}
+              {#each kits as kit (kit.kitId)}
+                <li class="trait-row" class:trait-row--locked={!kit.owned}>
+                  <span class="trait-row__name">{kit.owned ? '✓' : '🔒'} Kit: {kit.name}</span>
+                  <span class="trait-row__description">
+                    {kit.description}
+                    {kit.owned ? 'Owned.' : `Buy for ${kit.price} Renown in Progress.`}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
+  .progress-stats {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .trait-row--locked {
+    opacity: 0.65;
+  }
+
   .sheet-backdrop {
     position: fixed;
     inset: 0;

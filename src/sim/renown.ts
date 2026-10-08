@@ -15,7 +15,21 @@ export const RUN_COMPLETION_BONUS_RENOWN = 15;
  * non-'completed' outcome, no bonus.
  */
 export function calculateRunRenown(roomRecords: DungeonRoomRecord[], outcome: DungeonOutcome | null): number {
+  return calculateRunRenownBreakdown(roomRecords, outcome).total;
+}
+
+/** Where a run's Renown came from — shown on the run-end recap and the town toast (see ui/DungeonPauseView.svelte / ui/TownPhase.svelte). */
+export interface RunRenownBreakdown {
+  roomsWon: number;
+  roomRenown: number;
+  completionBonus: number;
+  total: number;
+}
+
+/** The same calculation as calculateRunRenown, itemized. */
+export function calculateRunRenownBreakdown(roomRecords: DungeonRoomRecord[], outcome: DungeonOutcome | null): RunRenownBreakdown {
   const roomsWon = roomRecords.filter((record) => record.result.outcome === 'win').length;
+  const roomRenown = roomsWon * ROOM_CLEAR_RENOWN;
   const completionBonus = outcome === 'completed' ? RUN_COMPLETION_BONUS_RENOWN : 0;
-  return roomsWon * ROOM_CLEAR_RENOWN + completionBonus;
+  return { roomsWon, roomRenown, completionBonus, total: roomRenown + completionBonus };
 }

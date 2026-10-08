@@ -81,7 +81,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 4,
       activeRun: null,
       recruitmentPool: [],
-      runHistory: { clearedWithIds: [] },
+      runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
@@ -133,7 +133,7 @@ describe('saveGame / loadGame', () => {
       townStorage: createTownStorage(),
       dayCount: 2,
       activeRun,
-      recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
@@ -190,7 +190,7 @@ describe('saveGame / loadGame', () => {
         townStorage: createTownStorage(),
         dayCount: 0,
         activeRun: null,
-        recruitmentPool: [], runHistory: { clearedWithIds: [] },
+        recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
       }),
     );
 
@@ -204,7 +204,7 @@ describe('saveGame / loadGame', () => {
       townStorage: createTownStorage(),
       dayCount: 3,
       activeRun: null,
-      recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
@@ -230,7 +230,7 @@ describe('saveGame / loadGame', () => {
       townStorage: createTownStorage(),
       dayCount: 0,
       activeRun: null,
-      recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
@@ -260,7 +260,7 @@ describe('saveGame / loadGame', () => {
       townStorage: createTownStorage(),
       dayCount: 0,
       activeRun: null,
-      recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      recruitmentPool: [], runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
@@ -283,7 +283,7 @@ describe('loadGame: kit drift repair (healer redesign)', () => {
       dayCount: 1,
       activeRun: null,
       recruitmentPool: [],
-      runHistory: { clearedWithIds: [] },
+      runHistory: { clearedWithIds: [], characterStats: {} },
       metaProgression: { renown: 42, unlockedKitIds: {} },
     };
     const storage = createMemoryStorage();
@@ -297,5 +297,46 @@ describe('loadGame: kit drift repair (healer redesign)', () => {
       'dawneth-mending-charge',
       'dawneth-guardians-vow',
     ]);
+  });
+});
+
+describe('loadGame: runHistory.characterStats', () => {
+  it('round-trips per-character run stats', () => {
+    const state: GameState = {
+      roster: { adventurers: [], recruitedIds: [] },
+      townStorage: createTownStorage(),
+      dayCount: 1,
+      activeRun: null,
+      recruitmentPool: [],
+      runHistory: { clearedWithIds: ['a'], characterStats: { a: { runs: 2, clears: 1, bestRoomsWon: 5 } } },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
+    };
+    const storage = createMemoryStorage();
+    saveGame(state, storage);
+    expect(loadGame(storage)!.runHistory).toEqual(state.runHistory);
+  });
+
+  it('loads a save from before characterStats existed with empty stats', () => {
+    const state: GameState = {
+      roster: { adventurers: [], recruitedIds: [] },
+      townStorage: createTownStorage(),
+      dayCount: 1,
+      activeRun: null,
+      recruitmentPool: [],
+      runHistory: { clearedWithIds: [], characterStats: {} },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
+    };
+    const storage = createMemoryStorage();
+    saveGame(state, storage);
+    // Strip characterStats from the stored JSON to mimic an older save.
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)!;
+      const parsed = JSON.parse(storage.getItem(key)!);
+      if (parsed?.runHistory) {
+        delete parsed.runHistory.characterStats;
+        storage.setItem(key, JSON.stringify(parsed));
+      }
+    }
+    expect(loadGame(storage)!.runHistory).toEqual({ clearedWithIds: [], characterStats: {} });
   });
 });
