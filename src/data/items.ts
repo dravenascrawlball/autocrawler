@@ -1,5 +1,5 @@
 import type { Item } from '../sim/items';
-import { PowerAttackAction } from '../sim/actions/attack';
+import { RING_OF_EMBERS_BURN_SPECIAL } from './specialActions';
 
 /**
  * Item roster grouped by the enemy archetype whose loot table drops it
@@ -179,12 +179,9 @@ export const SAGES_CHARM_ITEM: Item = {
   price: SHAMAN_TIER_PRICE,
 };
 
-// --- Magic items: kit-altering faceEffects, not just stat modifiers (roadmap item 13) ---
+// --- Magic items: kit-altering effects, not just stat modifiers (roadmap item 13) ---
 // Loot-only (never added to ALL_ITEMS, so never shop-purchasable) — 2 bespoke signature items
-// proving the mechanism, not a full roster. Each definition's faceEffect.faceIndex is a
-// placeholder (0): sim/items.ts's rollItemInstance rolls a fresh one whenever a drop actually
-// instantiates the item (see this file's own loot table wiring in data/enemies.ts), so the
-// static value here is never what a player actually sees.
+// proving the mechanism, not a full roster.
 
 export const RING_OF_EMBERS_ITEM: Item = {
   id: 'ring-of-embers',
@@ -192,7 +189,7 @@ export const RING_OF_EMBERS_ITEM: Item = {
   slot: 'trinket',
   modifiers: [{ stat: 'speed', type: 'flat', amount: 1, source: 'item:ring-of-embers' }],
   price: SHAMAN_TIER_PRICE,
-  faceEffect: { faceIndex: 0, effect: { kind: 'enchant', enchantmentId: 'burning' } },
+  grantedSpecialAction: RING_OF_EMBERS_BURN_SPECIAL,
 };
 
 export const TOME_OF_POWER_ITEM: Item = {
@@ -201,7 +198,6 @@ export const TOME_OF_POWER_ITEM: Item = {
   slot: 'trinket',
   modifiers: [{ stat: 'attackPower', type: 'flat', amount: 1, source: 'item:tome-of-power' }],
   price: SHAMAN_TIER_PRICE,
-  faceEffect: { faceIndex: 0, effect: { kind: 'replace-action', action: PowerAttackAction } },
 };
 
 /** Magic items — resolvable via ITEM_REGISTRY (loot drops), deliberately excluded from ALL_ITEMS/the shop. */

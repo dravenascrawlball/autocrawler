@@ -1,8 +1,8 @@
 import type { Adventurer } from './adventurer';
 import type { Action } from './action';
-import type { Row } from './formation';
+import type { GridPosition } from './formation';
 import type { EnchantmentId } from './enchantments';
-import type { EquipmentSlot, FaceEffect, Item, RunInventory } from './items';
+import type { EquipmentSlot, Item, RunInventory } from './items';
 
 /**
  * Between-room party management. Every function here operates only on an
@@ -14,44 +14,15 @@ import type { EquipmentSlot, FaceEffect, Item, RunInventory } from './items';
  */
 
 /**
- * Writes `faceEffect`'s effect onto `adventurer`'s die face at
- * `faceEffect.faceIndex`, replacing whatever's there. Exported for
- * `adventurer.ts`'s `resetToTemplateBaseline`, which re-applies every
- * equipped item's faceEffect fresh against the just-rebuilt baseline (no
- * `previousFace` snapshot needed there — the rebuild is already clean, see
- * that function's own doc comment).
- */
-export function applyFaceEffect(adventurer: Adventurer, faceEffect: FaceEffect): void {
-  const { faceIndex, effect } = faceEffect;
-  if (effect.kind === 'replace-action') {
-    adventurer.dieFaces[faceIndex] = { action: effect.action };
-  } else {
-    adventurer.dieFaces[faceIndex] = { ...adventurer.dieFaces[faceIndex], enchantmentId: effect.enchantmentId };
-  }
-}
-
-/**
- * True if `faceIndex` is currently controlled by one of `adventurer`'s
- * equipped items' faceEffect (roadmap item 13) — checked via `previousFace`
- * being set, i.e. the effect is actually active right now, not just present
- * on an item sitting unequipped somewhere. `swapInAction`/`enchantFace`
- * refuse to touch a locked face, so `unequipItem`'s restore is never racing
- * a newer manual change.
- */
-export function isFaceLockedByEquipment(adventurer: Adventurer, faceIndex: number): boolean {
-  return Object.values(adventurer.equipment).some(
-    (item) => item?.faceEffect?.faceIndex === faceIndex && item.faceEffect.previousFace !== undefined,
-  );
-}
-
-/**
  * Equips `item` into `slot`, pulling it out of `inventory`. If the slot was
  * already occupied, the previous item is swapped back into `inventory`
- * (never discarded, never sent anywhere else), including restoring
- * whatever face it had overridden. Applies the item's stat modifiers and
- * removes the previous item's, if any; if `item` has a `faceEffect`,
- * snapshots the current face (for `unequipItem` to restore later) then
- * overwrites it.
+ * (never discarded, never sent anywhere else). Applies the item's stat
+ * modifiers and removes the previous item's, if any; if `item` grants a
+ * Special Action, adds it to `activeSpecialActions` — purely additively,
+ * alongside whatever the character already has (see adventurer.ts's
+ * `activeSpecialActions` doc comment and Item's `grantedSpecialAction` —
+ * this replaces the old dice-era faceEffect overwrite/restore dance, which
+ * is no longer needed since nothing here touches dieFaces at all).
  */
 export function equipItem(adventurer: Adventurer, inventory: RunInventory, item: Item, slot: EquipmentSlot): void {
   if (item.slot !== slot) {
@@ -66,9 +37,10 @@ export function equipItem(adventurer: Adventurer, inventory: RunInventory, item:
   const previousItem = adventurer.equipment[slot];
   if (previousItem) {
     adventurer.modifiers = adventurer.modifiers.filter((modifier) => !previousItem.modifiers.includes(modifier));
-    if (previousItem.faceEffect?.previousFace) {
-      adventurer.dieFaces[previousItem.faceEffect.faceIndex] = previousItem.faceEffect.previousFace;
-      previousItem.faceEffect.previousFace = undefined;
+    if (previousItem.grantedSpecialAction) {
+      adventurer.activeSpecialActions = adventurer.activeSpecialActions.filter(
+        (special) => special !== previousItem.grantedSpecialAction,
+      );
     }
     inventory.items.push(previousItem);
   }
@@ -76,16 +48,15 @@ export function equipItem(adventurer: Adventurer, inventory: RunInventory, item:
   inventory.items.splice(inventoryIndex, 1);
   adventurer.equipment[slot] = item;
   adventurer.modifiers = [...adventurer.modifiers, ...item.modifiers];
-  if (item.faceEffect) {
-    item.faceEffect.previousFace = { ...adventurer.dieFaces[item.faceEffect.faceIndex] };
-    applyFaceEffect(adventurer, item.faceEffect);
+  if (item.grantedSpecialAction) {
+    adventurer.activeSpecialActions = [...adventurer.activeSpecialActions, item.grantedSpecialAction];
   }
 }
 
 /**
  * Unequips whatever occupies `slot`, returning it to `inventory`, removing
- * its stat modifiers, and — if it had a `faceEffect` — restoring exactly
- * what was on that face before it was equipped. No-op if empty.
+ * its stat modifiers and — if it granted one — its Special Action. No-op if
+ * empty.
  */
 export function unequipItem(adventurer: Adventurer, inventory: RunInventory, slot: EquipmentSlot): void {
   const item = adventurer.equipment[slot];
@@ -94,9 +65,8 @@ export function unequipItem(adventurer: Adventurer, inventory: RunInventory, slo
   }
 
   adventurer.modifiers = adventurer.modifiers.filter((modifier) => !item.modifiers.includes(modifier));
-  if (item.faceEffect?.previousFace) {
-    adventurer.dieFaces[item.faceEffect.faceIndex] = item.faceEffect.previousFace;
-    item.faceEffect.previousFace = undefined;
+  if (item.grantedSpecialAction) {
+    adventurer.activeSpecialActions = adventurer.activeSpecialActions.filter((special) => special !== item.grantedSpecialAction);
   }
   adventurer.equipment[slot] = null;
   inventory.items.push(item);
@@ -142,9 +112,6 @@ export function swapInAction(adventurer: Adventurer, newAction: Action, faceInde
   if (faceIndex < 0 || faceIndex >= adventurer.dieFaces.length) {
     return false;
   }
-  if (isFaceLockedByEquipment(adventurer, faceIndex)) {
-    return false;
-  }
   if (spareFaceCount(adventurer, newAction) <= 0) {
     return false;
   }
@@ -165,15 +132,20 @@ export function enchantFace(adventurer: Adventurer, faceIndex: number, enchantme
   if (faceIndex < 0 || faceIndex >= adventurer.dieFaces.length) {
     return false;
   }
-  if (isFaceLockedByEquipment(adventurer, faceIndex)) {
-    return false;
-  }
 
   adventurer.dieFaces[faceIndex] = { ...adventurer.dieFaces[faceIndex], enchantmentId };
   return true;
 }
 
-/** Reassigns `adventurer`'s formation row (front/back) — see formation.ts. Always succeeds; no eligibility rule to fail. */
-export function setRow(adventurer: Adventurer, row: Row): void {
-  adventurer.row = row;
+/**
+ * Reassigns `adventurer`'s full grid position (lane + rank) — see
+ * formation.ts. Always succeeds; no eligibility rule to fail (the caller
+ * decides whether to enforce "one living party member per cell" — see
+ * ui/PartyLayoutGrid.svelte's swap-on-occupied-cell convention). Replaces
+ * the old front/back-only `setRow` once per-fight full 3x3 placement
+ * shipped (the Autobattle Revision Cleanup's "Character Layout Choice"
+ * pass — see docs/roadmap.md).
+ */
+export function setPosition(adventurer: Adventurer, position: GridPosition): void {
+  adventurer.position = position;
 }

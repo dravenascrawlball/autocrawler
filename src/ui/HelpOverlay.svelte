@@ -32,12 +32,12 @@
 
     <section>
       <h3>The Loop</h3>
-      <p>Recruit and gear up adventurers in <strong>Town</strong>, then embark a party into the <strong>Dungeon</strong>. Come back with gold and loot to spend on the next run.</p>
+      <p>Recruit adventurers in <strong>Town</strong>, then embark a party into the <strong>Dungeon</strong>. Gold and gear found along the way are spent in the between-room shop — none of it carries back to Town.</p>
     </section>
 
     <section>
       <h3>Combat</h3>
-      <p>Battles resolve automatically. Each adventurer has a die with 6 faces — attacks, heals, and special moves — that rolls each turn. The front row soaks up most enemy attacks; the back row is safer, but not untouchable.</p>
+      <p>Battles resolve automatically. Each adventurer always acts on their turn — usually an attack, though healers and support characters have their own reliable move instead — plus a chance to trigger their own signature special move or passive trait. The front row soaks up most enemy attacks; the back row is safer, but not untouchable.</p>
     </section>
 
     <section>

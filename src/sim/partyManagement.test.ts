@@ -4,17 +4,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createAdventurer, type AdventurerTemplate } from './adventurer';
-import { AttackNearestAction, AttackLowestHpAction, PowerAttackAction } from './actions/attack';
-import {
-  equipItem,
-  unequipItem,
-  swapInAction,
-  enchantFace,
-  spareFaceCount,
-  distinctFaceActions,
-  isFaceLockedByEquipment,
-} from './partyManagement';
+import { AttackNearestAction, AttackLowestHpAction } from './actions/attack';
+import { EmpowerAction } from './actions/support';
+import { equipItem, unequipItem, swapInAction, enchantFace, spareFaceCount, distinctFaceActions } from './partyManagement';
 import { createRunInventory, type Item } from './items';
+import type { SpecialAction } from './specialActions';
 
 function heroTemplate(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -90,109 +84,71 @@ describe('equipItem / unequipItem', () => {
   });
 });
 
-describe('equipItem / unequipItem: faceEffect (roadmap item 13)', () => {
-  function replaceActionItem(faceIndex: number): Item {
-    return {
-      id: 'tome-of-power',
-      name: 'Tome of Power',
-      slot: 'trinket',
-      modifiers: [],
-      price: 0,
-      faceEffect: { faceIndex, effect: { kind: 'replace-action', action: PowerAttackAction } },
-    };
-  }
+describe('equipItem / unequipItem: grantedSpecialAction (roadmap item 13)', () => {
+  const RING_SPECIAL: SpecialAction = { id: 'test-ring-special', name: 'Test Ring Special', trigger: 'on-hit-landed', action: EmpowerAction };
 
-  function enchantItem(faceIndex: number): Item {
+  function ringItem(): Item {
     return {
       id: 'ring-of-embers',
       name: 'Ring of Embers',
       slot: 'trinket',
       modifiers: [],
       price: 0,
-      faceEffect: { faceIndex, effect: { kind: 'enchant', enchantmentId: 'burning' } },
+      grantedSpecialAction: RING_SPECIAL,
     };
   }
 
-  it('a replace-action item overwrites the target face on equip and restores it exactly on unequip', () => {
-    const hero = createAdventurer('hero', heroTemplate(), 'front'); // all 6 faces start as Attack Nearest
-    const inventory = createRunInventory();
-    const tome = replaceActionItem(2);
-    inventory.items.push(tome);
-
-    equipItem(hero, inventory, tome, 'trinket');
-
-    expect(hero.dieFaces[2].action).toBe(PowerAttackAction);
-    expect(tome.faceEffect?.previousFace).toEqual({ action: AttackNearestAction });
-
-    unequipItem(hero, inventory, 'trinket');
-
-    expect(hero.dieFaces[2].action).toBe(AttackNearestAction);
-    expect(tome.faceEffect?.previousFace).toBeUndefined();
-  });
-
-  it('an enchant item enchants the target face on equip and restores it exactly on unequip', () => {
+  it('equipping a Special-Action-granting item adds it to activeSpecialActions; unequipping removes it again', () => {
     const hero = createAdventurer('hero', heroTemplate(), 'front');
-    hero.dieFaces[3] = { action: AttackLowestHpAction }; // some pre-existing, unenchanted face
     const inventory = createRunInventory();
-    const ring = enchantItem(3);
+    const ring = ringItem();
     inventory.items.push(ring);
 
     equipItem(hero, inventory, ring, 'trinket');
-
-    expect(hero.dieFaces[3]).toEqual({ action: AttackLowestHpAction, enchantmentId: 'burning' });
+    expect(hero.activeSpecialActions).toEqual([RING_SPECIAL]);
 
     unequipItem(hero, inventory, 'trinket');
-
-    expect(hero.dieFaces[3]).toEqual({ action: AttackLowestHpAction });
+    expect(hero.activeSpecialActions).toEqual([]);
   });
 
-  it('swapping a new item into an occupied slot restores the previous item\'s face effect first', () => {
+  it('is purely additive: granting alongside an already-active Special Action keeps both', () => {
     const hero = createAdventurer('hero', heroTemplate(), 'front');
+    const joinTimeSpecial: SpecialAction = { id: 'join-time', name: 'Join Time', trigger: 'on-turn-start', action: EmpowerAction };
+    hero.activeSpecialActions = [joinTimeSpecial];
     const inventory = createRunInventory();
-    const tome = replaceActionItem(0);
-    const ring = enchantItem(0);
-    inventory.items.push(tome, ring);
-
-    equipItem(hero, inventory, tome, 'trinket');
-    expect(hero.dieFaces[0].action).toBe(PowerAttackAction);
+    const ring = ringItem();
+    inventory.items.push(ring);
 
     equipItem(hero, inventory, ring, 'trinket');
-
-    // The tome's effect was reverted before the ring's was applied.
-    expect(hero.dieFaces[0]).toEqual({ action: AttackNearestAction, enchantmentId: 'burning' });
-    expect(tome.faceEffect?.previousFace).toBeUndefined();
-  });
-
-  it('isFaceLockedByEquipment is true only while a faceEffect item is actively equipped', () => {
-    const hero = createAdventurer('hero', heroTemplate(), 'front');
-    const inventory = createRunInventory();
-    const tome = replaceActionItem(1);
-    inventory.items.push(tome);
-
-    expect(isFaceLockedByEquipment(hero, 1)).toBe(false); // still just sitting in inventory
-
-    equipItem(hero, inventory, tome, 'trinket');
-    expect(isFaceLockedByEquipment(hero, 1)).toBe(true);
+    expect(hero.activeSpecialActions).toEqual([joinTimeSpecial, RING_SPECIAL]);
 
     unequipItem(hero, inventory, 'trinket');
-    expect(isFaceLockedByEquipment(hero, 1)).toBe(false);
+    expect(hero.activeSpecialActions).toEqual([joinTimeSpecial]);
   });
 
-  it('swapInAction and enchantFace refuse to touch a face locked by an equipped item', () => {
-    const hero = createAdventurer('hero', heroTemplate({ bonusFaces: [AttackLowestHpAction] }), 'front');
+  it('swapping a new granting item into an occupied slot removes the previous grant first', () => {
+    const hero = createAdventurer('hero', heroTemplate(), 'front');
+    const otherSpecial: SpecialAction = { id: 'other-special', name: 'Other Special', trigger: 'on-turn-start', action: EmpowerAction };
     const inventory = createRunInventory();
-    const tome = replaceActionItem(4);
-    inventory.items.push(tome);
-    equipItem(hero, inventory, tome, 'trinket');
+    const ring = ringItem();
+    const other: Item = { id: 'other-trinket', name: 'Other Trinket', slot: 'trinket', modifiers: [], price: 0, grantedSpecialAction: otherSpecial };
+    inventory.items.push(ring, other);
 
-    expect(swapInAction(hero, AttackLowestHpAction, 4)).toBe(false);
-    expect(hero.dieFaces[4].action).toBe(PowerAttackAction); // untouched
+    equipItem(hero, inventory, ring, 'trinket');
+    expect(hero.activeSpecialActions).toEqual([RING_SPECIAL]);
 
-    expect(enchantFace(hero, 4, 'burning')).toBe(false);
-    expect(hero.dieFaces[4]).toEqual({ action: PowerAttackAction }); // untouched, no enchantment applied
+    equipItem(hero, inventory, other, 'trinket');
+    expect(hero.activeSpecialActions).toEqual([otherSpecial]);
+  });
 
-    // An unlocked face is unaffected.
-    expect(swapInAction(hero, AttackLowestHpAction, 5)).toBe(true);
+  it('an item without a grantedSpecialAction leaves activeSpecialActions untouched', () => {
+    const hero = createAdventurer('hero', heroTemplate(), 'front');
+    const inventory = createRunInventory();
+    const plainSword: Item = { id: 'sword', name: 'Sword', slot: 'weapon', modifiers: [], price: 0 };
+    inventory.items.push(plainSword);
+
+    equipItem(hero, inventory, plainSword, 'weapon');
+    expect(hero.activeSpecialActions).toEqual([]);
   });
 });
 

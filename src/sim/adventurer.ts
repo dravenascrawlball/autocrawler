@@ -1,16 +1,25 @@
 import type { Action, ActionId } from './action';
-import type { Row } from './formation';
+import type { Row, RowOrPosition, GridPosition } from './formation';
+import { resolvePosition } from './formation';
 import type { StatModifier } from './stats';
-import type { PassiveAbility, UpgradeChoice } from './leveling';
-import { xpToNextLevel } from './leveling';
 import type { EquipmentSlots, LootTableEntry } from './items';
 import { createEmptyEquipmentSlots } from './items';
-import { applyFaceEffect } from './partyManagement';
 import type { GoldDropTable } from './gold';
 import type { Trait } from './traits';
+import { rollTraits, UNIVERSAL_TRAIT_ROLL_CAP } from './traits';
+import type { TagId } from './tags';
+import type { Aura, AppliedAura } from './auras';
+import type { Kit } from './kits';
+import { pickKit } from './kits';
+import type { ActiveShield } from './shields';
 import type { DieFace } from './dieFace';
+import { dominantFaceIndex } from './dieFace';
 import type { ActiveStatusEffect } from './statusEffects';
 import type { ActiveBuff } from './buffs';
+import type { SpecialAction } from './specialActions';
+import type { CharacterPoolEntry } from './characterPool';
+import { pickPoolEntry } from './characterPool';
+import type { RngSource } from './rng';
 
 export interface Adventurer {
   id: string;
@@ -19,16 +28,21 @@ export interface Adventurer {
   archetype: string;
   /** Display class/role label (e.g. "Fighter"), shown alongside `name` as "Gudrun the Fighter". Empty for enemies, which have no separate role from their name. */
   role: string;
-  /** Which line this combatant fights from — see formation.ts. Player-assignable for party members (state/townActions.ts's setAdventurerRow); fixed per room composition for enemies. */
-  row: Row;
+  /** Where this combatant stands on its side's 3x3 grid — see formation.ts. Player-assignable for party members (state/townActions.ts's setAdventurerPosition); fixed per room composition for enemies. */
+  position: GridPosition;
+  /**
+   * The action the turn engine always resolves, deterministically, every
+   * turn — see turnEngine.ts's resolveTurn. Set once at creation from
+   * `template.basicAction` if declared, else derived from whichever action
+   * dominates `dieFaces` (see dieFace.ts's dominantFaceIndex) — stable for
+   * the adventurer's lifetime regardless of later face swaps via equipment
+   * or leveling, unlike the old per-turn dice roll it replaced.
+   */
+  basicAction: Action;
   hp: number;
   maxHp: number;
   attackPower: number;
   speed: number;
-  /** Percentage points of base hit chance against a target's evasion (see actions/attack.ts's hitChance). */
-  accuracy: number;
-  /** Percentage points subtracted from an attacker's accuracy when this unit is the target. */
-  evasion: number;
   /** Percentage chance a landed hit is a critical (see actions/attack.ts's applyAttackToTarget) — a universal stat, small baseline for everyone (roadmap item 11's Tharavel raises it, but every character/enemy already has some). */
   critChance: number;
   /** Base heal amount for HealAction — separate from attackPower so a dual-role unit's attack and heal output can be tuned independently (see actions/heal.ts). 0 for anything without a heal action. */
@@ -57,17 +71,37 @@ export interface Adventurer {
   statusEffects: ActiveStatusEffect[];
   /** Currently active timed StatModifier grants (e.g. Glint's Rallying Strike armor buff) — see buffs.ts. */
   buffs: ActiveBuff[];
-  xp: number;
+  /** Currently active depletable damage-absorb pools (e.g. Glint's Shield Wall) — see shields.ts. */
+  shields: ActiveShield[];
+  /**
+   * Trigger+effect kit granted at join time, evaluated by the turn engine
+   * alongside (never instead of) the deterministic Basic Action every turn
+   * — see specialActions.ts. Just one entry everywhere today (nothing
+   * populates more than one yet; multi-slot support is a later concern),
+   * kept as an array since resolveSpecialActionTriggers already fires every
+   * matching entry rather than assuming exactly one.
+   */
+  activeSpecialActions: SpecialAction[];
+  /** Bumped by levelUpAdventurer (see leveling.ts) when the between-room shop's Recruit section draws a duplicate of this adventurer — scoped to the run, reset by resetToTemplateBaseline. */
   level: number;
-  /** XP required, from the current `xp`, to reach `level + 1`. */
-  xpToNextLevel: number;
-  /** Unresolved upgrade points from level-ups; spent via resolveUpgradeChoice. */
-  pendingUpgradeChoices: UpgradeChoice[];
-  /** Per-action level counters, bumped by resolving an action-level upgrade choice. */
+  /** Per-action level counters — see leveling.ts's actionLevelPercentBonus, read directly by actions/attack.ts and heal.ts. */
   actionLevels: Partial<Record<ActionId, number>>;
-  passives: PassiveAbility[];
   /** Permanent narrative-flavored markers granted by game events (e.g. SURVIVOR_TRAIT on rescue) — see traits.ts. */
   traits: Trait[];
+  /**
+   * Labels carried by this unit — species/archetype/element/physical/
+   * personality, a mix of mechanical-synergy and pure-flavor (see
+   * tags.ts). Sourced from the template's innate tags plus (once built)
+   * whatever Kit/Trait is active; not mutated mid-run except by an
+   * effect that explicitly grants/removes one.
+   */
+  tags: TagId[];
+  /** Continuous party-wide effects this unit grants to tagged allies (including itself) — see auras.ts. Empty until Kits/Traits can carry one. */
+  auras: Aura[];
+  /** Aura modifiers currently applied to this unit, tracked for tickAuras to cleanly remove before recomputing — see auras.ts. */
+  appliedAuras: AppliedAura[];
+  /** The Kit (see kits.ts) drawn from the template's kitPool at creation, if any — undefined for a character with no kitPool (behaves exactly as before Kit existed). Rerolled on every resetToTemplateBaseline, same lifecycle as activeSpecialActions. */
+  activeKit?: Kit;
   /** XP awarded to the party when this unit dies in a room win. Meaningful only for enemies. */
   xpReward?: number;
   /** Loot rolled independently on room win when this unit dies. Meaningful only for enemies. */
@@ -95,7 +129,6 @@ export interface DownedSummary {
   roomIndex: number;
   /** The enemy archetype (e.g. "Brute") whose attack landed the killing blow — null if a status effect (e.g. Burn) downed them instead, since that has no single attacker to credit. */
   killerArchetype: string | null;
-  xpGained: number;
   damageDone: number;
   damageTaken: number;
   healed: number;
@@ -110,10 +143,6 @@ export interface AdventurerTemplate {
   maxHp: number;
   attackPower: number;
   speed: number;
-  /** Percentage points of base hit chance against a target's evasion. Defaults to DEFAULT_ACCURACY if omitted — placeholder pending the balance pass (roadmap item 6). */
-  accuracy?: number;
-  /** Percentage points subtracted from an attacker's accuracy when this unit is the target. Defaults to DEFAULT_EVASION if omitted. */
-  evasion?: number;
   /** Percentage chance a landed hit is a critical. Defaults to DEFAULT_CRIT_CHANCE if omitted — placeholder pending the balance pass (roadmap item 6/11). */
   critChance?: number;
   /** Base heal amount for HealAction. Defaults to DEFAULT_HEAL_POWER (0) if omitted — only archetypes/enemies with 'heal' in their deck need to set this. */
@@ -121,6 +150,10 @@ export interface AdventurerTemplate {
   actions: ActionId[];
   /** Exactly 6 entries — see Adventurer.dieFaces. */
   dieFaces: DieFace[];
+  /** Explicit, deliberately-authored Basic Action — see Adventurer.basicAction. Omit only for a template not yet retheme'd (e.g. an enemy), which falls back to dieFaces' dominant action. */
+  basicAction?: Action;
+  /** Candidates this character can be granted at join time — see characterPool.ts. Omit (or leave empty) for a character with no Special Action/Trait yet; a future meta-progression unlock grows this list over time. */
+  specialActionPool?: CharacterPoolEntry[];
   startingLevel?: number;
   xpReward?: number;
   lootTable?: LootTableEntry[];
@@ -133,13 +166,16 @@ export interface AdventurerTemplate {
   unlocked?: boolean;
   /** Innate traits this character starts every instance with (e.g. Gudrun's Rage) — distinct from SURVIVOR_TRAIT, which is granted by a game event rather than seeded on a template. */
   traits?: Trait[];
+  /** Innate tags this character/archetype starts every instance with (e.g. a species tag) — see Adventurer.tags. */
+  tags?: TagId[];
+  /** Innate auras this character/archetype grants every instance — see Adventurer.auras. */
+  auras?: Aura[];
+  /** Candidates this character can be granted at join time, rerolled on every reset — see kits.ts. Omit (or leave empty) for a character with no Kit variety yet. */
+  kitPool?: Kit[];
   /** Explicit starting formation row, overriding the role-based default (see formation.ts's resolveDefaultRow) — for a character whose kit doesn't fit their role's usual line (e.g. Isilwen, a fully-ranged Rogue). Omit to use the role default. */
   defaultRow?: Row;
 }
 
-/** Placeholder pending the balance pass (roadmap item 6) — used when a template omits accuracy/evasion. */
-const DEFAULT_ACCURACY = 85;
-const DEFAULT_EVASION = 0;
 /** Baseline critical-hit chance for anyone who doesn't set their own — a real (if small) part of combat for everyone, not just characters/enemies Tharavel has buffed. Placeholder pending the balance pass. */
 export const DEFAULT_CRIT_CHANCE = 5;
 const DEFAULT_HEAL_POWER = 0;
@@ -147,38 +183,53 @@ const DEFAULT_HEAL_POWER = 0;
 export function createAdventurer(
   id: string,
   template: AdventurerTemplate,
-  row: Row,
+  position: RowOrPosition,
   modifiers: StatModifier[] = [],
+  /** Meta-progression unlocks (see data/characterUnlocks.ts) to merge into the template's own pool — empty for a character who hasn't unlocked anything yet (or isn't tracked by meta-progression at all, e.g. an enemy). */
+  unlockedPoolEntries: CharacterPoolEntry[] = [],
+  /** Universal Traits (see data/traits.ts's UNIVERSAL_TRAIT_POOL) to roll from, independent of unlockedPoolEntries/specialActionPool — empty for a character not meant to participate (e.g. Dee, or an enemy). */
+  universalTraitPool: Trait[] = [],
+  rng: RngSource = () => Math.random(),
+  /** Kits bought from the Shop with Renown (see data/kitShop.ts, state/metaProgression.ts) to merge into the template's own kitPool — empty for a character with no Kit unlocks yet (or an enemy). */
+  unlockedKits: Kit[] = [],
 ): Adventurer {
   const level = template.startingLevel ?? 1;
   const ownedFaces: Action[] = [...template.dieFaces.map((face) => face.action), ...(template.bonusFaces ?? [])];
+  const basicAction = template.basicAction ?? template.dieFaces[dominantFaceIndex(template.dieFaces)].action;
+  const poolEntry = pickPoolEntry([...(template.specialActionPool ?? []), ...unlockedPoolEntries], rng);
+  const activeKit = pickKit([...(template.kitPool ?? []), ...unlockedKits], rng);
+  const rolledTraits = rollTraits(universalTraitPool, UNIVERSAL_TRAIT_ROLL_CAP, rng);
 
   return {
     id,
     name: template.name,
     archetype: template.name,
-    role: template.role ?? '',
-    row,
+    role: activeKit?.role ?? template.role ?? '',
+    position: resolvePosition(position),
+    basicAction,
     hp: template.maxHp,
     maxHp: template.maxHp,
     attackPower: template.attackPower,
     speed: template.speed,
-    accuracy: template.accuracy ?? DEFAULT_ACCURACY,
-    evasion: template.evasion ?? DEFAULT_EVASION,
     critChance: template.critChance ?? DEFAULT_CRIT_CHANCE,
     healPower: template.healPower ?? DEFAULT_HEAL_POWER,
     actions: [...template.actions],
-    modifiers: [...modifiers],
+    modifiers: [...modifiers, ...(activeKit?.modifiers ?? [])],
     // Cloned per face: enchanting one instance's face must never affect the template or another
     // instance built from the same template (e.g. every Grunt sharing GRUNT_TEMPLATE) — see dieFace.ts.
     dieFaces: template.dieFaces.map((face) => ({ ...face })),
-    xp: 0,
     level,
-    xpToNextLevel: xpToNextLevel(level),
-    pendingUpgradeChoices: [],
     actionLevels: {},
-    passives: [],
-    traits: [...(template.traits ?? [])],
+    traits: [
+      ...(template.traits ?? []),
+      ...(poolEntry?.kind === 'trait' ? [poolEntry.trait] : []),
+      ...rolledTraits,
+    ],
+    activeSpecialActions: poolEntry?.kind === 'special-action' ? [poolEntry.specialAction] : [],
+    tags: [...(template.tags ?? []), ...(activeKit?.tags ?? [])],
+    auras: [...(template.auras ?? [])],
+    appliedAuras: [],
+    activeKit: activeKit ?? undefined,
     xpReward: template.xpReward,
     lootTable: template.lootTable,
     goldDrop: template.goldDrop,
@@ -186,6 +237,7 @@ export function createAdventurer(
     ownedFaces,
     statusEffects: [],
     buffs: [],
+    shields: [],
     runDamageDealt: 0,
     runDamageTaken: 0,
     runHealingDone: 0,
@@ -195,27 +247,39 @@ export function createAdventurer(
 
 /**
  * Rebuilds `adventurer` in place back to `template`'s fresh baseline —
- * level, XP, action-levels, earned Faces, passives, run-scoped stats,
- * everything a run can change resets; only `equipment` (and the row the
- * player last assigned) survives. Called when a drafted party member
- * returns to town (see state/dungeonOrchestrator.ts's finishDungeonRun),
- * so equipping gear is the only cross-run progression lever left — level-
- * ups are deliberately scoped to a single run.
+ * level (and any stat growth from it), equipment, every other run-scoped
+ * stat — everything a run can change resets; only whatever
+ * meta-progression has unlocked (see `unlockedPoolEntries`) survives.
+ * Called when a drafted party member returns to town (see
+ * state/dungeonOrchestrator.ts's finishDungeonRun) — equipment is
+ * deliberately run-scoped now, same as level-ups (Town Storage Cleanup,
+ * see docs/roadmap.md): gear found or bought mid-run never carries
+ * forward, there's no town-side equip step anymore. The rebuild re-rolls
+ * `activeSpecialActions`/`activeKit`/`traits` (both the special-action-pool
+ * trait and the universal-pool ones) from the combined template +
+ * unlocked pool (see createAdventurer), so a character who just unlocked
+ * something new has a real chance of getting it on their very next run,
+ * not just after their *next* reset.
  */
-export function resetToTemplateBaseline(adventurer: Adventurer, template: AdventurerTemplate): void {
-  const equipment = adventurer.equipment;
-  Object.assign(adventurer, createAdventurer(adventurer.id, template, adventurer.row));
-
-  adventurer.equipment = equipment;
-  for (const item of Object.values(equipment)) {
-    if (item) {
-      adventurer.modifiers = [...adventurer.modifiers, ...item.modifiers];
-      if (item.faceEffect) {
-        // The rebuild above already produced a clean baseline, so the snapshot is simply
-        // whatever that fresh baseline put on this face — no risk of it being stale.
-        item.faceEffect.previousFace = { ...adventurer.dieFaces[item.faceEffect.faceIndex] };
-        applyFaceEffect(adventurer, item.faceEffect);
-      }
-    }
-  }
+export function resetToTemplateBaseline(
+  adventurer: Adventurer,
+  template: AdventurerTemplate,
+  unlockedPoolEntries: CharacterPoolEntry[] = [],
+  universalTraitPool: Trait[] = [],
+  rng: RngSource = () => Math.random(),
+  unlockedKits: Kit[] = [],
+): void {
+  Object.assign(
+    adventurer,
+    createAdventurer(
+      adventurer.id,
+      template,
+      adventurer.position,
+      [],
+      unlockedPoolEntries,
+      universalTraitPool,
+      rng,
+      unlockedKits,
+    ),
+  );
 }

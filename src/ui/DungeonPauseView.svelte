@@ -6,12 +6,17 @@
     unequipItemDuringRun,
     retreatFromDungeon,
     finishDungeonRun,
+    buyRecruitOffer,
+    buyRelicOffer,
+    buyEquipmentOffer,
   } from '../state/dungeonOrchestrator';
-  import LevelUpModal from './LevelUpModal.svelte';
+  import { setAdventurerPosition } from '../state/townActions';
   import DownedModal from './DownedModal.svelte';
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
+  import PartyLayoutGrid, { type LayoutUnit } from './PartyLayoutGrid.svelte';
   import type { EquipmentSlot } from '../sim/items';
+  import type { GridPosition } from '../sim/formation';
 
   export let onContinue: () => void;
 
@@ -25,23 +30,61 @@
     ? (partyMembers.find((adventurer) => adventurer.id === selectedAdventurerId) ?? null)
     : null;
   $: inventoryItems = $dungeonPlayback?.inventory.items ?? [];
+  // The room resolveNextRoom will resolve next (see dungeonRun.ts's own doc comment — roomIndex
+  // already points past the room that just finished) — null once the run has fully ended (a Win/
+  // Loss/Retreat outcome, checked explicitly via runOutcome rather than just the index bounds:
+  // a Loss still leaves roomIndex pointing at a room that would have come next had the run kept
+  // going, but there's no actual "next room" to prepare a layout for once it's over).
+  $: nextRoom =
+    $dungeonPlayback && runOutcome === null && $dungeonPlayback.runState.roomIndex < $dungeonPlayback.runState.rooms.length
+      ? $dungeonPlayback.runState.rooms[$dungeonPlayback.runState.roomIndex]
+      : null;
+  $: nextRoomEnemyUnits = nextRoom
+    ? nextRoom.enemies.map(
+        (enemy): LayoutUnit => ({
+          id: enemy.id,
+          name: enemy.name,
+          position: enemy.position,
+          side: 'enemy',
+          hp: enemy.hp,
+          maxHp: enemy.maxHp,
+        }),
+      )
+    : [];
+  $: partyLayoutUnits = partyMembers.map(
+    (member): LayoutUnit => ({
+      id: member.id,
+      name: member.name,
+      position: member.position,
+      side: 'party',
+      hp: member.hp,
+      maxHp: member.maxHp,
+    }),
+  );
+  $: battleFormationUnits = [...partyLayoutUnits, ...nextRoomEnemyUnits];
+
+  /** Moves whichever party member is currently selected to `position` — swapping with whoever's already there, if anyone, rather than stacking both in the same cell. Picking a layout is purely a readiness choice; it never fails. */
+  function placeSelectedAt(position: GridPosition): void {
+    if (!selected) return;
+    const occupant = partyMembers.find(
+      (member) => member.id !== selected?.id && member.position.lane === position.lane && member.position.rank === position.rank,
+    );
+    if (occupant) {
+      setAdventurerPosition(occupant.id, selected.position);
+    }
+    setAdventurerPosition(selected.id, position);
+  }
   // Same one-at-a-time gating for a just-downed character's popup (see DownedModal) — resolved
   // before any pending level-up, so the run's story reads in the order it happened.
   $: nextDownedId =
     (partyMembers.find((member) => member.downedSummary && !member.downedSummary.acknowledged) ?? null)?.id ?? null;
-  // Forces every pending level-up to be resolved, one character at a time, before the equipment
-  // screen underneath is usable — see LevelUpModal. Held back while a Downed popup is still
-  // pending (nextDownedId), then party order decides who goes first; not otherwise meaningful.
-  $: nextLevelUpId = nextDownedId
+  // Loot prompts come after the life-and-death Downed popup, same priority chain as before — see
+  // LootModal.svelte.
+  $: nextUnpromptedLootItem = nextDownedId
     ? null
-    : ((partyMembers.find((member) => member.pendingUpgradeChoices.length > 0) ?? null)?.id ?? null);
-  // Loot prompts come last in the priority chain (life-and-death, then growth, then housekeeping)
-  // — held back while a Downed popup or a pending level-up is still queued, same as those two are
-  // held back by each other. See LootModal.svelte.
-  $: nextUnpromptedLootItem =
-    nextDownedId || nextLevelUpId
-      ? null
-      : ($dungeonPlayback?.inventory.items.find((item) => !item.promptDismissed) ?? null);
+    : ($dungeonPlayback?.inventory.items.find((item) => !item.promptDismissed) ?? null);
+  $: shopOffers = $dungeonPlayback?.shopOffers ?? { recruits: [], relics: [], equipment: [] };
+  $: shopGold = $dungeonPlayback?.inventory.gold ?? 0;
   // Non-null once the run has actually ended (win/loss/forced-retreat) — see
   // DungeonPhaseView.svelte's onRoomReplayComplete, which now pauses here even on an ended run so
   // any pending Downed popup still gets shown before the player can leave for town.
@@ -107,14 +150,82 @@
             {#if member.hp <= 0}
               <span class="tag tag--downed">☠ Downed</span>
             {/if}
-            {#if member.pendingUpgradeChoices.length > 0}
-              <span class="tag tag--level-up">★ Level Up!</span>
+            {#if member.level > 1}
+              <span class="tag tag--level-up">★ Level {member.level}</span>
             {/if}
           </svelte:fragment>
         </CharacterCard>
       </li>
     {/each}
   </ul>
+
+  {#if nextRoom}
+    <section class="prepare-battle">
+      <h3>Prepare for Battle</h3>
+      <p class="prepare-battle__hint">
+        {#if selected}
+          Click a cell on <strong>Your Formation</strong> to place {selected.name} there.
+        {:else}
+          Select a party member above, then click a cell on <strong>Your Formation</strong> to place them.
+        {/if}
+      </p>
+      <PartyLayoutGrid
+        units={battleFormationUnits}
+        interactive
+        selectedId={selectedAdventurerId}
+        onCellClick={placeSelectedAt}
+      />
+    </section>
+  {/if}
+
+  {#if runOutcome === null}
+    <section class="shop">
+      <h3>Shop <span class="shop__gold">{shopGold}g</span></h3>
+
+      <h4>Recruit</h4>
+      <ul class="shop-offers">
+        {#each shopOffers.recruits as offer (offer.adventurer.id)}
+          <li class="shop-offer">
+            <span class="shop-offer__label">
+              {offer.adventurer.name}
+              {#if offer.alreadyInParty}<span class="shop-offer__hint">(level up!)</span>{/if}
+            </span>
+            <button
+              type="button"
+              disabled={shopGold < offer.price}
+              on:click={() => buyRecruitOffer(offer.adventurer.id)}
+            >
+              {offer.alreadyInParty ? 'Level Up' : 'Recruit'} — {offer.price}g
+            </button>
+          </li>
+        {/each}
+      </ul>
+
+      <h4>Relics</h4>
+      <ul class="shop-offers">
+        {#each shopOffers.relics as offer (offer.relic.id)}
+          <li class="shop-offer">
+            <span class="shop-offer__label">{offer.relic.name} — {offer.relic.description}</span>
+            <button type="button" disabled={shopGold < offer.price} on:click={() => buyRelicOffer(offer.relic.id)}>
+              Buy — {offer.price}g
+            </button>
+          </li>
+        {/each}
+      </ul>
+
+      <h4>Equipment</h4>
+      <ul class="shop-offers">
+        {#each shopOffers.equipment as offer (offer.item.id)}
+          <li class="shop-offer">
+            <span class="shop-offer__label">{offer.item.name} — {offer.item.slot}</span>
+            <button type="button" disabled={shopGold < offer.price} on:click={() => buyEquipmentOffer(offer.item.id)}>
+              Buy — {offer.price}g
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 
   {#if selected}
     <h3>{selected.name}'s Equipment</h3>
@@ -157,7 +268,6 @@
 </section>
 
 <DownedModal adventurerId={nextDownedId} />
-<LevelUpModal adventurerId={nextLevelUpId} />
 <LootModal item={nextUnpromptedLootItem} />
 
 <style>
@@ -207,5 +317,54 @@
   .tag--downed {
     color: var(--danger-bright);
     border-color: var(--danger);
+  }
+
+  .prepare-battle {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .prepare-battle__hint {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0 0 8px;
+  }
+
+  .prepare-battle :global(.layout-grid) {
+    max-width: 640px;
+  }
+
+  .shop {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .shop__gold {
+    color: var(--gold-bright);
+    font-size: 14px;
+    margin-left: 8px;
+  }
+
+  .shop-offers {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .shop-offer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .shop-offer__hint {
+    color: var(--gold-bright);
+    margin-left: 4px;
   }
 </style>

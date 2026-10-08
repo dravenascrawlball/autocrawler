@@ -5,7 +5,7 @@ import { activeRun } from './activeRun';
 import { dungeonPlayback } from './dungeonPlayback';
 import { currentView } from './view';
 import { refreshRecruitmentPool } from './recruitmentPool';
-import { clearDraft } from './draft';
+import { clearOpeningShop } from './openingShop';
 import { createStarterRoster } from '../data/roster';
 import { STARTER_TOWN_ITEMS } from '../data/items';
 import { createTownStorage } from '../sim/townStorage';
@@ -15,9 +15,10 @@ import { createTownStorage } from '../sim/townStorage';
  * new install looks like — the same starter roster/town items/day count
  * that `roster.ts`/`townStorage.ts`/`dayCount.ts` fall back to when there's
  * no save to load, plus a freshly rolled recruitment pool. Nobody starts
- * recruited: the first Embark is a pure draft. Autosave (see autosave.ts)
- * then persists this over whatever save existed before, so there's no
- * separate "clear localStorage" step.
+ * recruited: the first Embark opens onto a fresh opening gold shop (see
+ * state/openingShop.ts). Autosave (see autosave.ts) then persists this over
+ * whatever save existed before, so there's no separate "clear localStorage"
+ * step.
  *
  * Deliberately leaves state/runHistory.ts untouched — it's meant to back
  * future achievements/branching paths ("cleared a run with Gudrun"), which
@@ -34,7 +35,7 @@ export function resetGame(): void {
   dayCount.set(0);
   activeRun.set(null);
   dungeonPlayback.set(null);
-  clearDraft();
+  clearOpeningShop();
   currentView.set('town');
 
   refreshRecruitmentPool();

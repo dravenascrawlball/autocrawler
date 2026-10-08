@@ -134,7 +134,6 @@ describe('resolveRoom', () => {
     expect(adv.downedSummary).toEqual({
       roomIndex: 2,
       killerArchetype: 'Ogre',
-      xpGained: 0,
       damageDone: 3,
       damageTaken: 10,
       healed: 0,
@@ -177,7 +176,6 @@ describe('resolveRoom', () => {
     expect(advA.downedSummary).toEqual({
       roomIndex: 0,
       killerArchetype: 'Ogre',
-      xpGained: 0,
       damageDone: 0,
       damageTaken: 5,
       healed: 0,
@@ -186,7 +184,6 @@ describe('resolveRoom', () => {
     expect(advB.downedSummary).toEqual({
       roomIndex: 0,
       killerArchetype: 'Ogre',
-      xpGained: 0,
       damageDone: 0,
       damageTaken: 5,
       healed: 0,

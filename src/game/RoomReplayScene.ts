@@ -1,33 +1,21 @@
 import Phaser from 'phaser';
-import type { Row } from '../sim/formation';
+import type { GridPosition } from '../sim/formation';
 import type { StatusEffectId } from '../sim/statusEffects';
 import { rageDamageBonusFraction } from '../sim/traits';
 import { COLORS } from './constants';
 
-/**
- * A portrait's current mood, driven by combat events (see playAttack/
- * playHeal below). Textures are looked up as `portrait:<archetype
- * lowercased>:<state>`, loaded from `/portraits/<archetype>-<state>.png`
- * — any state missing for a given archetype falls back to that
- * archetype's `idle` texture, and if even that's missing, the card shows
- * a plain colored circle instead (see createCard). Nothing crashes or
- * looks broken before real art exists; it just looks like it does today.
- */
-export type PortraitState = 'idle' | 'attack' | 'hit' | 'cast' | 'healed' | 'downed' | 'dodge';
-const PORTRAIT_STATES: PortraitState[] = ['idle', 'attack', 'hit', 'cast', 'healed', 'downed', 'dodge'];
-
 export interface ReplayUnit {
   id: string;
   name: string;
-  /** Archetype template name (e.g. "Fighter", "Grunt") — see sim/adventurer.ts's `archetype` field. Used for portrait lookup. */
+  /** Archetype template name (e.g. "Fighter", "Grunt") — see sim/adventurer.ts's `archetype` field. Used for the grid body sprite lookup. */
   archetype: string;
   /** HP at the start of this room's replay. */
   hp: number;
   maxHp: number;
   side: 'party' | 'enemy';
-  /** Front/back formation row — see sim/formation.ts. Fixed for the whole room replay; no in-combat repositioning exists (yet). */
-  row: Row;
-  /** Whether this unit has RAGE_TRAIT (see sim/traits.ts) — shows a live "Raging +N%" readout on the HUD card, recomputed as HP changes during the replay. */
+  /** Position on this unit's side's 3x3 grid — see sim/formation.ts. Fixed for the whole room replay; no in-combat repositioning exists (yet). */
+  position: GridPosition;
+  /** Whether this unit has RAGE_TRAIT (see sim/traits.ts) — shows a live "Raging +N%" readout on its status badge, recomputed as HP changes during the replay. */
   hasRageTrait?: boolean;
 }
 
@@ -36,10 +24,10 @@ export type ReplayEvent =
   | { type: 'heal'; actorId: string; targetId: string; amount: number }
   /** A status effect (e.g. Burn, Poison) dealing its per-turn damage — see sim/statusEffects.ts. No actor: it's self-inflicted, not landed by another unit's turn. */
   | { type: 'status-tick'; targetId: string; damage: number; effectId: StatusEffectId }
-  /** The die roll that decided this turn's action (see sim/turnEngine.ts's rolledActionId) — played before that turn's other event(s). */
+  /** Announces the action about to fire this turn (see sim/turnEngine.ts's rolledActionId — deterministic now, not actually rolled; the field/event names are a holdover from the old dice system) — played before that turn's other event(s). */
   | { type: 'roll'; actorId: string; actionName: string }
   /**
-   * A one-shot floating announcement over `actorId`'s card — not a
+   * A one-shot floating announcement over `actorId`'s grid position — not a
    * persistent per-ally readout (a buff's own effect, e.g. mitigated
    * damage, still shows up in future hits normally). Used by Glint's
    * Rallying Strike, Fallacy's Empower, and Fallacy's Command
@@ -67,78 +55,108 @@ export interface RoomReplaySceneData {
   onSceneReady?: (scene: RoomReplayScene) => void;
 }
 
-// Lane layout (static front/back formation view, between the two HUD strips — see formation.ts).
-// Four columns left-to-right: party back, party front, enemy front, enemy back — the two front
-// rows meet in the middle (where the actual fighting reads as happening), backs sit outside them.
+// Lane layout: a static 3x3-grid-per-side formation view fills the whole canvas now — there's no
+// separate HUD card strip anymore (dungeon HUD rework, roadmap item 1): with party size now
+// ranging 1-9 over a run's life, a side panel sized for "always exactly 4" broke at both ends
+// (sparse at 1, didn't fit at 7-9). HP/status now lives as a compact badge attached directly to
+// each unit's grid position instead, which scales for free with however many slots are occupied.
+// Six columns left-to-right: party rank 2/1/0 (back to front), then enemy rank 0/1/2 (front to
+// back) — the two front ranks meet in the middle, back ranks sit outermost. Each column has
+// exactly 3 fixed lane slots (top to bottom) — an unoccupied lane just renders empty.
 const CELL_SIZE = 80;
-/** Native dimensions of a body sprite PNG — anchored at feet, scaled to CELL_SIZE wide. */
+/** Native dimensions of a body sprite PNG — anchored at feet. */
 const BODY_SPRITE_WIDTH = 64;
 const BODY_SPRITE_HEIGHT = 96;
+/**
+ * Rendered narrower than CELL_SIZE (the column's own width/spacing), not the full column width —
+ * scaling sprites to fill CELL_SIZE made each occupied lane's vertical band (LANE_STEP, driven by
+ * this height) dominate the canvas, flipping the whole formation view from landscape to portrait
+ * once the old HUD card strips (which used to add width on both sides) were removed. Shrinking
+ * just the sprite (not the column grid itself) buys back a landscape shape without touching lane
+ * spacing/positioning math, which still keys off CELL_SIZE.
+ */
+const BODY_SPRITE_RENDER_WIDTH = 60;
+const BODY_SPRITE_DISPLAY_HEIGHT = BODY_SPRITE_RENDER_WIDTH * (BODY_SPRITE_HEIGHT / BODY_SPRITE_WIDTH);
 const LANE_SIDE_PADDING = 40;
-const LANE_COLUMN_COUNT = 4;
+const LANE_COLUMN_COUNT = 6;
+/** Every side's grid is exactly 3 lanes deep — fixed, not dependent on how many units occupy it. */
+const GRID_LANES = 3;
+
+// Status badge — HP bar + HP text (+ a Rage readout when present), anchored directly below each
+// unit's feet. Compact and minimal on purpose (no name, no portrait — see the file's own doc
+// comment on what this intentionally dropped) so it stays legible at the grid's full 9-per-side
+// density, not just at today's lighter rosters.
+const BADGE_WIDTH = CELL_SIZE - 10;
+const BADGE_HP_BAR_HEIGHT = 5;
+const BADGE_HP_BAR_WIDTH = BADGE_WIDTH - 8;
+const BADGE_HP_TEXT_HEIGHT = 12;
+const BADGE_RAGE_TEXT_HEIGHT = 11;
+const BADGE_ROW_GAP = 2;
+/** Gap between a unit's feet and the top of its badge. */
+const BADGE_TOP_GAP = 4;
+const BADGE_HEIGHT = BADGE_HP_BAR_HEIGHT + BADGE_ROW_GAP + BADGE_HP_TEXT_HEIGHT + BADGE_ROW_GAP + BADGE_RAGE_TEXT_HEIGHT;
+
 /**
- * Extra headroom above the top row: a body sprite is anchored at its feet (lane-cell center) and
- * extends upward by its full display height, so the top row needs more clearance above it than
- * LANE_SIDE_PADDING alone gives, or heads get clipped by the canvas edge. Sized for the tallest
- * sprite (CELL_SIZE * BODY_SPRITE_HEIGHT/BODY_SPRITE_WIDTH) above its cell's vertical center, plus
- * a small buffer.
+ * Vertical spacing between lane slots. Deliberately NOT just CELL_SIZE (which only governs
+ * horizontal column width and sprite width): a body sprite's display height
+ * (BODY_SPRITE_DISPLAY_HEIGHT) is 1.5x CELL_SIZE on its own, before the badge below it even enters
+ * the picture — spacing lanes by CELL_SIZE alone would make every occupied lane's sprite overlap
+ * the lane below it. Each lane instead gets a self-contained vertical band exactly tall enough for
+ * one sprite plus its badge, so nothing overlaps regardless of how densely the grid is populated
+ * (up to the full 3x3).
  */
-const LANE_TOP_PADDING = Math.ceil(CELL_SIZE * (BODY_SPRITE_HEIGHT / BODY_SPRITE_WIDTH) - CELL_SIZE / 2 + 10);
+const LANE_STEP = BODY_SPRITE_DISPLAY_HEIGHT + BADGE_TOP_GAP + BADGE_HEIGHT;
+/** Flat clearance above the topmost lane band. */
+const LANE_TOP_MARGIN = 16;
 /**
- * Fixed headroom reserved above the lane rows, on top of LANE_TOP_PADDING's own (much smaller)
- * sprite-clipping margin — guarantees every room's formation sits low enough to read as standing
- * on the backdrop's stone floor rather than up in the archway, even a minimal 1v1 room where the
- * HUD cards alone wouldn't force the canvas tall enough to push it down on their own (see
- * replayCanvasSize, which folds this into its own height floor so the two stay in sync). Also
- * doubles as open space for a future "who rolled what" readout above the fight.
+ * Fixed headroom reserved above the lane rows — guarantees every room's formation sits low enough
+ * to read as standing on the backdrop's stone floor rather than up in the archway, even a minimal
+ * 1v1 room (see replayCanvasSize, which folds this into its own height floor so the two stay in
+ * sync). Also doubles as open space for the roll banner. Trimmed down alongside
+ * BODY_SPRITE_RENDER_WIDTH (see its own doc comment) — still comfortably enough room for the
+ * banner text and some breathing room above the formation, just not as much as a card-strip-era
+ * canvas could spare.
  */
-const LANE_FLOOR_MARGIN = 180;
-/** Extra downward push applied to whatever additional vertical room the canvas has beyond LANE_FLOOR_MARGIN's guaranteed minimum (e.g. a tall HUD card stack) — 0 would leave that extra room centered above the margin, 1 would push it all the way into the margin. */
+const LANE_FLOOR_MARGIN = 120;
+/** Extra downward push applied to whatever additional vertical room the canvas has beyond LANE_FLOOR_MARGIN's guaranteed minimum — 0 would leave that extra room centered above the margin, 1 would push it all the way into the margin. */
 const LANE_VERTICAL_BIAS_FRACTION = 0.7;
 const DOWNED_ALPHA = 0.3;
 
-// HUD card layout (fixed strips: party left, enemy right — HP/status live here, not on the grid).
-// Cards are a vertical stack (portrait on top, text rows below) so the portrait can be big and
-// portrait-scaled rather than a small square — source art is authored at 720x1080 (2:3), the same
-// ratio used here, so it also works unscaled in a future full-size gallery view.
-const PORTRAIT_ASPECT = 1080 / 720;
-const PORTRAIT_WIDTH = 120;
-const PORTRAIT_HEIGHT = PORTRAIT_WIDTH * PORTRAIT_ASPECT;
-const CARD_WIDTH = PORTRAIT_WIDTH + 16;
-const PORTRAIT_TOP_PADDING = 8;
-const ROW_GAP = 4;
-const NAME_ROW_HEIGHT = 16;
-const HP_TEXT_ROW_HEIGHT = 14;
-const HP_BAR_HEIGHT = 7;
-const STATUS_ROW_HEIGHT = 14;
-/** Reserved unconditionally (like STATUS_ROW_HEIGHT) so a card's layout doesn't shift depending on whether this unit has RAGE_TRAIT — only populated with text for units that do. */
-const RAGE_ROW_HEIGHT = 14;
-const CARD_BOTTOM_PADDING = 8;
-const CARD_HEIGHT =
-  PORTRAIT_TOP_PADDING +
-  PORTRAIT_HEIGHT +
-  ROW_GAP +
-  NAME_ROW_HEIGHT +
-  ROW_GAP +
-  HP_TEXT_ROW_HEIGHT +
-  ROW_GAP +
-  HP_BAR_HEIGHT +
-  ROW_GAP +
-  STATUS_ROW_HEIGHT +
-  ROW_GAP +
-  RAGE_ROW_HEIGHT +
-  CARD_BOTTOM_PADDING;
-const CARD_GAP = 8;
-const CARD_MARGIN = 12;
-/** Each side's cards form a 2-column grid (rather than one tall column) so a full 4-member party fits in 2 rows. */
-const CARDS_PER_ROW = 2;
-const HUD_STRIP_WIDTH = CARD_MARGIN * 2 + CARDS_PER_ROW * CARD_WIDTH + (CARDS_PER_ROW - 1) * CARD_GAP;
-const HP_BAR_WIDTH = 110;
+/**
+ * Which of the 6 lane-view columns (0-5, left to right) `unit` belongs in: the party's 3 ranks
+ * back-to-front (columns 0-2), then the enemy's 3 ranks front-to-back (columns 3-5) — the two
+ * front ranks (party rank 0, enemy rank 0) meet in the middle, back ranks sit outermost. A free
+ * function (not a scene method) so replayCanvasSize can share it without a scene instance.
+ */
+function columnForUnit(unit: ReplayUnit): number {
+  return unit.side === 'party' ? 2 - unit.position.rank : 3 + unit.position.rank;
+}
+
+/**
+ * How many lane slots each column actually needs to render `units` without anyone overlapping —
+ * GRID_LANES (3) under normal circumstances, but more whenever a single column ends up with more
+ * occupants than that. This is the common case today, not an edge case: every character currently
+ * defaults to lane 1 or the legacy front/back shorthand (see formation.ts's resolvePosition), so a
+ * party of 5+ routinely piles everyone into just 2 of the 6 columns (roadmap item 4 — nothing
+ * diversifies lanes/ranks yet). Every column uses this same slot count, not just the crowded one,
+ * so lanes stay row-aligned across the whole grid.
+ */
+function requiredLaneSlots(units: ReplayUnit[]): number {
+  const counts = new Map<number, number>();
+  for (const unit of units) {
+    const column = columnForUnit(unit);
+    counts.set(column, (counts.get(column) ?? 0) + 1);
+  }
+  return Math.max(GRID_LANES, ...counts.values());
+}
+
+/** The lane grid's total height for this room's actual units — shared by replayCanvasSize and create() so the two never drift apart. */
+function laneAreaHeight(units: ReplayUnit[]): number {
+  return LANE_FLOOR_MARGIN + LANE_TOP_MARGIN + requiredLaneSlots(units) * LANE_STEP;
+}
 
 const INTRO_HOLD_MS = 700;
 const INTRO_FADE_MS = 400;
-/** How long an attack/hit/cast/healed portrait shows before reverting to idle. Downed never reverts. */
-const REACTION_HOLD_MS = 500;
 
 // Impact juice: a brief pause at the peak of a landed attack's lunge (via the tween's own `hold`,
 // not a global timeScale freeze — keeps this consistent with the rest of the file's `scaled()`
@@ -156,51 +174,22 @@ const LETHAL_SHAKE_INTENSITY = 0.014;
 const DEATH_FALL_ANGLE_DEG = 75;
 const DEATH_FALL_DURATION_MS = 420;
 
-// Die-roll animation (roadmap item 7 Phase 5) — a small badge on the acting unit's HUD card that
-// tumbles through random faces before settling on the action that actually fired.
-const DIE_SIZE = 26;
-/** Badge center, relative to the card's own center — top-right corner, just inside the card edge. */
-const DIE_OFFSET_X = CARD_WIDTH / 2 - DIE_SIZE / 2 - 4;
-const DIE_OFFSET_Y = -CARD_HEIGHT / 2 + DIE_SIZE / 2 + 4;
-const DIE_TUMBLE_STEPS = 5;
-const DIE_TUMBLE_STEP_MS = 70;
-const DIE_SETTLE_HOLD_MS = 350;
-const DIE_FADE_MS = 200;
-
 /**
- * Roll banner — a big "Name rolled Action!" readout centered in the headroom LANE_FLOOR_MARGIN
- * reserves above the formation, replacing the old small floating label that used to appear over
- * just the acting unit's card. The die badge itself still tumbles on the card as the "who's
- * acting" cue; this is the "what did they roll" half, made legible at a glance instead of easy to
- * miss in the middle of a fight.
+ * Turn-start banner — a big "Name uses Action!" readout centered in the headroom
+ * LANE_FLOOR_MARGIN reserves above the formation. Used to be paired with a tumbling die badge
+ * over the acting unit's head (a literal roll animation) — removed once Basic Action became
+ * deterministic (the combat overhaul) made the "rolled" framing actively misleading; this banner
+ * is now the only per-turn announcement of what's about to fire.
  */
 const ROLL_BANNER_FONT_SIZE = 22;
 const ROLL_BANNER_FADE_MS = 220;
 const ROLL_BANNER_HOLD_MS = 450;
 
-/** Canvas size that fits the 4-lane formation view (sized to whichever row has the most members) plus both HUD strips (sized to the larger side's roster). */
-export function replayCanvasSize(
-  partyFrontCount: number,
-  partyBackCount: number,
-  enemyFrontCount: number,
-  enemyBackCount: number,
-): { width: number; height: number } {
-  const laneAreaWidth = LANE_SIDE_PADDING * 2 + LANE_COLUMN_COUNT * CELL_SIZE;
-  const maxLaneRows = Math.max(partyFrontCount, partyBackCount, enemyFrontCount, enemyBackCount, 1);
-  // Includes LANE_FLOOR_MARGIN so the canvas is always tall enough for create() to ground the
-  // formation on the floor without having to borrow room from the HUD cards' own height — see that
-  // constant's doc comment. Must stay in sync with create()'s own identical laneContentHeight calc.
-  const laneAreaHeight = LANE_FLOOR_MARGIN + LANE_TOP_PADDING + LANE_SIDE_PADDING + maxLaneRows * CELL_SIZE;
-
-  const partyCount = partyFrontCount + partyBackCount;
-  const enemyCount = enemyFrontCount + enemyBackCount;
-  const maxCards = Math.max(partyCount, enemyCount, 1);
-  const maxCardRows = Math.ceil(maxCards / CARDS_PER_ROW);
-  const cardsHeight = CARD_MARGIN * 2 + maxCardRows * CARD_HEIGHT + (maxCardRows - 1) * CARD_GAP;
-
+/** Canvas size that fits `units`' lane grid — width is always fixed (6 columns), height grows past the normal 3-lane minimum if any single column ends up more crowded than that (see requiredLaneSlots). */
+export function replayCanvasSize(units: ReplayUnit[]): { width: number; height: number } {
   return {
-    width: HUD_STRIP_WIDTH * 2 + laneAreaWidth,
-    height: Math.max(cardsHeight, laneAreaHeight),
+    width: LANE_SIDE_PADDING * 2 + LANE_COLUMN_COUNT * CELL_SIZE,
+    height: laneAreaHeight(units),
   };
 }
 
@@ -209,26 +198,26 @@ function colorToCss(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
+/** Inverse of colorToCss — the announce events' colors are authored as CSS hex strings (see DungeonPhaseView's buildRoomData), but the Glow filter wants a numeric color. */
+function cssColorToNumber(color: string): number {
+  return parseInt(color.replace('#', ''), 16);
+}
+
 /** Lowercases and replaces spaces with underscores (e.g. "Kobold Skirmisher" -> "kobold_skirmisher") so a multi-word archetype name still resolves to a valid asset filename. Mirrors ui/portraits.ts's own copy. */
 function slugifyArchetype(archetype: string): string {
   return archetype.toLowerCase().replace(/\s+/g, '_');
 }
 
-function portraitTextureKey(archetype: string, state: PortraitState): string {
-  return `portrait:${slugifyArchetype(archetype)}:${state}`;
-}
-
-function portraitAssetPath(archetype: string, state: PortraitState): string {
-  return `/portraits/${slugifyArchetype(archetype)}-${state}.png`;
-}
-
 /**
  * Grid body sprite for a unit — a static 64x96 image per archetype (see
- * public/sprites/), keyed separately from portraits since they're a
- * different asset. Every archetype/monster is expected to have a real file
- * in place (a copy of default_adventurer.png/default_monster.png as a
- * stand-in until real art exists) — unlike portraits, there's no
- * missing-file fallback here.
+ * public/sprites/), the unit's only on-canvas art now that the HUD
+ * card strip (and the portrait mood art it carried — attack/hit/cast/
+ * healed/downed/dodge faces) is gone. Combat feedback now reads through
+ * the sprite's own tint flash, lunge, death-fall, and the floating damage
+ * numbers/sparks, rather than a separate face swapping expression.
+ * Every archetype/monster is expected to have a real file in place (a
+ * copy of default_adventurer.png/default_monster.png as a stand-in until
+ * real art exists) — no missing-file fallback here.
  */
 function bodyTextureKey(archetype: string): string {
   return `body:${slugifyArchetype(archetype)}`;
@@ -239,18 +228,38 @@ function bodyAssetPath(side: 'party' | 'enemy', archetype: string): string {
   return `/sprites/${folder}/${slugifyArchetype(archetype)}.png`;
 }
 
-/** Single shared backdrop behind the whole replay canvas (HUD strips and lane view alike) — not per-archetype, since it's the room's environment, not a unit's own art. Missing file (no art yet) just leaves Phaser's own flat `backgroundColor` showing, same graceful-degradation convention as portraits/sprites. */
+/** Single shared backdrop behind the whole replay canvas. Missing file (no art yet) just leaves Phaser's own flat `backgroundColor` showing, same graceful-degradation convention as the body sprites. */
 const BACKGROUND_TEXTURE_KEY = 'background:dungeon-room';
 const BACKGROUND_ASSET_PATH = '/backgrounds/dungeon-room.png';
 
+// Impact/heal sparks — a generated (not loaded) texture, since it's a plain tinted dot rather than
+// real art, reused across every burst by tinting per-call instead of per-archetype assets.
+const SPARK_TEXTURE_KEY = 'fx:spark';
+const HIT_BURST_COUNT = 10;
+const LETHAL_BURST_COUNT = 24;
+const HEAL_BURST_COUNT = 14;
+const BURST_LIFESPAN_MS = 380;
+const LETHAL_BURST_LIFESPAN_MS = 520;
+
+// A killing blow also pulses a whole-screen glow (see create()'s lethalGlow filter) on top of the
+// existing camera shake — makes a kill read as more significant than a regular hit without
+// touching the shake itself.
+const LETHAL_GLOW_STRENGTH = 10;
+const LETHAL_GLOW_PULSE_MS = 180;
+
+// Heals, casts, and buff/support announcements get the same glow filter but much softer — ambient
+// warmth rather than another impact beat.
+const SOFT_GLOW_STRENGTH = 3;
+const SOFT_GLOW_PULSE_MS = 240;
+
 /**
- * Replays one room's flattened action log: a spatial grid view in the
- * middle (units at their real grid positions, sliding on `move` events)
- * flanked by two fixed HUD strips (party left, enemy right) carrying each
- * unit's portrait, name, HP bar, and status — attacks/heals pulse the
- * relevant portraits' mood (see PortraitState) and update HP on the card,
- * not on the grid. Opens with a brief fade-in "Room N / total" title
- * card, then calls `onComplete` once every event has played.
+ * Replays one room's flattened action log: every unit stands at its real
+ * grid position with a compact HP/status badge beneath its feet (see the
+ * file's own doc comment on why this replaced the old fixed-size HUD card
+ * strip) — attacks/heals flash and shake the relevant sprite and update
+ * its badge, rather than a separate portrait's mood. Opens with a brief
+ * fade-in "Room N / total" title card, then calls `onComplete` once every
+ * event has played.
  */
 export class RoomReplayScene extends Phaser.Scene {
   static readonly KEY = 'RoomReplayScene';
@@ -258,16 +267,20 @@ export class RoomReplayScene extends Phaser.Scene {
   private sceneData!: RoomReplaySceneData;
   private gridContainers = new Map<string, Phaser.GameObjects.Container>();
   private gridSprites = new Map<string, Phaser.GameObjects.Image>();
-  private cardPortraits = new Map<string, Phaser.GameObjects.Image | Phaser.GameObjects.Arc>();
-  private cardHealthBars = new Map<string, Phaser.GameObjects.Rectangle>();
-  private cardHpTexts = new Map<string, Phaser.GameObjects.Text>();
-  private cardRageTexts = new Map<string, Phaser.GameObjects.Text>();
-  private cardPositions = new Map<string, { x: number; y: number }>();
+  private badgeHealthBars = new Map<string, Phaser.GameObjects.Rectangle>();
+  private badgeHpTexts = new Map<string, Phaser.GameObjects.Text>();
+  private badgeRageTexts = new Map<string, Phaser.GameObjects.Text>();
+  /** A unit's feet position — the shared anchor every per-unit effect (badge, floating text, sparks) positions itself relative to. */
+  private feetPositions = new Map<string, { x: number; y: number }>();
   private currentHp = new Map<string, number>();
   private speedMultiplier = 1;
   private desiredPaused = false;
   /** Extra vertical offset applied to lane positions when the canvas is taller than the lane area needs — see create()'s comment. */
   private laneVerticalOffset = 0;
+  /** How many lane slots each column renders this room — see requiredLaneSlots; computed once in create(). */
+  private laneSlotCount = GRID_LANES;
+  /** Whole-camera glow filter, held at outerStrength 0 until a lethal hit pulses it — see LETHAL_GLOW_STRENGTH. */
+  private lethalGlow: Phaser.Filters.Glow | null = null;
 
   constructor() {
     super(RoomReplayScene.KEY);
@@ -278,11 +291,10 @@ export class RoomReplayScene extends Phaser.Scene {
     data.onSceneReady?.(this);
     this.gridContainers.clear();
     this.gridSprites.clear();
-    this.cardPortraits.clear();
-    this.cardHealthBars.clear();
-    this.cardHpTexts.clear();
-    this.cardRageTexts.clear();
-    this.cardPositions.clear();
+    this.badgeHealthBars.clear();
+    this.badgeHpTexts.clear();
+    this.badgeRageTexts.clear();
+    this.feetPositions.clear();
     this.currentHp.clear();
     this.speedMultiplier = data.speedMultiplier ?? 1;
     this.desiredPaused = false;
@@ -332,15 +344,6 @@ export class RoomReplayScene extends Phaser.Scene {
   preload(): void {
     this.load.image(BACKGROUND_TEXTURE_KEY, BACKGROUND_ASSET_PATH);
 
-    const archetypes = new Set(this.sceneData.units.map((unit) => unit.archetype));
-    for (const archetype of archetypes) {
-      for (const state of PORTRAIT_STATES) {
-        this.load.image(portraitTextureKey(archetype, state), portraitAssetPath(archetype, state));
-      }
-    }
-    // Missing files 404 individually via Phaser's own error handling — expected until portrait art
-    // exists for a given archetype/state; textures.exists() below is how callers detect that.
-
     const bodySeen = new Set<string>();
     for (const unit of this.sceneData.units) {
       const key = bodyTextureKey(unit.archetype);
@@ -354,67 +357,70 @@ export class RoomReplayScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.createBackground(width, height);
+    this.ensureSparkTexture();
+    this.lethalGlow = this.cameras.main.filters.internal.addGlow(0xffffff, 0, 0, 1);
 
-    const partyUnits = this.sceneData.units.filter((unit) => unit.side === 'party');
-    const enemyUnits = this.sceneData.units.filter((unit) => unit.side === 'enemy');
-    partyUnits.forEach((unit, index) =>
-      this.createCard(unit, this.cardX(0, index % CARDS_PER_ROW), this.cardY(Math.floor(index / CARDS_PER_ROW))),
-    );
-    enemyUnits.forEach((unit, index) =>
-      this.createCard(
-        unit,
-        this.cardX(width - HUD_STRIP_WIDTH, index % CARDS_PER_ROW),
-        this.cardY(Math.floor(index / CARDS_PER_ROW)),
-      ),
-    );
-
-    // Column order left-to-right: party back, party front, enemy front, enemy back — the two
-    // front rows meet in the middle, backs sit outside them (see the layout comment above).
-    const lanes: { units: ReplayUnit[]; column: number }[] = [
-      { units: partyUnits.filter((u) => u.row === 'back'), column: 0 },
-      { units: partyUnits.filter((u) => u.row === 'front'), column: 1 },
-      { units: enemyUnits.filter((u) => u.row === 'front'), column: 2 },
-      { units: enemyUnits.filter((u) => u.row === 'back'), column: 3 },
-    ];
-    // The canvas's actual height is often taller than the lane area alone needs (it's sized to fit
-    // whichever side has more HUD cards — see replayCanvasSize) — without this, units stay pinned
-    // to their top-padding offset and end up looking stranded near the top of a tall background
-    // instead of sitting mid-scene. Centers the lane block's natural height (mirrors
-    // replayCanvasSize's own laneAreaHeight formula) in whatever extra vertical room the canvas has.
-    const maxLaneRows = Math.max(...lanes.map((lane) => lane.units.length), 1);
-    // Must match replayCanvasSize's own laneAreaHeight formula — see LANE_FLOOR_MARGIN's doc
-    // comment for why the canvas is guaranteed at least this tall.
-    const laneContentHeight = LANE_FLOOR_MARGIN + LANE_TOP_PADDING + LANE_SIDE_PADDING + maxLaneRows * CELL_SIZE;
+    // The canvas's actual height is often taller than the lane area alone needs — without this,
+    // units stay pinned to their top-margin offset and end up looking stranded near the top of a
+    // tall background instead of sitting mid-scene. Centers the lane grid's fixed height in
+    // whatever extra vertical room the canvas has.
     // LANE_FLOOR_MARGIN alone already grounds the formation even in the smallest room; any extra
-    // room the canvas has beyond that (e.g. a tall HUD card stack) pushes it down further still,
-    // rather than sitting centered in that extra space.
-    this.laneVerticalOffset = LANE_FLOOR_MARGIN + Math.max(0, height - laneContentHeight) * LANE_VERTICAL_BIAS_FRACTION;
+    // room the canvas has beyond that pushes it down further still, rather than sitting centered
+    // in that extra space.
+    this.laneSlotCount = requiredLaneSlots(this.sceneData.units);
+    this.laneVerticalOffset =
+      LANE_FLOOR_MARGIN + Math.max(0, height - laneAreaHeight(this.sceneData.units)) * LANE_VERTICAL_BIAS_FRACTION;
 
-    this.drawLaneDivider(maxLaneRows);
+    this.drawLaneDivider();
 
-    for (const lane of lanes) {
-      // Centers a lane with fewer occupants than the tallest lane within that shared row span
-      // (e.g. 3 in front, 1 in back -> the lone back-row unit sits at the middle row, not pinned
-      // to the top) rather than every lane top-aligning independently.
-      const rowOffset = (maxLaneRows - lane.units.length) / 2;
-      lane.units.forEach((unit, index) => {
-        const pos = this.laneScreenPosition(lane.column, index + rowOffset);
-        this.createGridUnit(unit, pos.x, pos.y);
-      });
+    // Grouped by column (rank) rather than placed at each unit's raw lane slot: today every
+    // character defaults to lane 1 (center) via the legacy front/back shorthand (see
+    // formation.ts's resolvePosition) — nothing diversifies lanes yet, so two units sharing a rank
+    // would otherwise render stacked exactly on top of each other. Grouping and centering within
+    // the column keeps today's rosters readable, while still placing units at their literal lane
+    // slot once lanes actually differ (see layoutColumn's own doc comment for why this degrades
+    // gracefully either way).
+    const byColumn = new Map<number, ReplayUnit[]>();
+    for (const unit of this.sceneData.units) {
+      const column = columnForUnit(unit);
+      const existing = byColumn.get(column);
+      if (existing) existing.push(unit);
+      else byColumn.set(column, [unit]);
+    }
+    for (const [column, units] of byColumn) {
+      this.layoutColumn(column, units);
     }
 
     this.playIntro();
   }
 
   /**
+   * Places every unit in one column, sorted by lane and centered as a group within
+   * `laneSlotCount` slots — e.g. a single unit lands dead center; 3 units with distinct lanes
+   * 0/1/2 land exactly at their own literal slots once `laneSlotCount` is exactly 3 (the centering
+   * offset is 0 once the group fills every slot). Units sharing the same lane (today's universal
+   * case — see create()'s own comment) are simply the stable sort order at that point, so they
+   * still end up centered and separated rather than overlapping — and `laneSlotCount` itself
+   * already grew to fit this column's actual occupant count if it exceeds the normal 3 (see
+   * requiredLaneSlots), so this never has to overflow past its own slots.
+   */
+  private layoutColumn(column: number, units: ReplayUnit[]): void {
+    const sorted = [...units].sort((a, b) => a.position.lane - b.position.lane);
+    const offset = (this.laneSlotCount - sorted.length) / 2;
+    sorted.forEach((unit, index) => {
+      const pos = this.laneFeetPosition(column, index + offset);
+      this.createGridUnit(unit, pos.x, pos.y);
+    });
+  }
+
+  /**
    * Fills the whole canvas with the shared dungeon backdrop, if its art exists — a no-op leaving
-   * Phaser's flat `backgroundColor` visible otherwise. Drawn first so every other object (cards,
-   * lane divider, grid units) paints on top of it. Scaled to cover (like CSS `object-fit: cover`)
-   * rather than stretched: the canvas's width is fixed but its height varies with room size
-   * (~290-560px), so a uniform scale-and-crop keeps the source art's own proportions correct in
-   * every room instead of squashing/stretching it differently each time. Overflow past the canvas
-   * edge is simply never rendered — Phaser doesn't draw outside the canvas bounds — so no mask is
-   * needed.
+   * Phaser's flat `backgroundColor` visible otherwise. Drawn first so every other object paints on
+   * top of it. Scaled to cover (like CSS `object-fit: cover`) rather than stretched: the canvas's
+   * width is fixed but its height varies with room size, so a uniform scale-and-crop keeps the
+   * source art's own proportions correct in every room instead of squashing/stretching it
+   * differently each time. Overflow past the canvas edge is simply never rendered — Phaser doesn't
+   * draw outside the canvas bounds — so no mask is needed.
    */
   private createBackground(width: number, height: number): void {
     if (!this.textures.exists(BACKGROUND_TEXTURE_KEY)) {
@@ -425,139 +431,139 @@ export class RoomReplayScene extends Phaser.Scene {
     image.setScale(scale);
   }
 
-  /** Card center x within a strip starting at `stripLeft` (0 for the party strip, `width - HUD_STRIP_WIDTH` for the enemy strip). */
-  private cardX(stripLeft: number, col: number): number {
-    return stripLeft + CARD_MARGIN + CARD_WIDTH / 2 + col * (CARD_WIDTH + CARD_GAP);
+  /** Generates the shared spark dot texture once (textures persist across scene restarts on the same Game, so a re-check is enough — no per-room regeneration). Tinted per-burst rather than per-archetype, since it's a plain effect, not real art. */
+  private ensureSparkTexture(): void {
+    if (this.textures.exists(SPARK_TEXTURE_KEY)) return;
+    const graphics = this.make.graphics({}, false);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillCircle(4, 4, 4);
+    graphics.generateTexture(SPARK_TEXTURE_KEY, 8, 8);
+    graphics.destroy();
   }
 
-  private cardY(row: number): number {
-    return CARD_MARGIN + CARD_HEIGHT / 2 + row * (CARD_HEIGHT + CARD_GAP);
+  /** One-shot particle burst (hit sparks, heal sparkle) — spawns its own short-lived emitter and destroys it once its particles finish, rather than keeping a shared emitter alive for the whole replay. */
+  private burstSparks(x: number, y: number, tint: number, quantity: number, lifespanMs: number): void {
+    const scaledLifespan = this.scaled(lifespanMs);
+    const emitter = this.add.particles(x, y, SPARK_TEXTURE_KEY, {
+      lifespan: scaledLifespan,
+      speed: { min: 60, max: 220 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.4, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint,
+      blendMode: 'ADD',
+      emitting: false,
+    });
+    emitter.explode(quantity);
+    this.time.delayedCall(scaledLifespan + 50, () => emitter.destroy());
   }
 
-  /** A single vertical line between the two front columns — the only visual cue for "this is where the fighting happens." Spans just the actual lane rows (offset the same way as the units themselves) rather than stretching to the canvas edges, which would otherwise dangle past a vertically-centered formation. */
-  private drawLaneDivider(maxLaneRows: number): void {
-    const x = HUD_STRIP_WIDTH + LANE_SIDE_PADDING + 2 * CELL_SIZE;
-    const top = this.laneVerticalOffset + LANE_TOP_PADDING;
-    const bottom = top + maxLaneRows * CELL_SIZE;
+  /**
+   * Pulses the whole-screen glow filter (see create()'s lethalGlow) up and back down, in `color`
+   * — reset to white once the pulse finishes so the next (possibly uncolored) pulse doesn't
+   * inherit it. Shared by the strong white pulse on a killing blow and the softer, event-tinted
+   * pulses on heals/casts/buff announcements (see pulseLethalGlow/pulseSoftGlow below).
+   */
+  private pulseGlow(strength: number, durationMs: number, color: number): void {
+    if (!this.lethalGlow) return;
+    this.lethalGlow.color = color;
+    this.tweens.add({
+      targets: this.lethalGlow,
+      outerStrength: strength,
+      duration: this.scaled(durationMs),
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (this.lethalGlow) this.lethalGlow.color = 0xffffff;
+      },
+    });
+  }
+
+  /** The strong white pulse on a killing blow — the screen-wide complement to the camera shake already applied for a killing blow. */
+  private pulseLethalGlow(): void {
+    this.pulseGlow(LETHAL_GLOW_STRENGTH, LETHAL_GLOW_PULSE_MS, 0xffffff);
+  }
+
+  /** A soft, event-tinted glow pulse for heals/casts/buff announcements — much weaker than the lethal-hit pulse so it reads as ambient warmth rather than another impact. */
+  private pulseSoftGlow(color: number): void {
+    this.pulseGlow(SOFT_GLOW_STRENGTH, SOFT_GLOW_PULSE_MS, color);
+  }
+
+  /** A single vertical line between the two front-rank columns (party rank 0, enemy rank 0) — the only visual cue for "this is where the fighting happens." Spans just the fixed lane grid height (offset the same way as the units themselves) rather than stretching to the canvas edges, which would otherwise dangle past a vertically-centered formation. */
+  private drawLaneDivider(): void {
+    const x = LANE_SIDE_PADDING + 3 * CELL_SIZE;
+    const top = this.laneVerticalOffset + LANE_TOP_MARGIN;
+    const bottom = top + this.laneSlotCount * LANE_STEP;
     const graphics = this.add.graphics();
     graphics.lineStyle(1, COLORS.gridLine, 1);
     graphics.lineBetween(x, top, x, bottom);
   }
 
-  /** Screen position for the `index`-th unit (top to bottom, can be fractional — see create()'s rowOffset) in lane `column` (0-3, see the create() comment). */
-  private laneScreenPosition(column: number, index: number): { x: number; y: number } {
+  /** Feet position for lane `lane` (0-2, top to bottom — a fixed slot, not occupant-dependent) within column `column` (0-5, see columnForUnit). Each lane's own self-contained band (LANE_STEP tall) means this never needs to know how densely-occupied neighboring lanes are. */
+  private laneFeetPosition(column: number, lane: number): { x: number; y: number } {
     return {
-      x: HUD_STRIP_WIDTH + LANE_SIDE_PADDING + column * CELL_SIZE + CELL_SIZE / 2,
-      y: this.laneVerticalOffset + LANE_TOP_PADDING + index * CELL_SIZE + CELL_SIZE / 2,
+      x: LANE_SIDE_PADDING + column * CELL_SIZE + CELL_SIZE / 2,
+      y: this.laneVerticalOffset + LANE_TOP_MARGIN + lane * LANE_STEP + BODY_SPRITE_DISPLAY_HEIGHT,
     };
   }
 
-  /** A body sprite in its formation lane, anchored at the feet (cell center) — no name/health bar here, both live on the HUD card. Faces toward the opposing side: party faces right, enemy faces left (sprites are drawn facing right by convention). */
-  private createGridUnit(unit: ReplayUnit, x: number, y: number): void {
-    const displayHeight = CELL_SIZE * (BODY_SPRITE_HEIGHT / BODY_SPRITE_WIDTH);
+  /** A body sprite in its formation lane, anchored at the feet, plus its status badge just below. Faces toward the opposing side: party faces right, enemy faces left (sprites are drawn facing right by convention). */
+  private createGridUnit(unit: ReplayUnit, feetX: number, feetY: number): void {
+    this.feetPositions.set(unit.id, { x: feetX, y: feetY });
+
     const sprite = this.add
       .image(0, 0, bodyTextureKey(unit.archetype))
       .setOrigin(0.5, 1)
-      .setDisplaySize(CELL_SIZE, displayHeight)
+      .setDisplaySize(BODY_SPRITE_RENDER_WIDTH, BODY_SPRITE_DISPLAY_HEIGHT)
       .setFlipX(unit.side === 'enemy');
-    const container = this.add.container(x, y, [sprite]);
+    const container = this.add.container(feetX, feetY, [sprite]);
     this.gridContainers.set(unit.id, container);
     this.gridSprites.set(unit.id, sprite);
+
+    this.createStatusBadge(unit, feetX, feetY);
   }
 
-  /** Resolves the best available portrait texture key for `state`, falling back to `idle`, or null if neither exists. */
-  private resolvePortraitTextureKey(archetype: string, state: PortraitState): string | null {
-    const key = portraitTextureKey(archetype, state);
-    if (this.textures.exists(key)) return key;
-    const idleKey = portraitTextureKey(archetype, 'idle');
-    return this.textures.exists(idleKey) ? idleKey : null;
-  }
+  /** Compact HP bar + HP text (+ Rage readout when present) centered just below `unit`'s feet — see the file's own doc comment on why this replaces the old HUD card. */
+  private createStatusBadge(unit: ReplayUnit, feetX: number, feetY: number): void {
+    const badgeCenterY = feetY + BADGE_TOP_GAP + BADGE_HEIGHT / 2;
+    const bg = this.add.rectangle(0, 0, BADGE_WIDTH, BADGE_HEIGHT, COLORS.background, 0.8);
+    let cursor = -BADGE_HEIGHT / 2;
 
-  /** Vertical stack from the card's top edge: portrait, name, HP text, HP bar, status — see the layout constants above. */
-  private createCard(unit: ReplayUnit, x: number, y: number): void {
-    this.cardPositions.set(unit.id, { x, y });
-    const color = unit.side === 'party' ? COLORS.attacker : COLORS.target;
-    const top = -CARD_HEIGHT / 2;
-    let cursor = top;
-
-    // Near-opaque rather than the semi-transparent look this used to have — over the dungeon
-    // backdrop art, a lightly-tinted box read as hard to skim at a glance.
-    const cardBg = this.add.rectangle(0, 0, CARD_WIDTH, CARD_HEIGHT, COLORS.background, 0.92);
-    cardBg.setStrokeStyle(1, COLORS.gridLine);
-
-    cursor += PORTRAIT_TOP_PADDING;
-    const portraitY = cursor + PORTRAIT_HEIGHT / 2;
-    const initialKey = this.resolvePortraitTextureKey(unit.archetype, 'idle');
-    const portrait: Phaser.GameObjects.Image | Phaser.GameObjects.Arc = initialKey
-      ? this.add.image(0, portraitY, initialKey).setDisplaySize(PORTRAIT_WIDTH, PORTRAIT_HEIGHT)
-      : this.add.circle(0, portraitY, PORTRAIT_WIDTH / 2, color);
-    this.cardPortraits.set(unit.id, portrait);
-    cursor += PORTRAIT_HEIGHT + ROW_GAP;
-
-    const nameText = this.add
-      .text(0, cursor + NAME_ROW_HEIGHT / 2, unit.name, { fontSize: '13px', color: '#ffffff' })
-      .setOrigin(0.5, 0.5);
-    cursor += NAME_ROW_HEIGHT + ROW_GAP;
+    const barY = cursor + BADGE_HP_BAR_HEIGHT / 2;
+    const healthBarBg = this.add.rectangle(0, barY, BADGE_HP_BAR_WIDTH, BADGE_HP_BAR_HEIGHT, COLORS.healthBarBack);
+    const healthBarFill = this.add
+      .rectangle(0, barY, BADGE_HP_BAR_WIDTH * (unit.hp / unit.maxHp), BADGE_HP_BAR_HEIGHT, COLORS.healthBarFill)
+      .setOrigin(0, 0.5);
+    healthBarFill.x = -BADGE_HP_BAR_WIDTH / 2;
+    this.badgeHealthBars.set(unit.id, healthBarFill);
+    cursor += BADGE_HP_BAR_HEIGHT + BADGE_ROW_GAP;
 
     const hpText = this.add
-      .text(0, cursor + HP_TEXT_ROW_HEIGHT / 2, `${unit.hp}/${unit.maxHp}`, { fontSize: '11px', color: '#cccccc' })
+      .text(0, cursor + BADGE_HP_TEXT_HEIGHT / 2, `${unit.hp}/${unit.maxHp}`, { fontSize: '10px', color: '#cccccc' })
       .setOrigin(0.5, 0.5);
-    this.cardHpTexts.set(unit.id, hpText);
-    cursor += HP_TEXT_ROW_HEIGHT + ROW_GAP;
+    this.badgeHpTexts.set(unit.id, hpText);
+    cursor += BADGE_HP_TEXT_HEIGHT + BADGE_ROW_GAP;
 
-    const barY = cursor + HP_BAR_HEIGHT / 2;
-    const healthBarBg = this.add.rectangle(0, barY, HP_BAR_WIDTH, HP_BAR_HEIGHT, COLORS.healthBarBack);
-    const healthBarFill = this.add
-      .rectangle(0, barY, HP_BAR_WIDTH * (unit.hp / unit.maxHp), HP_BAR_HEIGHT, COLORS.healthBarFill)
-      .setOrigin(0, 0.5);
-    healthBarFill.x = -HP_BAR_WIDTH / 2;
-    this.cardHealthBars.set(unit.id, healthBarFill);
-    cursor += HP_BAR_HEIGHT + ROW_GAP;
-
-    const children: Phaser.GameObjects.GameObject[] = [cardBg, portrait, nameText, hpText, healthBarBg, healthBarFill];
-
-    // STATUS_ROW_HEIGHT's vertical space stays reserved (unused now that Adventurer.status is gone,
-    // roadmap: roguelite draft rework) so RAGE_ROW_HEIGHT below doesn't need a layout re-derivation.
-    cursor += STATUS_ROW_HEIGHT + ROW_GAP;
+    const children: Phaser.GameObjects.GameObject[] = [bg, healthBarBg, healthBarFill, hpText];
 
     if (unit.hasRageTrait) {
       const rageText = this.add
-        .text(0, cursor + RAGE_ROW_HEIGHT / 2, this.rageLabel(unit.hp, unit.maxHp), {
-          fontSize: '10px',
+        .text(0, cursor + BADGE_RAGE_TEXT_HEIGHT / 2, this.rageLabel(unit.hp, unit.maxHp), {
+          fontSize: '9px',
           color: '#ff6666',
         })
         .setOrigin(0.5, 0.5);
-      this.cardRageTexts.set(unit.id, rageText);
+      this.badgeRageTexts.set(unit.id, rageText);
       children.push(rageText);
     }
 
-    this.add.container(x, y, children);
+    this.add.container(feetX, badgeCenterY, children);
   }
 
   /** "Raging +N%" once the bonus is non-zero, blank at full HP — see traits.ts's RAGE_TRAIT. */
   private rageLabel(hp: number, maxHp: number): string {
     const bonusPercent = Math.round(rageDamageBonusFraction(hp, maxHp) * 100);
     return bonusPercent > 0 ? `Raging +${bonusPercent}%` : '';
-  }
-
-  /** Sets a card's portrait to `state`'s texture (falling back to idle, or leaving a circle-fallback portrait untouched). */
-  private setPortraitState(unitId: string, state: PortraitState): void {
-    const unit = this.sceneData.units.find((u) => u.id === unitId);
-    const portrait = this.cardPortraits.get(unitId);
-    if (!unit || !portrait || !(portrait instanceof Phaser.GameObjects.Image)) {
-      return; // no portrait art at all for this archetype — nothing to swap, the circle fallback just sits still
-    }
-
-    const key = this.resolvePortraitTextureKey(unit.archetype, state);
-    if (key) {
-      portrait.setTexture(key);
-    }
-  }
-
-  /** Shows `state` on the portrait, then reverts to idle after REACTION_HOLD_MS — used for every state except 'downed', which persists. */
-  private pulsePortrait(unitId: string, state: PortraitState): void {
-    this.setPortraitState(unitId, state);
-    this.time.delayedCall(this.scaled(REACTION_HOLD_MS), () => this.setPortraitState(unitId, 'idle'));
   }
 
   /** Fades in a "Room N / total" title card over the (already-visible) units, holds briefly, then starts the event log. */
@@ -596,7 +602,7 @@ export class RoomReplayScene extends Phaser.Scene {
       return;
     }
     if (event.type === 'attack') {
-      this.playAttack(event.actorId, event.targetId, event.damage, event.hit, next);
+      this.playAttack(event.actorId, event.targetId, event.damage, next);
       return;
     }
     if (event.type === 'status-tick') {
@@ -610,86 +616,36 @@ export class RoomReplayScene extends Phaser.Scene {
     this.playHeal(event.actorId, event.targetId, event.amount, next);
   }
 
-  /** Floats a one-shot text announcement over `actorId`'s card — see the 'announce' ReplayEvent doc comment for what uses this. */
+  /** Floats a one-shot text announcement over `actorId`'s grid position, plus a soft glow pulse in the same color — see the 'announce' ReplayEvent doc comment for what uses this. */
   private playAnnounce(actorId: string, text: string, color: string, onDone: () => void): void {
-    const cardPos = this.cardPositions.get(actorId);
-    if (!cardPos) {
+    const feet = this.feetPositions.get(actorId);
+    if (!feet) {
       onDone();
       return;
     }
 
-    this.floatText(cardPos.x, cardPos.y - CARD_HEIGHT / 2, text, color);
+    this.floatText(feet.x, feet.y - BODY_SPRITE_DISPLAY_HEIGHT, text, color);
+    this.pulseSoftGlow(cssColorToNumber(color));
     this.time.delayedCall(this.scaled(220), onDone);
   }
 
   /**
-   * A small die badge appears on the acting unit's HUD card, tumbles through a few random faces,
-   * then settles — the die itself never grows to fit a long action name (it's a fixed small
-   * square), so once it lands, what actually fired is announced separately via the roll banner
-   * (see playRollBanner) instead of a label squeezed onto the card.
+   * Fades in "Name uses Action!" centered in the headroom LANE_FLOOR_MARGIN reserves above the
+   * formation (see that constant's doc comment), holds long enough to read, then fades back out —
+   * a non-blocking overlay; `onDone` fires once the hold+fade finishes, pacing the turn (there's no
+   * die animation anymore to pace it instead — see this file's ROLL_BANNER_* doc comment).
    */
   private playRoll(actorId: string, actionName: string, onDone: () => void): void {
-    const cardPos = this.cardPositions.get(actorId);
-    if (!cardPos) {
-      onDone();
-      return;
-    }
     const actorName = this.sceneData.units.find((unit) => unit.id === actorId)?.name ?? actorId;
-
-    const dieX = cardPos.x + DIE_OFFSET_X;
-    const dieY = cardPos.y + DIE_OFFSET_Y;
-    const bg = this.add.rectangle(dieX, dieY, DIE_SIZE, DIE_SIZE, 0x000000, 0.85).setStrokeStyle(1, COLORS.gridLine);
-    const label = this.add.text(dieX, dieY, '?', { fontSize: '13px', color: '#ffffff' }).setOrigin(0.5, 0.5);
-
-    const tumble = (stepsLeft: number): void => {
-      if (stepsLeft === 0) {
-        // Landed: the die itself just freezes on its last face (the number is decorative, not
-        // meaningful) — see playRollBanner for what actually fired.
-        this.playRollBanner(actorName, actionName);
-        this.time.delayedCall(this.scaled(DIE_SETTLE_HOLD_MS), () => {
-          this.tweens.add({
-            targets: [bg, label],
-            alpha: 0,
-            duration: this.scaled(DIE_FADE_MS),
-            onComplete: () => {
-              bg.destroy();
-              label.destroy();
-              onDone();
-            },
-          });
-        });
-        return;
-      }
-
-      label.setText(String(1 + Math.floor(Math.random() * 6)));
-      this.tweens.add({
-        targets: [bg, label],
-        angle: stepsLeft % 2 === 0 ? 12 : -12,
-        duration: this.scaled(DIE_TUMBLE_STEP_MS),
-        yoyo: true,
-        onComplete: () => tumble(stepsLeft - 1),
-      });
-    };
-
-    tumble(DIE_TUMBLE_STEPS);
-  }
-
-  /**
-   * Fades in "Name rolled Action!" centered in the headroom LANE_FLOOR_MARGIN reserves above the
-   * formation (see that constant's doc comment), holds long enough to read, then fades back out —
-   * a non-blocking overlay, not gated by its own onDone, since playRoll's own die-tumble timing
-   * already paces the turn.
-   */
-  private playRollBanner(actorName: string, actionName: string): void {
     const { width } = this.scale;
     const x = width / 2;
     // Centered in LANE_FLOOR_MARGIN's guaranteed headroom band specifically, not the raw canvas
     // top and not the full laneVerticalOffset (which also includes any *extra* push-down a tall
-    // HUD stack adds on top of the margin — this stays put regardless of that).
+    // canvas adds on top of the margin — this stays put regardless of that).
     const y = LANE_FLOOR_MARGIN / 2;
 
     const text = this.add
-      .text(x, y, `${actorName} rolled ${actionName}!`, {
+      .text(x, y, `${actorName} uses ${actionName}!`, {
         fontSize: `${ROLL_BANNER_FONT_SIZE}px`,
         fontStyle: 'bold',
         color: '#f0e4c8',
@@ -709,7 +665,10 @@ export class RoomReplayScene extends Phaser.Scene {
             targets: text,
             alpha: 0,
             duration: this.scaled(ROLL_BANNER_FADE_MS),
-            onComplete: () => text.destroy(),
+            onComplete: () => {
+              text.destroy();
+              onDone();
+            },
           });
         });
       },
@@ -719,11 +678,11 @@ export class RoomReplayScene extends Phaser.Scene {
   /** No actor lunge (it's self-inflicted) — just the HP hit and a brief pause so it reads as its own beat. */
   private playStatusTick(targetId: string, damage: number, effectId: StatusEffectId, onDone: () => void): void {
     const flashColor = effectId === 'poison' ? COLORS.poisonFlash : COLORS.burnFlash;
-    this.applyHpDelta(targetId, -damage, flashColor, 'hit');
+    this.applyHpDelta(targetId, -damage, flashColor);
     this.time.delayedCall(this.scaled(220), onDone);
   }
 
-  private playAttack(actorId: string, targetId: string, damage: number, hit: boolean, onDone: () => void): void {
+  private playAttack(actorId: string, targetId: string, damage: number, onDone: () => void): void {
     const actor = this.gridContainers.get(actorId);
     const target = this.gridContainers.get(targetId);
     if (!actor || !target) {
@@ -735,13 +694,15 @@ export class RoomReplayScene extends Phaser.Scene {
     const originY = actor.y;
     const lungeX = originX + (target.x - originX) * 0.3;
     const lungeY = originY + (target.y - originY) * 0.3;
-    const isLethal = hit && (this.currentHp.get(targetId) ?? Infinity) <= damage;
-
-    this.pulsePortrait(actorId, 'attack');
+    // `hit` is always true now (no more miss roll — see this file's ReplayEvent doc comment);
+    // `damage` is what actually carries meaning, 0 meaning a Shield/Invulnerability/Dodge fully
+    // blocked it.
+    const dealtDamage = damage > 0;
+    const isLethal = dealtDamage && (this.currentHp.get(targetId) ?? Infinity) <= damage;
 
     // The lunge tween animates both x and y on the same target, so Phaser creates one TweenData
     // per property and calls onYoyo once per property — i.e. twice per bounce, not once. Without
-    // this guard, a landed hit's damage (and the miss reaction) would be applied twice.
+    // this guard, a landed hit's damage (and the blocked reaction) would be applied twice.
     let impactApplied = false;
     this.tweens.add({
       targets: actor,
@@ -751,16 +712,15 @@ export class RoomReplayScene extends Phaser.Scene {
       yoyo: true,
       // A brief hold at the peak of the lunge, right as the hit lands, reads as a hit-stop beat
       // without freezing anything else in the scene — see the constants' comment above.
-      hold: hit ? this.scaled(isLethal ? LETHAL_HIT_HOLD_MS : HIT_HOLD_MS) : 0,
+      hold: dealtDamage ? this.scaled(isLethal ? LETHAL_HIT_HOLD_MS : HIT_HOLD_MS) : 0,
       ease: 'Quad.easeOut',
       onYoyo: () => {
         if (impactApplied) return;
         impactApplied = true;
-        if (hit) {
-          this.applyHpDelta(targetId, -damage, COLORS.attackFlash, 'hit');
+        if (dealtDamage) {
+          this.applyHpDelta(targetId, -damage, COLORS.attackFlash);
         } else {
-          this.pulsePortrait(targetId, 'dodge');
-          this.showMissText(targetId);
+          this.showBlockedText(targetId);
         }
       },
       onComplete: onDone,
@@ -774,8 +734,8 @@ export class RoomReplayScene extends Phaser.Scene {
       return;
     }
 
-    this.pulsePortrait(actorId, 'cast');
-    this.applyHpDelta(targetId, amount, COLORS.healFlash, 'healed');
+    this.pulseSoftGlow(COLORS.healFlash);
+    this.applyHpDelta(targetId, amount, COLORS.healFlash);
 
     this.tweens.add({
       targets: actor,
@@ -787,11 +747,11 @@ export class RoomReplayScene extends Phaser.Scene {
     });
   }
 
-  /** Updates HP (card bar + text), flashes the grid icon, and pulses the card portrait — 'downed' instead of `reactionState` and no revert if this brings HP to 0. Also floats a damage/heal number and, for damage, shakes the camera (more for a killing blow) and plays a death-fall on the grid sprite if this brings HP to 0. */
-  private applyHpDelta(unitId: string, delta: number, flashColor: number, reactionState: PortraitState): void {
+  /** Updates the status badge (bar + text), flashes the grid sprite, and floats a damage/heal number — plus, for damage, shakes the camera (more for a killing blow) and plays a death-fall on the grid sprite if this brings HP to 0. */
+  private applyHpDelta(unitId: string, delta: number, flashColor: number): void {
     const unit = this.sceneData.units.find((u) => u.id === unitId);
-    const bar = this.cardHealthBars.get(unitId);
-    const hpText = this.cardHpTexts.get(unitId);
+    const bar = this.badgeHealthBars.get(unitId);
+    const hpText = this.badgeHpTexts.get(unitId);
     const gridSprite = this.gridSprites.get(unitId);
     const gridContainer = this.gridContainers.get(unitId);
     if (!unit || !bar || !hpText) {
@@ -803,16 +763,28 @@ export class RoomReplayScene extends Phaser.Scene {
     const ratio = unit.maxHp > 0 ? newHp / unit.maxHp : 0;
     const isLethal = delta < 0 && newHp <= 0;
 
-    this.tweens.add({ targets: bar, width: HP_BAR_WIDTH * ratio, duration: this.scaled(220) });
+    this.tweens.add({ targets: bar, width: BADGE_HP_BAR_WIDTH * ratio, duration: this.scaled(220) });
     hpText.setText(`${newHp}/${unit.maxHp}`);
 
-    const rageText = this.cardRageTexts.get(unitId);
+    const rageText = this.badgeRageTexts.get(unitId);
     if (rageText) {
       rageText.setText(this.rageLabel(newHp, unit.maxHp));
     }
 
     if (gridContainer && delta !== 0) {
       this.showDamageNumber(gridContainer.x, gridContainer.y - CELL_SIZE * 0.6, delta, colorToCss(flashColor));
+      const burstY = gridContainer.y - CELL_SIZE * 0.5;
+      if (delta < 0) {
+        this.burstSparks(
+          gridContainer.x,
+          burstY,
+          flashColor,
+          isLethal ? LETHAL_BURST_COUNT : HIT_BURST_COUNT,
+          isLethal ? LETHAL_BURST_LIFESPAN_MS : BURST_LIFESPAN_MS,
+        );
+      } else {
+        this.burstSparks(gridContainer.x, burstY, flashColor, HEAL_BURST_COUNT, BURST_LIFESPAN_MS);
+      }
     }
 
     if (delta < 0) {
@@ -820,22 +792,20 @@ export class RoomReplayScene extends Phaser.Scene {
         this.scaled(isLethal ? LETHAL_SHAKE_DURATION_MS : SHAKE_DURATION_MS),
         isLethal ? LETHAL_SHAKE_INTENSITY : SHAKE_INTENSITY,
       );
+      if (isLethal) {
+        this.pulseLethalGlow();
+      }
     }
 
-    if (newHp <= 0) {
-      this.setPortraitState(unitId, 'downed');
-      if (gridSprite) {
-        const fallAngle = unit.side === 'party' ? -DEATH_FALL_ANGLE_DEG : DEATH_FALL_ANGLE_DEG;
-        this.tweens.add({
-          targets: gridSprite,
-          angle: fallAngle,
-          alpha: DOWNED_ALPHA,
-          duration: this.scaled(DEATH_FALL_DURATION_MS),
-          ease: 'Cubic.easeIn',
-        });
-      }
-    } else {
-      this.pulsePortrait(unitId, reactionState);
+    if (newHp <= 0 && gridSprite) {
+      const fallAngle = unit.side === 'party' ? -DEATH_FALL_ANGLE_DEG : DEATH_FALL_ANGLE_DEG;
+      this.tweens.add({
+        targets: gridSprite,
+        angle: fallAngle,
+        alpha: DOWNED_ALPHA,
+        duration: this.scaled(DEATH_FALL_DURATION_MS),
+        ease: 'Cubic.easeIn',
+      });
     }
 
     if (gridSprite) {
@@ -860,15 +830,15 @@ export class RoomReplayScene extends Phaser.Scene {
     });
   }
 
-  /** Floats a "Miss" label up from the target's grid position and fades it out — the only feedback a dodge gets on the grid itself. */
-  private showMissText(unitId: string): void {
+  /** Floats a "Blocked" label up from the target's grid position and fades it out — the only feedback a Shield/Invulnerability/Dodge that fully negated a hit gets (there's no more "Miss" — every attack always connects, see sim/action.ts's doc comments on the "pure auto-battler" pass). */
+  private showBlockedText(unitId: string): void {
     const container = this.gridContainers.get(unitId);
     if (!container) return;
 
-    this.floatText(container.x, container.y - CELL_SIZE * 0.6, 'Miss', '#cccccc');
+    this.floatText(container.x, container.y - CELL_SIZE * 0.6, 'Blocked', '#cccccc');
   }
 
-  /** Floats `text` upward from `(x, y)` and fades it out — shared by the Miss popup and the die-roll result announcement. */
+  /** Floats `text` upward from `(x, y)` and fades it out — shared by the Blocked popup and the turn-start banner. */
   private floatText(x: number, y: number, text: string, color: string): void {
     const label = this.add.text(x, y, text, { fontSize: '14px', color }).setOrigin(0.5, 0.5);
 

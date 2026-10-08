@@ -10,7 +10,7 @@ import {
   RALLY_BUFF_DURATION_TURNS,
   PiercingStrikeAction,
   FearAction,
-  FEAR_ACCURACY_PENALTY,
+  FEAR_VULNERABILITY_PERCENT,
   FEAR_DURATION_TURNS,
   PickpocketStrikeAction,
   PICKPOCKET_GOLD_MIN,
@@ -28,15 +28,24 @@ import {
   MOURNING_STRIKE_MAX_PERCENT,
   SneakStrikeAction,
   SNEAK_STRIKE_BACK_ROW_CHANCE,
+  VenomStingAction,
   FocusedShotAction,
+  LifestealStrikeAction,
+  LIFESTEAL_PERCENT,
+  ExecuteStrikeAction,
+  ChainStrikeAction,
+  CHAIN_BOUNCE_COUNT,
+  ScatterShotAction,
+  SCATTER_SHOT_TARGET_COUNT,
   DAMAGE_VARIANCE_FRACTION,
   MIN_DAMAGE_AFTER_ARMOR,
   CRIT_DAMAGE_MULTIPLIER,
 } from './attack';
 import { createBattleState } from '../battle';
 import { MendingChargeAction } from './heal';
-import { RAGE_TRAIT } from '../traits';
-import { tickBuffs } from '../buffs';
+import { RAGE_TRAIT, THORNS_TRAIT, THORNS_REFLECT_PERCENT } from '../traits';
+import { tickBuffs, applyBuff } from '../buffs';
+import { applyShield } from '../shields';
 import { getEffectiveStat } from '../stats';
 
 /** rng() returns each value in order, repeating the last once exhausted — lets a test control the hit roll and the variance roll (two separate rng() calls) independently. */
@@ -131,18 +140,19 @@ describe('attack actions and StatModifiers', () => {
   });
 });
 
-describe('hit chance, damage variance, and armor', () => {
-  it('misses when the roll exceeds hit chance, dealing no damage but still resolving the outcome', () => {
+describe('damage variance, armor, and Shield/Invulnerability/Dodge (no hit/miss roll)', () => {
+  it('always connects regardless of rng — there is no Accuracy/Evasion miss roll', () => {
     const attacker = createAdventurer('attacker', template(), 'front');
-    // Evasion this high clamps hit chance to MIN_HIT_CHANCE (5%) regardless of accuracy.
-    const evasiveEnemy = createAdventurer('enemy', template({ maxHp: 100, evasion: 200 }), 'front');
-    const battle = createBattleState([attacker], [evasiveEnemy]);
+    const enemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([attacker], [enemy]);
 
-    // 0.5 >= the 5% floor -> miss.
-    const outcome = AttackNearestAction.resolve({ actor: attacker, target: evasiveEnemy, battle, rng: () => 0.5 });
+    // Even the highest possible rng roll still lands — no miss chance exists anymore.
+    const outcome = AttackNearestAction.resolve({ actor: attacker, target: enemy, battle, rng: () => 0.999999 });
 
-    expect(outcome).toEqual({ type: 'attack', damage: 0, hit: false, targetId: 'enemy' });
-    expect(evasiveEnemy.hp).toBe(100);
+    expect(outcome.type).toBe('attack');
+    if (outcome.type !== 'attack') throw new Error('expected attack');
+    expect(outcome.hit).toBe(true);
+    expect(outcome.damage).toBeGreaterThan(0);
   });
 
   it('rolls damage variance within ±DAMAGE_VARIANCE_FRACTION of the base value on a landed hit', () => {
@@ -188,6 +198,70 @@ describe('hit chance, damage variance, and armor', () => {
       rng: () => 0.5,
     });
     expect(flooredOutcome).toMatchObject({ hit: true, damage: MIN_DAMAGE_AFTER_ARMOR });
+  });
+
+  it('a Shield absorbs damage before HP, partially depleting rather than staying flat', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    const shieldedEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 4, 3);
+    const battle = createBattleState([attacker], [shieldedEnemy]);
+
+    // No variance at rng 0.5 -> 10 damage, 4 absorbed by Shield, 6 reaches HP.
+    const outcome = AttackNearestAction.resolve({ actor: attacker, target: shieldedEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack', damage: 6, hit: true, targetId: 'enemy' });
+    expect(shieldedEnemy.hp).toBe(94);
+    expect(shieldedEnemy.shields).toEqual([]);
+  });
+
+  it('a Shield can fully negate a landed hit, unlike armor\'s MIN_DAMAGE_AFTER_ARMOR floor', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    const shieldedEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 50, 3);
+    const battle = createBattleState([attacker], [shieldedEnemy]);
+
+    const outcome = AttackNearestAction.resolve({ actor: attacker, target: shieldedEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack', damage: 0, hit: true, targetId: 'enemy' });
+    expect(shieldedEnemy.hp).toBe(100);
+    expect(shieldedEnemy.shields).toEqual([{ id: 'test-shield', amount: 40, remainingTurns: 3 }]);
+  });
+
+  it('Invulnerability blocks all damage, Shield included, and never depletes the Shield', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    const target = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(target, 'test-shield', 50, 3);
+    applyBuff(target, 'invuln', { stat: 'invulnerable', type: 'flat', amount: 1, source: 'buff:test' }, 3);
+    const battle = createBattleState([attacker], [target]);
+
+    const outcome = AttackNearestAction.resolve({ actor: attacker, target, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack', damage: 0, hit: true, targetId: 'enemy' });
+    expect(target.hp).toBe(100);
+    expect(target.shields).toEqual([{ id: 'test-shield', amount: 50, remainingTurns: 3 }]);
+  });
+
+  it('Thorns reflects a percent of final damage back onto the attacker, after Shield absorption', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10, maxHp: 100 }), 'front');
+    const thornyTarget = createAdventurer('enemy', template({ maxHp: 100, traits: [THORNS_TRAIT] }), 'front');
+    const battle = createBattleState([attacker], [thornyTarget]);
+
+    // No variance at rng 0.5 -> 10 damage; THORNS_REFLECT_PERCENT of that reflects onto the attacker.
+    const outcome = AttackNearestAction.resolve({ actor: attacker, target: thornyTarget, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack', damage: 10, hit: true, targetId: 'enemy' });
+    expect(attacker.hp).toBe(100 - Math.round(10 * (THORNS_REFLECT_PERCENT / 100)));
+  });
+
+  it('Thorns does not reflect anything on a miss or a fully-Shielded hit (no final damage landed)', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10, maxHp: 100 }), 'front');
+    const thornyTarget = createAdventurer('enemy', template({ maxHp: 100, traits: [THORNS_TRAIT] }), 'front');
+    applyShield(thornyTarget, 'test-shield', 50, 3);
+    const battle = createBattleState([attacker], [thornyTarget]);
+
+    AttackNearestAction.resolve({ actor: attacker, target: thornyTarget, battle, rng: () => 0.5 });
+
+    expect(attacker.hp).toBe(100);
   });
 });
 
@@ -271,7 +345,7 @@ describe('CleaveAction (Bodil\'s signature mechanic — roadmap item 11)', () =>
     const battle = createBattleState([attacker], [downedFront, backA, backB]);
 
     const target = CleaveAction.selectTarget({ actor: attacker, battle });
-    expect(target?.row).toBe('back');
+    expect(target?.position.rank).toBe(2);
 
     const outcome = CleaveAction.resolve({ actor: attacker, target: target!, battle, rng: () => 0.5 });
     expect(outcome).toMatchObject({
@@ -283,20 +357,20 @@ describe('CleaveAction (Bodil\'s signature mechanic — roadmap item 11)', () =>
     });
   });
 
-  it('rolls hit/miss independently per target', () => {
+  it('resolves each row-mate independently — one Shielded, one not', () => {
     const attacker = createAdventurer('attacker', template(), 'front');
-    // First rng() call (front-a's hit roll) misses at MIN_HIT_CHANCE-adjacent evasion; second target hits.
-    const missEnemy = createAdventurer('miss', template({ maxHp: 100, evasion: 200 }), 'front');
-    const hitEnemy = createAdventurer('hit', template({ maxHp: 100 }), 'front');
-    const battle = createBattleState([attacker], [missEnemy, hitEnemy]);
+    const shieldedEnemy = createAdventurer('shielded', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 1000, 3);
+    const openEnemy = createAdventurer('open', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([attacker], [shieldedEnemy, openEnemy]);
 
-    const outcome = CleaveAction.resolve({ actor: attacker, target: missEnemy, battle, rng: () => 0.5 });
+    const outcome = CleaveAction.resolve({ actor: attacker, target: shieldedEnemy, battle, rng: () => 0.5 });
 
     expect(outcome).toEqual({
       type: 'attack-multi',
       hits: [
-        { damage: 0, hit: false, targetId: 'miss' },
-        { damage: 5, hit: true, targetId: 'hit' },
+        { damage: 0, hit: true, targetId: 'shielded' },
+        { damage: 5, hit: true, targetId: 'open' },
       ],
     });
   });
@@ -406,7 +480,7 @@ describe('PiercingStrikeAction (Drifta\'s signature mechanic — roadmap item 11
 
     expect(PiercingStrikeAction.selectTarget({ actor: drifta, battle })?.id).toBe('back');
 
-    drifta.row = 'back'; // player moves her via Formation
+    drifta.position = { lane: 1, rank: 2 }; // player moves her via Formation
     expect(PiercingStrikeAction.selectTarget({ actor: drifta, battle })?.id).toBe('front');
   });
 
@@ -420,8 +494,46 @@ describe('PiercingStrikeAction (Drifta\'s signature mechanic — roadmap item 11
   });
 });
 
+describe('ExecuteStrikeAction (Drifta\'s second signature mechanic)', () => {
+  it('finishes off a target already below EXECUTE_THRESHOLD_FRACTION on a landed hit', () => {
+    const drifta = createAdventurer('drifta', template({ attackPower: 1 }), 'front');
+    const weakEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    weakEnemy.hp = 20; // 20% of maxHp — below EXECUTE_THRESHOLD_FRACTION (30%)
+    const battle = createBattleState([drifta], [weakEnemy]);
+
+    const outcome = ExecuteStrikeAction.resolve({ actor: drifta, target: weakEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack-with-execute', damage: 20, hit: true, targetId: 'enemy', executed: true });
+    expect(weakEnemy.hp).toBe(0);
+  });
+
+  it('deals only normal damage against a target above the threshold', () => {
+    const drifta = createAdventurer('drifta', template({ attackPower: 10 }), 'front');
+    const healthyEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([drifta], [healthyEnemy]);
+
+    const outcome = ExecuteStrikeAction.resolve({ actor: drifta, target: healthyEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack-with-execute', damage: 10, hit: true, targetId: 'enemy', executed: false });
+    expect(healthyEnemy.hp).toBe(90);
+  });
+
+  it('Invulnerability blocks the finishing blow too', () => {
+    const drifta = createAdventurer('drifta', template({ attackPower: 1 }), 'front');
+    const weakInvulnerableEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    weakInvulnerableEnemy.hp = 20;
+    applyBuff(weakInvulnerableEnemy, 'invuln', { stat: 'invulnerable', type: 'flat', amount: 1, source: 'buff:test' }, 3);
+    const battle = createBattleState([drifta], [weakInvulnerableEnemy]);
+
+    const outcome = ExecuteStrikeAction.resolve({ actor: drifta, target: weakInvulnerableEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack-with-execute', damage: 0, hit: true, targetId: 'enemy', executed: false });
+    expect(weakInvulnerableEnemy.hp).toBe(20);
+  });
+});
+
 describe('FearAction (Mirka\'s signature mechanic — roadmap item 11)', () => {
-  it('applies a timed negative-accuracy debuff to every living enemy in the target row, dealing no damage', () => {
+  it('applies a timed vulnerability debuff to every living enemy in the target row, dealing no damage', () => {
     const mirka = createAdventurer('mirka', template(), 'front');
     const frontA = createAdventurer('front-a', template({ maxHp: 100 }), 'front');
     const frontB = createAdventurer('front-b', template({ maxHp: 100 }), 'front');
@@ -433,35 +545,33 @@ describe('FearAction (Mirka\'s signature mechanic — roadmap item 11)', () => {
     expect(outcome).toEqual({
       type: 'fear',
       fearedEnemyIds: ['front-a', 'front-b'],
-      accuracyAmount: FEAR_ACCURACY_PENALTY,
+      vulnerabilityAmount: FEAR_VULNERABILITY_PERCENT,
       durationTurns: FEAR_DURATION_TURNS,
     });
-    expect(getEffectiveStat(85, 'accuracy', frontA.modifiers)).toBe(85 + FEAR_ACCURACY_PENALTY);
-    expect(getEffectiveStat(85, 'accuracy', frontB.modifiers)).toBe(85 + FEAR_ACCURACY_PENALTY);
-    expect(getEffectiveStat(85, 'accuracy', back.modifiers)).toBe(85); // back row untouched
-    expect(frontA.hp).toBe(100); // no damage
+    expect(getEffectiveStat(0, 'vulnerability', frontA.modifiers)).toBe(FEAR_VULNERABILITY_PERCENT);
+    expect(getEffectiveStat(0, 'vulnerability', frontB.modifiers)).toBe(FEAR_VULNERABILITY_PERCENT);
+    expect(getEffectiveStat(0, 'vulnerability', back.modifiers)).toBe(0); // back row untouched
+    expect(frontA.hp).toBe(100); // no damage from Fear itself
   });
 
-  it('actually lowers hit chance while active, and stops once it expires', () => {
+  it('actually makes the feared target take more damage while active, and stops once it expires', () => {
     const mirka = createAdventurer('mirka', template(), 'front');
-    const feared = createAdventurer('feared', template({ accuracy: 90, maxHp: 100 }), 'front');
-    const ally = createAdventurer('ally', template({ evasion: 0, maxHp: 100 }), 'front');
-    const battle = createBattleState([mirka, ally], [feared]);
+    const feared = createAdventurer('feared', template({ maxHp: 1000 }), 'front');
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    const battle = createBattleState([mirka, attacker], [feared]);
 
     FearAction.resolve({ actor: mirka, target: feared, battle, rng: () => 0.5 });
 
-    // 90 accuracy - 20 penalty = 70 vs 0 evasion -> rng of 0.75 is now a miss (0.75 >= 0.70).
-    const debuffedRoll = AttackNearestAction.resolve({ actor: feared, target: ally, battle, rng: () => 0.75 });
-    expect(debuffedRoll).toMatchObject({ hit: false });
+    const debuffedHit = AttackNearestAction.resolve({ actor: attacker, target: feared, battle, rng: () => 0.5 });
+    expect(debuffedHit).toMatchObject({ damage: Math.round(10 * (1 + FEAR_VULNERABILITY_PERCENT / 100)) });
 
     for (let i = 0; i < FEAR_DURATION_TURNS; i++) {
       tickBuffs(feared);
     }
     expect(feared.buffs).toEqual([]);
 
-    // Same roll now lands: 90 accuracy vs 0 evasion -> 0.75 < 0.90 -> hit.
-    const clearedRoll = AttackNearestAction.resolve({ actor: feared, target: ally, battle, rng: () => 0.75 });
-    expect(clearedRoll).toMatchObject({ hit: true });
+    const clearedHit = AttackNearestAction.resolve({ actor: attacker, target: feared, battle, rng: () => 0.5 });
+    expect(clearedHit).toMatchObject({ damage: 10 });
   });
 
   it('falls through to the back row once the front row is wiped, same as Cleave', () => {
@@ -472,7 +582,7 @@ describe('FearAction (Mirka\'s signature mechanic — roadmap item 11)', () => {
     const battle = createBattleState([mirka], [downedFront, backA]);
 
     const target = FearAction.selectTarget({ actor: mirka, battle });
-    expect(target?.row).toBe('back');
+    expect(target?.position.rank).toBe(2);
 
     const outcome = FearAction.resolve({ actor: mirka, target: target!, battle, rng: () => 0.5 });
     expect(outcome).toMatchObject({ fearedEnemyIds: ['back-a'] });
@@ -494,14 +604,15 @@ describe('PickpocketStrikeAction (Nerissa\'s signature mechanic — roadmap item
     expect(PICKPOCKET_GOLD_MAX).toBeGreaterThanOrEqual(3);
   });
 
-  it('never generates gold on a miss', () => {
+  it('never generates gold when a Shield fully absorbs the hit', () => {
     const nerissa = createAdventurer('nerissa', template(), 'front');
-    const evasiveEnemy = createAdventurer('enemy', template({ maxHp: 100, evasion: 200 }), 'front');
-    const battle = createBattleState([nerissa], [evasiveEnemy]);
+    const shieldedEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 1000, 3);
+    const battle = createBattleState([nerissa], [shieldedEnemy]);
 
-    const outcome = PickpocketStrikeAction.resolve({ actor: nerissa, target: evasiveEnemy, battle, rng: () => 0.5 });
+    const outcome = PickpocketStrikeAction.resolve({ actor: nerissa, target: shieldedEnemy, battle, rng: () => 0.5 });
 
-    expect(outcome).toEqual({ type: 'attack-and-gold', damage: 0, hit: false, targetId: 'enemy', goldGenerated: 0 });
+    expect(outcome).toEqual({ type: 'attack-and-gold', damage: 0, hit: true, targetId: 'enemy', goldGenerated: 0 });
   });
 
   it('can also land a hit that generates no gold, if the gold-chance roll fails', () => {
@@ -555,6 +666,39 @@ describe('GildedStrikeAction (Nerissa\'s signature mechanic — roadmap item 11)
   });
 });
 
+describe('ChainStrikeAction (Nerissa\'s second signature mechanic)', () => {
+  it('hits the primary target at full damage plus up to CHAIN_BOUNCE_COUNT other distinct living enemies at reduced damage', () => {
+    const nerissa = createAdventurer('nerissa', template({ attackPower: 10 }), 'front');
+    const primary = createAdventurer('primary', template({ maxHp: 100 }), 'front');
+    const bounceA = createAdventurer('bounce-a', template({ maxHp: 100 }), 'front');
+    const bounceB = createAdventurer('bounce-b', template({ maxHp: 100 }), 'back');
+    const battle = createBattleState([nerissa], [primary, bounceA, bounceB]);
+
+    const outcome = ChainStrikeAction.resolve({ actor: nerissa, target: primary, battle, rng: () => 0.5 });
+
+    expect(outcome.type).toBe('attack-multi');
+    if (outcome.type !== 'attack-multi') throw new Error('expected attack-multi');
+    expect(outcome.hits).toHaveLength(1 + CHAIN_BOUNCE_COUNT);
+    expect(outcome.hits[0]).toEqual({ damage: 10, hit: true, targetId: 'primary' });
+    const bounceIds = outcome.hits.slice(1).map((hit) => hit.targetId);
+    expect(new Set(bounceIds).size).toBe(CHAIN_BOUNCE_COUNT); // distinct, no duplicates
+    expect(bounceIds).not.toContain('primary');
+  });
+
+  it('bounces fewer than CHAIN_BOUNCE_COUNT times when there are not enough other living enemies', () => {
+    const nerissa = createAdventurer('nerissa', template({ attackPower: 10 }), 'front');
+    const primary = createAdventurer('primary', template({ maxHp: 100 }), 'front');
+    const onlyOtherEnemy = createAdventurer('other', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([nerissa], [primary, onlyOtherEnemy]);
+
+    const outcome = ChainStrikeAction.resolve({ actor: nerissa, target: primary, battle, rng: () => 0.5 });
+
+    expect(outcome.type).toBe('attack-multi');
+    if (outcome.type !== 'attack-multi') throw new Error('expected attack-multi');
+    expect(outcome.hits).toHaveLength(2); // primary + the one other enemy, not CHAIN_BOUNCE_COUNT
+  });
+});
+
 describe('BlindingBoltAction (Dravena\'s signature mechanic — roadmap item 11)', () => {
   it('deals normal damage and blinds the target (lowers attackPower) on a landed hit', () => {
     const dravena = createAdventurer('dravena', template(), 'front');
@@ -577,31 +721,32 @@ describe('BlindingBoltAction (Dravena\'s signature mechanic — roadmap item 11)
     );
   });
 
-  it('never blinds on a miss', () => {
+  it('never blinds when a Shield fully absorbs the hit', () => {
     const dravena = createAdventurer('dravena', template(), 'front');
-    const evasiveEnemy = createAdventurer('enemy', template({ maxHp: 100, evasion: 200 }), 'front');
-    const battle = createBattleState([dravena], [evasiveEnemy]);
+    const shieldedEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 1000, 3);
+    const battle = createBattleState([dravena], [shieldedEnemy]);
 
-    const outcome = BlindingBoltAction.resolve({ actor: dravena, target: evasiveEnemy, battle, rng: () => 0.5 });
+    const outcome = BlindingBoltAction.resolve({ actor: dravena, target: shieldedEnemy, battle, rng: () => 0.5 });
 
     expect(outcome).toEqual({
       type: 'attack-and-debuff',
       damage: 0,
-      hit: false,
+      hit: true,
       targetId: 'enemy',
       debuffApplied: false,
       attackPowerPercent: BLIND_ATTACK_PERCENT_PENALTY,
       durationTurns: BLIND_DURATION_TURNS,
     });
-    expect(getEffectiveStat(evasiveEnemy.attackPower, 'attackPower', evasiveEnemy.modifiers)).toBe(
-      evasiveEnemy.attackPower,
+    expect(getEffectiveStat(shieldedEnemy.attackPower, 'attackPower', shieldedEnemy.modifiers)).toBe(
+      shieldedEnemy.attackPower,
     );
   });
 
   it('actually lowers the target\'s damage output while active, and stops once it expires', () => {
     const dravena = createAdventurer('dravena', template(), 'front');
     const enemy = createAdventurer('enemy', template({ attackPower: 10, maxHp: 100 }), 'front');
-    const ally = createAdventurer('ally', template({ evasion: 0, maxHp: 100 }), 'front');
+    const ally = createAdventurer('ally', template({ maxHp: 100 }), 'front');
     const battle = createBattleState([dravena, ally], [enemy]);
 
     BlindingBoltAction.resolve({ actor: dravena, target: enemy, battle, rng: () => 0.5 });
@@ -675,14 +820,6 @@ describe('CardThrowAction (Isilwen\'s signature mechanic — roadmap item 11)', 
     expect(outcome).toMatchObject({ targetId: 'back' });
   });
 
-  it('misses cleanly like a normal attack, dealing no damage', () => {
-    const isilwen = createAdventurer('isilwen', template(), 'front');
-    const evasiveEnemy = createAdventurer('enemy', template({ maxHp: 100, evasion: 200 }), 'front');
-    const battle = createBattleState([isilwen], [evasiveEnemy]);
-
-    const outcome = CardThrowAction.resolve({ actor: isilwen, target: evasiveEnemy, battle, rng: () => 0.5 });
-    expect(outcome).toEqual({ type: 'attack', damage: 0, hit: false, targetId: 'enemy' });
-  });
 });
 
 describe('SneakStrikeAction (Caladwen\'s signature mechanic — roadmap item 3)', () => {
@@ -739,6 +876,70 @@ describe('SneakStrikeAction (Caladwen\'s signature mechanic — roadmap item 3)'
   });
 });
 
+describe("VenomStingAction (Caladwen's restored Poison identity)", () => {
+  it('is a melee action with no attack roll — applies Poison and reports inflict-status', () => {
+    const caladwen = createAdventurer('caladwen', template(), 'front');
+    const enemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([caladwen], [enemy]);
+
+    const outcome = VenomStingAction.resolve({ actor: caladwen, target: enemy, battle, rng: sequence(0.5) });
+
+    expect(VenomStingAction.reach).toBe('melee');
+    expect(outcome).toEqual({ type: 'inflict-status', targetId: 'enemy', effectId: 'poison' });
+    expect(enemy.statusEffects).toEqual([{ id: 'poison', damagePerTick: 1, remainingTicks: 5 }]);
+  });
+
+  it('selects the same melee-eligible target a Basic Action would', () => {
+    const caladwen = createAdventurer('caladwen', template(), 'front');
+    const deadFront = createAdventurer('front', template({ maxHp: 100 }), 'front');
+    deadFront.hp = 0;
+    const back = createAdventurer('back', template({ maxHp: 100 }), 'back');
+    const battle = createBattleState([caladwen], [deadFront, back]);
+
+    expect(VenomStingAction.selectTarget({ actor: caladwen, battle })).toBe(back);
+  });
+});
+
+describe('LifestealStrikeAction (Caladwen\'s second signature mechanic)', () => {
+  it('heals the attacker for LIFESTEAL_PERCENT of the damage actually dealt on a landed hit', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    attacker.hp = 10;
+    const enemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([attacker], [enemy]);
+
+    // No variance at rng 0.5 -> 10 damage dealt; LIFESTEAL_PERCENT of that healed back.
+    const outcome = LifestealStrikeAction.resolve({ actor: attacker, target: enemy, battle, rng: () => 0.5 });
+
+    const expectedHeal = Math.round(10 * (LIFESTEAL_PERCENT / 100));
+    expect(outcome).toEqual({ type: 'attack-and-heal-self', damage: 10, hit: true, targetId: 'enemy', healedAmount: expectedHeal });
+    expect(attacker.hp).toBe(10 + expectedHeal);
+  });
+
+  it('heals nothing when a Shield fully absorbs the hit, even though it landed', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 10 }), 'front');
+    attacker.hp = 10;
+    const shieldedEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    applyShield(shieldedEnemy, 'test-shield', 50, 3);
+    const battle = createBattleState([attacker], [shieldedEnemy]);
+
+    const outcome = LifestealStrikeAction.resolve({ actor: attacker, target: shieldedEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'attack-and-heal-self', damage: 0, hit: true, targetId: 'enemy', healedAmount: 0 });
+    expect(attacker.hp).toBe(10);
+  });
+
+  it('clamps the heal to the attacker\'s own effective maxHp', () => {
+    const attacker = createAdventurer('attacker', template({ attackPower: 100, maxHp: 20 }), 'front');
+    attacker.hp = 15;
+    const enemy = createAdventurer('enemy', template({ maxHp: 1000 }), 'front');
+    const battle = createBattleState([attacker], [enemy]);
+
+    LifestealStrikeAction.resolve({ actor: attacker, target: enemy, battle, rng: () => 0.5 });
+
+    expect(attacker.hp).toBe(20);
+  });
+});
+
 describe('FocusedShotAction (Melpomene\'s signature mechanic — roadmap item 3)', () => {
   it('is a ranged action', () => {
     expect(FocusedShotAction.reach).toBe('ranged');
@@ -764,6 +965,36 @@ describe('FocusedShotAction (Melpomene\'s signature mechanic — roadmap item 3)
     const outcome = FocusedShotAction.resolve({ actor: melemnope, target: enemy, battle, rng: sequence(0, 0.5) });
 
     expect(outcome).toMatchObject({ hit: true, damage: 10 });
+  });
+});
+
+describe('ScatterShotAction (Melpomene\'s second signature mechanic)', () => {
+  it('hits SCATTER_SHOT_TARGET_COUNT distinct living enemies at full damage, regardless of rank', () => {
+    const melpomene = createAdventurer('melpomene', template({ attackPower: 10 }), 'front');
+    const frontEnemy = createAdventurer('front-enemy', template({ maxHp: 100 }), 'front');
+    const backEnemy = createAdventurer('back-enemy', template({ maxHp: 100 }), 'back');
+    const battle = createBattleState([melpomene], [frontEnemy, backEnemy]);
+
+    const outcome = ScatterShotAction.resolve({ actor: melpomene, target: frontEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome.type).toBe('attack-multi');
+    if (outcome.type !== 'attack-multi') throw new Error('expected attack-multi');
+    expect(outcome.hits).toHaveLength(SCATTER_SHOT_TARGET_COUNT);
+    for (const hit of outcome.hits) {
+      expect(hit.damage).toBe(10); // full damage, no falloff unlike Chain Strike's bounces
+    }
+  });
+
+  it('hits fewer targets when there are not enough living enemies to reach', () => {
+    const melpomene = createAdventurer('melpomene', template({ attackPower: 10 }), 'front');
+    const onlyEnemy = createAdventurer('enemy', template({ maxHp: 100 }), 'front');
+    const battle = createBattleState([melpomene], [onlyEnemy]);
+
+    const outcome = ScatterShotAction.resolve({ actor: melpomene, target: onlyEnemy, battle, rng: () => 0.5 });
+
+    expect(outcome.type).toBe('attack-multi');
+    if (outcome.type !== 'attack-multi') throw new Error('expected attack-multi');
+    expect(outcome.hits).toHaveLength(1);
   });
 });
 

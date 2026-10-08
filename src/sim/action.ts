@@ -1,6 +1,7 @@
 import type { Adventurer } from './adventurer';
 import type { BattleState } from './battle';
 import type { RngSource } from './rng';
+import type { StatusEffectId } from './statusEffects';
 
 export type ActionId =
   | 'attack-nearest'
@@ -26,7 +27,22 @@ export type ActionId =
   | 'sneak-strike'
   | 'focused-shot'
   | 'potion-toss-ally'
-  | 'potion-toss-enemy';
+  | 'potion-toss-enemy'
+  | 'ember-burn'
+  | 'venom-sting'
+  | 'shield-wall'
+  | 'lifesteal-strike'
+  | 'taunt'
+  | 'cleanse'
+  | 'mark'
+  | 'execute-strike'
+  | 'silence'
+  | 'stun'
+  | 'chain-strike'
+  | 'scatter-shot'
+  | 'revive'
+  | 'guardians-ward'
+  | 'vanish';
 
 export interface ActionContext {
   actor: Adventurer;
@@ -43,7 +59,14 @@ export interface TargetingContext {
 }
 
 export type ActionOutcome =
-  /** `hit: false` means the attack missed — `damage` is always 0 in that case; a landed hit is never 0 (see attack.ts's MIN_DAMAGE_AFTER_ARMOR). */
+  /**
+   * `hit` is always `true` — every attack connects (no Accuracy/Evasion
+   * miss roll; the "pure auto-battler" pass, see docs/roadmap.md). Kept
+   * in the shape rather than removed everywhere `hit` is read, but
+   * `damage` is the field that actually carries meaning now: 0 means
+   * something fully blocked it (Shield, Invulnerability, Drifta's Dodge),
+   * not that it missed.
+   */
   | { type: 'attack'; damage: number; hit: boolean; targetId: string }
   /** A single action landing on more than one target at once (e.g. Bodil's Cleave — see actions/attack.ts) — each entry is resolved exactly like a plain 'attack' hit, just batched under one turn/one die roll. */
   | { type: 'attack-multi'; hits: { damage: number; hit: boolean; targetId: string }[] }
@@ -73,6 +96,52 @@ export type ActionOutcome =
    */
   | { type: 'support-buff'; targetId: string; stat: string; amount: number; durationTurns: number }
   /**
+   * Glint's Shield Wall (second Special Action — the Shield ability type
+   * from docs/missing-ability-types.md): grants a single ally (herself
+   * included, whoever's lowest-HP) a depletable damage-absorb pool, no
+   * attack of her own — see actions/support.ts and shields.ts. Distinct
+   * from 'support-buff': the granted amount shrinks as it absorbs hits
+   * rather than staying flat for the whole duration.
+   */
+  | { type: 'support-shield'; targetId: string; amount: number; durationTurns: number }
+  /**
+   * Caladwen's second Special Action (the Lifesteal ability type from
+   * docs/missing-ability-types.md): a normal single-target attack (same
+   * `damage`/`hit`/`targetId` shape as 'attack') that also heals the
+   * attacker for a percent of the damage actually dealt — see
+   * actions/attack.ts's LifestealStrikeAction. `healedAmount` is 0 on a
+   * miss or a hit a Shield fully absorbed (damage dealt was 0), and is
+   * itself clamped by the attacker's own effective maxHp.
+   */
+  | { type: 'attack-and-heal-self'; damage: number; hit: boolean; targetId: string; healedAmount: number }
+  /**
+   * Dawneth's Cleanse (second-Special pass — the Cleanse ability type):
+   * no attack of her own — clears every active status effect (Burn/
+   * Poison) from a single ally, herself included. Scoped to status
+   * effects only for now, not StatModifier debuffs (e.g. Blind) — a
+   * deliberate first-pass cut, not an oversight. `clearedEffectIds` is
+   * empty if the target had nothing to cleanse (still resolves — same
+   * "always fires" convention as Mending Charge).
+   */
+  | { type: 'cleanse'; targetId: string; clearedEffectIds: StatusEffectId[] }
+  /**
+   * Drifta's Execute Strike (second-Special pass — the Execute ability
+   * type): a normal lowest-HP-targeted melee attack, but a target already
+   * below EXECUTE_THRESHOLD_FRACTION (checked before the hit) is finished
+   * off entirely on a landed hit, regardless of what the roll/armor/Shield
+   * would otherwise have left them at. `damage` reports the true total HP
+   * lost (including the finishing blow), not just the rolled hit.
+   */
+  | { type: 'attack-with-execute'; damage: number; hit: boolean; targetId: string; executed: boolean }
+  /**
+   * Mira's Revive (second-Special pass — the Revive ability type): brings
+   * a Downed ally (hp <= 0) back into the fight at a fraction of their
+   * effective maxHp — see actions/heal.ts's ReviveAction. `amount` is the
+   * HP they come back with. Never fires if nobody on her side is
+   * currently Downed (see targeting.ts's selectDownedAlly).
+   */
+  | { type: 'revive'; targetId: string; amount: number }
+  /**
    * Mira's Potion Toss (Enemy) (roadmap item 3): the debuff counterpart to
    * 'support-buff' above — a timed StatModifier applied to a single enemy,
    * no attack of her own. `amount` is negative (a debuff), same convention
@@ -89,26 +158,30 @@ export type ActionOutcome =
   | { type: 'command'; commandedAllyId: string; attackOutcome: { damage: number; hit: boolean; targetId: string } | null }
   /**
    * Mirka's Fear (roadmap item 11): no attack of her own — applies a timed
-   * negative-accuracy StatModifier to every living enemy in her target's
-   * row at once (front, or back once front is empty — same row rule as
-   * Bodil's Cleave), so they're all worse at landing hits while it's
-   * active. See actions/attack.ts's FearAction and buffs.ts.
+   * positive 'vulnerability' StatModifier (the Mark ability type) to every
+   * living enemy in her target's row at once (front, or back once front is
+   * empty — same row rule as Bodil's Cleave), so they all take more damage
+   * from the party while it's active. See actions/attack.ts's FearAction
+   * and buffs.ts. Reframed from an accuracy debuff once Accuracy/Evasion
+   * were removed (the "pure auto-battler" pass — see docs/roadmap.md).
    */
-  | { type: 'fear'; fearedEnemyIds: string[]; accuracyAmount: number; durationTurns: number }
+  | { type: 'fear'; fearedEnemyIds: string[]; vulnerabilityAmount: number; durationTurns: number }
   /**
    * Nerissa's Pickpocket Strike (roadmap item 11): a normal single-target
    * attack (same `damage`/`hit`/`targetId` shape as 'attack') that also
-   * rolls bonus gold on a landed hit — see actions/attack.ts and gold.ts's
-   * rollGold. `goldGenerated` is 0 on a miss or a failed roll; the amount
-   * is banked into the run's gold at room-end regardless of how the room
-   * ends (see gold.ts's sumGeneratedGold), not gated on a win.
+   * rolls bonus gold when it actually deals damage — see actions/attack.ts
+   * and gold.ts's rollGold. `goldGenerated` is 0 if nothing got through
+   * (Shield/Invulnerability/Dodge) or a failed roll; the amount is banked
+   * into the run's gold at room-end regardless of how the room ends (see
+   * gold.ts's sumGeneratedGold), not gated on a win.
    */
   | { type: 'attack-and-gold'; damage: number; hit: boolean; targetId: string; goldGenerated: number }
   /**
    * Dravena's Blinding Bolt (roadmap item 11): a ranged single-target
    * attack that also applies a timed negative-attackPower StatModifier
-   * (Blind) to that same target — but only if the bolt actually lands;
-   * a miss never blinds anyone. See actions/attack.ts's BlindingBoltAction
+   * (Blind) to that same target — but only if the bolt actually deals
+   * damage; nothing getting through (Shield/Invulnerability/Dodge) blinds
+   * nobody. See actions/attack.ts's BlindingBoltAction
    * and buffs.ts. `debuffApplied` mirrors `hit` (always false when
    * `hit` is false), kept as its own field so the replay UI doesn't need
    * to re-derive it.
@@ -132,12 +205,21 @@ export type ActionOutcome =
   | { type: 'heal-and-charge'; amount: number; targetId: string; energyGained: number; totalEnergy: number }
   /**
    * Tharavel's Inspire (roadmap item 11): no attack of her own — grants
-   * every living ally (herself included) a timed accuracy + critChance
-   * buff at once. See actions/support.ts's InspireAction and buffs.ts.
+   * every living ally (herself included) a timed critChance buff at once
+   * (consolidated from a separate accuracy + crit pair once Accuracy was
+   * removed as a baseline stat — see docs/roadmap.md). See
+   * actions/support.ts's InspireAction and buffs.ts.
    */
-  | { type: 'party-buff'; buffedAllyIds: string[]; accuracyAmount: number; critChanceAmount: number; durationTurns: number }
+  | { type: 'party-buff'; buffedAllyIds: string[]; critChanceAmount: number; durationTurns: number }
   /** Signals the turn engine to end the room early via triggerRetreat — see actions/retreat.ts. */
-  | { type: 'retreat' };
+  | { type: 'retreat' }
+  /**
+   * Ring of Embers' granted Special Action (roadmap item 13's replacement
+   * now that per-face enchantments are retired — see data/specialActions.ts
+   * and sim/actions/itemEffects.ts): applies a status effect to a target
+   * with no attack roll of its own.
+   */
+  | { type: 'inflict-status'; targetId: string; effectId: StatusEffectId };
 
 export interface Action {
   id: ActionId;

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { plainFaces } from './dieFace';
 import { createAdventurer, resetToTemplateBaseline, type AdventurerTemplate } from './adventurer';
-import { AttackNearestAction, PowerAttackAction } from './actions/attack';
+import { AttackNearestAction } from './actions/attack';
+import { EmpowerAction } from './actions/support';
 import type { Item } from './items';
+import type { SpecialAction } from './specialActions';
+import type { Trait } from './traits';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -18,13 +21,10 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 }
 
 describe('resetToTemplateBaseline', () => {
-  it('clears level/XP/action-levels/passives/run-scoped stats back to a fresh instance', () => {
+  it('clears level/action-levels/run-scoped stats back to a fresh instance', () => {
     const adventurer = createAdventurer('hero', template(), 'front');
-    adventurer.xp = 500;
     adventurer.level = 5;
-    adventurer.pendingUpgradeChoices = [{ id: 'upgrade-1', level: 5, resolved: false }];
     adventurer.actionLevels = { 'attack-nearest': 3 };
-    adventurer.passives = [{ id: 'some-passive', name: 'Some Passive', modifiers: [] }];
     adventurer.hp = 1;
     adventurer.runDamageDealt = 40;
     adventurer.runDamageTaken = 30;
@@ -32,7 +32,6 @@ describe('resetToTemplateBaseline', () => {
     adventurer.downedSummary = {
       roomIndex: 0,
       killerArchetype: 'Grunt',
-      xpGained: 0,
       damageDone: 0,
       damageTaken: 5,
       healed: 0,
@@ -42,10 +41,7 @@ describe('resetToTemplateBaseline', () => {
     resetToTemplateBaseline(adventurer, template());
 
     expect(adventurer.level).toBe(1);
-    expect(adventurer.xp).toBe(0);
-    expect(adventurer.pendingUpgradeChoices).toEqual([]);
     expect(adventurer.actionLevels).toEqual({});
-    expect(adventurer.passives).toEqual([]);
     expect(adventurer.hp).toBe(adventurer.maxHp);
     expect(adventurer.runDamageDealt).toBe(0);
     expect(adventurer.runDamageTaken).toBe(0);
@@ -53,7 +49,7 @@ describe('resetToTemplateBaseline', () => {
     expect(adventurer.downedSummary).toBeUndefined();
   });
 
-  it('preserves equipment and re-applies its stat modifiers', () => {
+  it('clears equipment and its stat modifiers (Town Storage Cleanup: equipment is run-scoped now)', () => {
     const adventurer = createAdventurer('hero', template(), 'front');
     const sword: Item = {
       id: 'sword',
@@ -67,30 +63,27 @@ describe('resetToTemplateBaseline', () => {
 
     resetToTemplateBaseline(adventurer, template());
 
-    expect(adventurer.equipment.weapon).toBe(sword);
-    expect(adventurer.modifiers).toEqual(sword.modifiers);
+    expect(adventurer.equipment.weapon).toBeNull();
+    expect(adventurer.modifiers).toEqual([]);
   });
 
-  it('re-applies an equipped item\'s faceEffect against the fresh baseline (roadmap item 13)', () => {
-    const adventurer = createAdventurer('hero', template(), 'front'); // all 6 faces start as Attack Nearest
-    const tome: Item = {
-      id: 'tome-of-power',
-      name: 'Tome of Power',
+  it("clears an equipped item's grantedSpecialAction along with the equipment itself", () => {
+    const adventurer = createAdventurer('hero', template(), 'front');
+    const ringSpecial: SpecialAction = { id: 'test-ring-special', name: 'Test Ring Special', trigger: 'on-hit-landed', action: EmpowerAction };
+    const ring: Item = {
+      id: 'ring-of-embers',
+      name: 'Ring of Embers',
       slot: 'trinket',
       modifiers: [],
       price: 0,
-      faceEffect: { faceIndex: 2, effect: { kind: 'replace-action', action: PowerAttackAction } },
+      grantedSpecialAction: ringSpecial,
     };
-    adventurer.equipment.trinket = tome;
-    adventurer.dieFaces[2] = { action: PowerAttackAction }; // as if equipItem had already applied it
-    tome.faceEffect!.previousFace = { action: AttackNearestAction };
+    adventurer.equipment.trinket = ring;
+    adventurer.activeSpecialActions = [ringSpecial]; // as if equipItem had already applied it
 
     resetToTemplateBaseline(adventurer, template());
 
-    // The rebuild put Attack Nearest back on every face, then the faceEffect re-applied Power
-    // Attack on top of that fresh baseline — the snapshot reflects the rebuild, not stale state.
-    expect(adventurer.dieFaces[2].action).toBe(PowerAttackAction);
-    expect(adventurer.equipment.trinket?.faceEffect?.previousFace).toEqual({ action: AttackNearestAction });
+    expect(adventurer.activeSpecialActions).toEqual([]);
   });
 
   it('preserves the row the player last assigned', () => {
@@ -98,6 +91,74 @@ describe('resetToTemplateBaseline', () => {
 
     resetToTemplateBaseline(adventurer, template());
 
-    expect(adventurer.row).toBe('back');
+    expect(adventurer.position).toEqual({ lane: 1, rank: 2 });
+  });
+
+  it('merges unlockedPoolEntries into the template pool and can re-roll into one of them (meta-progression)', () => {
+    const unlockedSpecial: SpecialAction = { id: 'unlocked-special', name: 'Unlocked Special', trigger: 'on-turn-start', action: EmpowerAction };
+    const adventurer = createAdventurer('hero', template(), 'front');
+
+    resetToTemplateBaseline(adventurer, template(), [{ kind: 'special-action', specialAction: unlockedSpecial }], [], () => 0.99);
+
+    expect(adventurer.activeSpecialActions).toEqual([unlockedSpecial]);
+  });
+});
+
+describe('createAdventurer with a universal trait pool', () => {
+  const HARDY: Trait = { id: 'hardy', name: 'Hardy', description: 'test fixture' };
+  const LUCKY: Trait = { id: 'lucky', name: 'Lucky', description: 'test fixture' };
+  const GRIZZLED: Trait = { id: 'grizzled', name: 'Grizzled', description: 'test fixture' };
+  const POOL = [HARDY, LUCKY, GRIZZLED];
+
+  it('has no universal traits when the pool is omitted, matching prior behavior', () => {
+    const adventurer = createAdventurer('hero', template(), 'front');
+    expect(adventurer.traits).toEqual([]);
+  });
+
+  it('rolls up to UNIVERSAL_TRAIT_ROLL_CAP distinct traits from the pool', () => {
+    const adventurer = createAdventurer('hero', template(), 'front', [], [], POOL, () => 0);
+    expect(adventurer.traits).toHaveLength(2);
+    expect(new Set(adventurer.traits.map((t) => t.id)).size).toBe(2);
+  });
+
+  it('is additive with the template\'s own seeded traits, not a replacement', () => {
+    const seeded: Trait = { id: 'seeded', name: 'Seeded', description: 'always present' };
+    const adventurer = createAdventurer('hero', template({ traits: [seeded] }), 'front', [], [], POOL, () => 0);
+    expect(adventurer.traits).toContainEqual(seeded);
+    expect(adventurer.traits.length).toBe(1 + 2);
+  });
+
+  it('rerolls on resetToTemplateBaseline, same lifecycle as Special Action/Kit', () => {
+    const tpl = template();
+    const adventurer = createAdventurer('hero', tpl, 'front', [], [], POOL, () => 0);
+    adventurer.traits = [];
+
+    resetToTemplateBaseline(adventurer, tpl, [], POOL, () => 0);
+
+    expect(adventurer.traits).toHaveLength(2);
+  });
+});
+
+describe('createAdventurer with unlockedPoolEntries', () => {
+  it('draws from the template pool plus unlocked entries, picked via the injected rng', () => {
+    const baseSpecial: SpecialAction = { id: 'base-special', name: 'Base Special', trigger: 'on-turn-start', action: EmpowerAction };
+    const unlockedSpecial: SpecialAction = { id: 'unlocked-special', name: 'Unlocked Special', trigger: 'on-turn-start', action: EmpowerAction };
+    const withPool = template({
+      specialActionPool: [{ kind: 'special-action', specialAction: baseSpecial }],
+    });
+
+    const pickedBase = createAdventurer('a', withPool, 'front', [], [{ kind: 'special-action', specialAction: unlockedSpecial }], [], () => 0);
+    expect(pickedBase.activeSpecialActions).toEqual([baseSpecial]);
+
+    const pickedUnlocked = createAdventurer('b', withPool, 'front', [], [{ kind: 'special-action', specialAction: unlockedSpecial }], [], () => 0.99);
+    expect(pickedUnlocked.activeSpecialActions).toEqual([unlockedSpecial]);
+  });
+
+  it('defaults to no unlocked entries, matching prior behavior', () => {
+    const baseSpecial: SpecialAction = { id: 'base-special', name: 'Base Special', trigger: 'on-turn-start', action: EmpowerAction };
+    const withPool = template({ specialActionPool: [{ kind: 'special-action', specialAction: baseSpecial }] });
+
+    const adventurer = createAdventurer('a', withPool, 'front');
+    expect(adventurer.activeSpecialActions).toEqual([baseSpecial]);
   });
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { townStorage } from '../state/townStorage';
+  import { metaProgression } from '../state/metaProgression';
   import { recruitmentPool } from '../state/recruitmentPool';
   import { recruitAdventurer } from '../state/townActions';
   import CharacterCard from './CharacterCard.svelte';
@@ -9,7 +9,7 @@
 </script>
 
 <section>
-  <h2>Recruitment</h2>
+  <h2>Recruitment <span class="renown-balance">{$metaProgression.renown} Renown</span></h2>
   <ul class="recruit-grid">
     {#each $recruitmentPool as candidate (candidate.id)}
       <li>
@@ -19,12 +19,12 @@
           showDetails={false}
         >
           <svelte:fragment slot="tags">
-            <span class="tag">Cost: {candidate.cost}g</span>
+            <span class="tag">Cost: {candidate.cost} Renown</span>
           </svelte:fragment>
           <svelte:fragment slot="actions">
             <button
               type="button"
-              disabled={$townStorage.gold < candidate.cost}
+              disabled={$metaProgression.renown < candidate.cost}
               on:click={() => recruitAdventurer(candidate.id)}
             >
               Recruit
@@ -53,5 +53,11 @@
     border: 1px solid var(--panel-border);
     color: var(--text-muted);
     background: var(--bg-inset);
+  }
+
+  .renown-balance {
+    font-size: 14px;
+    color: var(--gold-bright);
+    margin-left: 8px;
   }
 </style>

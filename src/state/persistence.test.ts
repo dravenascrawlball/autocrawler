@@ -5,8 +5,9 @@ import { AttackNearestAction, AttackLowestHpAction } from '../sim/actions/attack
 import { createBattleState } from '../sim/battle';
 import { resolveRoom } from '../sim/room';
 import type { RoomDefinition } from '../sim/dungeonRun';
-import { createRunInventory, type Item } from '../sim/items';
+import { createRunInventory } from '../sim/items';
 import { createTownStorage } from '../sim/townStorage';
+import { IRON_SWORD_ITEM, SAGES_CHARM_ITEM } from '../data/items';
 import { saveGame, loadGame, type GameState } from './persistence';
 import type { ActiveDungeonRunState } from './activeRun';
 import type { RosterState } from './roster';
@@ -58,7 +59,7 @@ describe('saveGame / loadGame', () => {
   it('reproduces an identical town-only state', () => {
     const hero = createAdventurer('hero', heroTemplate(), 'front');
     hero.hp = 14;
-    hero.xp = 7;
+    hero.level = 2;
 
     const bench = createAdventurer('bench', heroTemplate(), 'front');
     bench.hp = 5;
@@ -66,14 +67,10 @@ describe('saveGame / loadGame', () => {
     const roster: RosterState = { adventurers: [hero, bench], recruitedIds: ['hero'] };
 
     const townStorage = createTownStorage();
-    const sword: Item = {
-      id: 'sword',
-      name: 'Sword',
-      slot: 'weapon',
-      modifiers: [{ stat: 'attackPower', type: 'flat', amount: 3, source: 'item:sword' }],
-      price: 0,
-    };
-    townStorage.items.push(sword);
+    // A real, ITEM_REGISTRY-registered item — items are now persisted narrowed to their id (see
+    // state/persistence.ts's serializeItem), so a save/load round trip can't rehydrate an item
+    // that isn't actually registered.
+    townStorage.items.push(IRON_SWORD_ITEM);
 
     const state: GameState = {
       roster,
@@ -82,6 +79,7 @@ describe('saveGame / loadGame', () => {
       activeRun: null,
       recruitmentPool: [],
       runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     const storage = createMemoryStorage();
@@ -114,7 +112,7 @@ describe('saveGame / loadGame', () => {
     const room1: RoomDefinition = { enemies: [createAdventurer('enemy2', enemyTemplate(), 'front')] };
 
     const inventory = createRunInventory();
-    inventory.items.push({ id: 'potion', name: 'Potion', slot: 'trinket', modifiers: [], price: 0 });
+    inventory.items.push(SAGES_CHARM_ITEM); // a real, ITEM_REGISTRY-registered item — see the other test's note
 
     const activeRun: ActiveDungeonRunState = {
       rooms: [room0, room1],
@@ -123,6 +121,7 @@ describe('saveGame / loadGame', () => {
       partyGold: 30,
       inventory,
       outcome: null,
+      activeRelics: [],
     };
 
     const roster: RosterState = { adventurers: [hero, bench], recruitedIds: [] };
@@ -132,6 +131,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 2,
       activeRun,
       recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     const storage = createMemoryStorage();
@@ -202,6 +202,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 3,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     const storage = createMemoryStorage();
@@ -227,6 +228,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 0,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     const storage = createMemoryStorage();
@@ -256,6 +258,7 @@ describe('saveGame / loadGame', () => {
       dayCount: 0,
       activeRun: null,
       recruitmentPool: [], runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     expect(() => saveGame(state, throwingStorage)).not.toThrow();

@@ -6,14 +6,12 @@ import { RAGE_TRAIT, rageDamageBonusFraction } from '../traits';
 import { getOpposingRoster, getOwnRoster, getHealEnergy } from '../battle';
 import { applyBuff } from '../buffs';
 import { rollGold } from '../gold';
+import { applyPoison } from '../statusEffects';
+import { POISON_DAMAGE_PER_TICK, POISON_TICKS } from '../enchantments';
+import { consumeShield } from '../shields';
+import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE } from '../traits';
+import type { Adventurer } from '../adventurer';
 
-/**
- * Hit-chance floor/ceiling — an attack is never a guaranteed hit or a
- * guaranteed miss, regardless of how lopsided accuracy vs. evasion gets.
- * Placeholder pending the balance pass (roadmap item 6).
- */
-export const MIN_HIT_CHANCE = 0.05;
-export const MAX_HIT_CHANCE = 0.95;
 /** Random multiplier range applied to a landed hit's damage — e.g. 0.15 draws uniformly from [0.85, 1.15]. Placeholder pending the balance pass. */
 export const DAMAGE_VARIANCE_FRACTION = 0.15;
 /** A landed hit always deals at least this much damage, so armor can never fully negate an attack that connects. */
@@ -42,45 +40,56 @@ function effectiveAttackPower(context: ActionContext, actionId: ActionId): numbe
   return power;
 }
 
-/** Attacker's accuracy minus target's evasion (both run through StatModifiers), clamped to [MIN_HIT_CHANCE, MAX_HIT_CHANCE]. */
-function hitChance(context: ActionContext): number {
-  const accuracy = getEffectiveStat(context.actor.accuracy, 'accuracy', context.actor.modifiers);
-  const evasion = getEffectiveStat(context.target.evasion, 'evasion', context.target.modifiers);
-  return Math.min(MAX_HIT_CHANCE, Math.max(MIN_HIT_CHANCE, (accuracy - evasion) / 100));
-}
-
 /** A single rng() draw mapped from [0,1) to a [1-varianceFraction, 1+varianceFraction] multiplier — defaults to DAMAGE_VARIANCE_FRACTION, but a signature move can widen its own swing (see Isilwen's Card Throw). */
 function rollDamageVariance(context: ActionContext, varianceFraction: number = DAMAGE_VARIANCE_FRACTION): number {
   return 1 + (context.rng() * 2 - 1) * varianceFraction;
 }
 
 /**
- * Whether a landed hit is also a critical — reuses `hitRoll` (the same
- * draw already spent on the hit/miss check) rather than consuming a fresh
- * rng() call of its own (roadmap item 11's Tharavel). Deliberate
- * simplification: critChance is normally much smaller than hitChance, so
- * this approximates an independent roll closely enough for a placeholder
- * system (P(crit | hit) ≈ critChance/hitChance) while avoiding a second
- * draw on every single attack in the game — which would have shifted the
- * rng-sequence position of every other roll (variance, gold, enchantment
- * chances, ...) in every existing action and test.
+ * Whether this attack is also a critical — an independent roll (its own
+ * rng() draw), since there's no hit/miss roll left to piggyback on
+ * (removed when Accuracy/Evasion were cut — every attack always connects
+ * now, see docs/roadmap.md's "pure auto-battler" pass).
  */
-function rollIsCrit(context: ActionContext, hitRoll: number): boolean {
+function rollIsCrit(context: ActionContext): boolean {
   const critChance = getEffectiveStat(context.actor.critChance, 'critChance', context.actor.modifiers);
-  return hitRoll < critChance / 100;
+  return context.rng() < critChance / 100;
 }
 
 /**
- * Rolls hit/miss against hitChance first — a miss still costs the actor's
- * turn (it doesn't get to try again this turn). A landed hit rolls whether
- * it's also a critical (see rollIsCrit), applies random variance and the
- * crit multiplier if applicable, then flat armor mitigation
- * (target's `armor` StatModifiers off a base of 0 — no item grants it yet
- * without an armor-slot piece equipped), floored at MIN_DAMAGE_AFTER_ARMOR.
- * `target` defaults to `context.target`, but can be overridden — see
- * resolveCleaveHits, which rolls this once per row-mate rather than just
- * context.target. `varianceFraction` likewise defaults to
- * DAMAGE_VARIANCE_FRACTION but can be widened per-action.
+ * Every attack always connects — there's no Accuracy/Evasion hit-chance
+ * roll (removed as part of the "pure auto-battler" pass; see
+ * docs/roadmap.md). The one exception is Drifta's Dodge Trait
+ * (DODGE_TRAIT — a genuine, rare, probabilistic negation, checked first,
+ * before anything else rolls), which reports the same `hit: true,
+ * damage: 0` shape as a fully-absorbed Shield or an Invulnerable target,
+ * rather than resurrecting a `hit: false` branch. Past that: rolls
+ * whether it's a critical (see rollIsCrit), applies random variance and
+ * the crit multiplier, then Mark's vulnerability multiplier (a timed
+ * positive StatModifier on a synthetic 'vulnerability' stat — see
+ * actions/support.ts's MarkAction; 0 for an unmarked target, a no-op),
+ * then flat armor mitigation (target's `armor` StatModifiers off a base
+ * of 0 — no item grants it yet without an armor-slot piece equipped),
+ * floored at MIN_DAMAGE_AFTER_ARMOR. A target with an active
+ * Invulnerability window (see the Invulnerability ability type — a timed
+ * buff on a synthetic 'invulnerable' stat) takes none of this at all,
+ * Shield included — checked next, before Shield even gets a chance to
+ * deplete. Otherwise, any active Shield (see shields.ts) absorbs from the
+ * floored amount before it touches HP — unlike armor's floor, a Shield
+ * can fully negate a hit, since blocking it entirely is the point of a
+ * Shield. `damage` in the returned shape is the actual HP lost, post-
+ * Shield (0 if a Shield fully absorbed it, or the hit was Invulnerable or
+ * Dodged) — a hit always "lands" (`hit: true`) and can still deal 0
+ * damage this way. If the target has the Thorns Trait (Gudrun's second
+ * ability — THORNS_TRAIT), a percent of whatever final damage *did* land
+ * reflects straight back onto the attacker, unmitigated by the
+ * attacker's own armor/Shield — a true passive, checked here rather than
+ * through the Special Action trigger pipeline (see traits.ts's
+ * THORNS_TRAIT doc comment for why). `target` defaults to
+ * `context.target`, but can be overridden — see resolveCleaveHits, which
+ * rolls this once per row-mate rather than just context.target.
+ * `varianceFraction` likewise defaults to DAMAGE_VARIANCE_FRACTION but
+ * can be widened per-action.
  */
 function applyAttackToTarget(
   context: ActionContext,
@@ -88,22 +97,53 @@ function applyAttackToTarget(
   target: ActionContext['target'],
   varianceFraction: number = DAMAGE_VARIANCE_FRACTION,
 ): { damage: number; hit: boolean; targetId: string } {
-  const hitRoll = context.rng();
-  if (hitRoll >= hitChance({ ...context, target })) {
-    return { damage: 0, hit: false, targetId: target.id };
+  const hasDodge = target.traits.some((trait) => trait.id === DODGE_TRAIT.id);
+  if (hasDodge && context.rng() < DODGE_CHANCE) {
+    return { damage: 0, hit: true, targetId: target.id };
   }
 
-  const critMultiplier = rollIsCrit(context, hitRoll) ? CRIT_DAMAGE_MULTIPLIER : 1;
-  const variedDamage = damage * rollDamageVariance(context, varianceFraction) * critMultiplier;
+  const critMultiplier = rollIsCrit(context) ? CRIT_DAMAGE_MULTIPLIER : 1;
+  const vulnerabilityPercent = getEffectiveStat(0, 'vulnerability', target.modifiers);
+  const variedDamage = damage * rollDamageVariance(context, varianceFraction) * critMultiplier * (1 + vulnerabilityPercent / 100);
   const armor = getEffectiveStat(0, 'armor', target.modifiers);
-  const finalDamage = Math.max(MIN_DAMAGE_AFTER_ARMOR, Math.round(variedDamage - armor));
+  const damageAfterArmor = Math.max(MIN_DAMAGE_AFTER_ARMOR, Math.round(variedDamage - armor));
+
+  const isInvulnerable = getEffectiveStat(0, 'invulnerable', target.modifiers) > 0;
+  if (isInvulnerable) {
+    return { damage: 0, hit: true, targetId: target.id };
+  }
+
+  const absorbedByShield = consumeShield(target, damageAfterArmor);
+  const finalDamage = damageAfterArmor - absorbedByShield;
 
   target.hp = Math.max(0, target.hp - finalDamage);
+
+  const hasThorns = target.traits.some((trait) => trait.id === THORNS_TRAIT.id);
+  if (hasThorns && finalDamage > 0) {
+    const reflected = Math.round(finalDamage * (THORNS_REFLECT_PERCENT / 100));
+    context.actor.hp = Math.max(0, context.actor.hp - reflected);
+  }
+
   return { damage: finalDamage, hit: true, targetId: target.id };
 }
 
 function applyAttack(context: ActionContext, damage: number): ActionOutcome {
   return { type: 'attack', ...applyAttackToTarget(context, damage, context.target) };
+}
+
+/** Picks up to `count` distinct living units from `pool` uniformly at random, without replacement — shared by ChainStrikeAction/ScatterShotAction. Never mutates `pool`. */
+function pickRandomDistinct(pool: Adventurer[], count: number, rng: ActionContext['rng']): Adventurer[] {
+  const remaining = [...pool];
+  const picked: Adventurer[] = [];
+  // Fixed up front — `remaining.length` shrinks every iteration (via splice below), so re-evaluating
+  // `Math.min` in the loop condition itself would cut the loop short after roughly half the intended picks.
+  const targetCount = Math.min(count, remaining.length);
+  for (let i = 0; i < targetCount; i++) {
+    const index = Math.floor(rng() * remaining.length);
+    picked.push(remaining[index]);
+    remaining.splice(index, 1);
+  }
+  return picked;
 }
 
 /** Cheap, fast melee attack — front row only, falling through to back once front is empty. */
@@ -170,25 +210,30 @@ export const CleaveAction: Action = {
   resolve(context: ActionContext): ActionOutcome {
     const damage = effectiveAttackPower(context, 'cleave');
     const rowMates = getOpposingRoster(context.battle, context.actor).filter(
-      (unit) => unit.hp > 0 && unit.row === context.target.row,
+      (unit) => unit.hp > 0 && unit.position.rank === context.target.position.rank,
     );
     const hits = rowMates.map((rowMate) => applyAttackToTarget(context, damage, rowMate));
     return { type: 'attack-multi', hits };
   },
 };
 
-/** Flat accuracy penalty Fear applies — negative, since it's a debuff. Placeholder pending the balance pass. */
-export const FEAR_ACCURACY_PENALTY = -20;
+/** Percent extra damage Fear's debuff causes its targets to take — placeholder pending the balance pass. */
+export const FEAR_VULNERABILITY_PERCENT = 20;
 /** How many of the feared unit's own turns Fear lasts before expiring — same cadence as Rallying Strike/Empower. */
 export const FEAR_DURATION_TURNS = 3;
-const FEAR_BUFF_ID = 'fear-accuracy';
+const FEAR_BUFF_ID = 'fear-vulnerability';
 
 /**
  * Mirka's signature mechanic (roadmap item 11): a pure debuff face, no
- * attack of her own — applies a timed negative-accuracy StatModifier to
- * every living enemy in her target's row at once (same row-selection rule
- * as Cleave), reusing buffs.ts's timed-modifier system with a negative
- * amount rather than inventing a separate debuff mechanism.
+ * attack of her own — applies a timed positive StatModifier on the
+ * synthetic 'vulnerability' stat (the Mark ability type — see
+ * actions/support.ts's MarkAction) to every living enemy in her target's
+ * row at once (same row-selection rule as Cleave), reusing buffs.ts's
+ * timed-modifier system. Reframed from its original "lowers accuracy"
+ * flavor (rattled enemies are worse at hitting back) to "takes more
+ * damage" (rattled enemies are easier for the party to finish off) when
+ * the "pure auto-battler" pass removed Accuracy/Evasion as a mechanic to
+ * key off of — see docs/roadmap.md.
  */
 export const FearAction: Action = {
   id: 'fear',
@@ -199,20 +244,20 @@ export const FearAction: Action = {
   },
   resolve(context: ActionContext): ActionOutcome {
     const rowMates = getOpposingRoster(context.battle, context.actor).filter(
-      (unit) => unit.hp > 0 && unit.row === context.target.row,
+      (unit) => unit.hp > 0 && unit.position.rank === context.target.position.rank,
     );
     for (const rowMate of rowMates) {
       applyBuff(
         rowMate,
         FEAR_BUFF_ID,
-        { stat: 'accuracy', type: 'flat', amount: FEAR_ACCURACY_PENALTY, source: 'buff:fear' },
+        { stat: 'vulnerability', type: 'flat', amount: FEAR_VULNERABILITY_PERCENT, source: 'buff:fear' },
         FEAR_DURATION_TURNS,
       );
     }
     return {
       type: 'fear',
       fearedEnemyIds: rowMates.map((rowMate) => rowMate.id),
-      accuracyAmount: FEAR_ACCURACY_PENALTY,
+      vulnerabilityAmount: FEAR_VULNERABILITY_PERCENT,
       durationTurns: FEAR_DURATION_TURNS,
     };
   },
@@ -276,11 +321,54 @@ export const PiercingStrikeAction: Action = {
   name: 'Piercing Strike',
   reach: 'melee',
   selectTarget(context: TargetingContext) {
-    const reachesBackRow = context.actor.row === 'front';
+    const reachesBackRow = context.actor.position.rank === 0;
     return selectLowestHpEnemy(context, !reachesBackRow);
   },
   resolve(context: ActionContext): ActionOutcome {
     return applyAttack(context, effectiveAttackPower(context, 'piercing-strike'));
+  },
+};
+
+/** HP fraction (of effective maxHp) a target must be below, before the hit, to qualify for Execute Strike's finishing blow. */
+export const EXECUTE_THRESHOLD_FRACTION = 0.3;
+
+/**
+ * Drifta's second signature mechanic (the Execute ability type from
+ * docs/missing-ability-types.md): a normal lowest-HP-targeted melee
+ * attack — but if the target was already below EXECUTE_THRESHOLD_FRACTION
+ * *before* the hit (checked first, not re-checked after normal damage),
+ * a landed hit finishes them off entirely, regardless of what the
+ * roll/armor/Shield would otherwise have left them at. A miss never
+ * executes (same "a miss costs the turn, nothing else happens" rule as
+ * every other attack), and a target already above the threshold just
+ * takes a normal attack's worth of damage like AttackLowestHpAction would.
+ */
+export const ExecuteStrikeAction: Action = {
+  id: 'execute-strike',
+  name: 'Execute Strike',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const effectiveMaxHp = getEffectiveStat(context.target.maxHp, 'maxHp', context.target.modifiers);
+    const qualifiesForExecute = context.target.hp / effectiveMaxHp < EXECUTE_THRESHOLD_FRACTION;
+    const hpBeforeHit = context.target.hp;
+
+    const damage = effectiveAttackPower(context, 'execute-strike');
+    const attackHit = applyAttackToTarget(context, damage, context.target);
+
+    // Invulnerability blocks the finishing blow too — "takes zero damage" means zero, no exceptions.
+    const isInvulnerable = getEffectiveStat(0, 'invulnerable', context.target.modifiers) > 0;
+    let executed = false;
+    let totalDamage = attackHit.damage;
+    if (attackHit.hit && qualifiesForExecute && !isInvulnerable && context.target.hp > 0) {
+      context.target.hp = 0;
+      executed = true;
+      totalDamage = hpBeforeHit;
+    }
+
+    return { type: 'attack-with-execute', damage: totalDamage, hit: attackHit.hit, targetId: attackHit.targetId, executed };
   },
 };
 
@@ -307,7 +395,7 @@ export const PickpocketStrikeAction: Action = {
   resolve(context: ActionContext): ActionOutcome {
     const damage = effectiveAttackPower(context, 'pickpocket-strike');
     const attackHit = applyAttackToTarget(context, damage, context.target);
-    const goldGenerated = attackHit.hit
+    const goldGenerated = attackHit.damage > 0
       ? rollGold({ chance: PICKPOCKET_GOLD_CHANCE, min: PICKPOCKET_GOLD_MIN, max: PICKPOCKET_GOLD_MAX }, context.rng)
       : 0;
 
@@ -342,6 +430,42 @@ export const GildedStrikeAction: Action = {
   },
 };
 
+/** How many additional targets Chain Strike bounces to beyond the primary, and what percent of normal damage each bounce deals — placeholders pending the balance pass. */
+export const CHAIN_BOUNCE_COUNT = 2;
+export const CHAIN_BOUNCE_DAMAGE_PERCENT = 60;
+
+/**
+ * Nerissa's second signature mechanic (the Chain ability type from
+ * docs/missing-ability-types.md): a ranged attack on her normal target at
+ * full damage, plus up to CHAIN_BOUNCE_COUNT additional distinct living
+ * enemies (picked uniformly at random, no row restriction) each hit
+ * independently for CHAIN_BOUNCE_DAMAGE_PERCENT of normal damage — each
+ * bounce rolls its own hit/miss/armor/Shield exactly like a normal attack,
+ * via applyAttackToTarget. Fewer bounces land if there aren't enough other
+ * living enemies to reach — never pads with duplicates.
+ */
+export const ChainStrikeAction: Action = {
+  id: 'chain-strike',
+  name: 'Chain Strike',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'chain-strike');
+    const primaryHit = applyAttackToTarget(context, damage, context.target);
+
+    const others = getOpposingRoster(context.battle, context.actor).filter(
+      (unit) => unit.hp > 0 && unit.id !== context.target.id,
+    );
+    const bounceTargets = pickRandomDistinct(others, CHAIN_BOUNCE_COUNT, context.rng);
+    const bounceDamage = damage * (CHAIN_BOUNCE_DAMAGE_PERCENT / 100);
+    const bounceHits = bounceTargets.map((target) => applyAttackToTarget(context, bounceDamage, target));
+
+    return { type: 'attack-multi', hits: [primaryHit, ...bounceHits] };
+  },
+};
+
 /** Ranged attack — can reach either row directly, unlike a melee action's front-row restriction. */
 export const RangedShotAction: Action = {
   id: 'ranged-shot',
@@ -363,10 +487,11 @@ const BLIND_BUFF_ID = 'blind-attack-power';
 /**
  * Dravena's signature mechanic (roadmap item 11): a ranged single-target
  * attack that also applies a timed negative-attackPower StatModifier
- * (Blind) to the same target, but only on a landed hit — a miss deals no
- * damage and blinds nobody. Reuses buffs.ts's timed-modifier system with a
- * negative percent amount, same convention as Fear (accuracy) and Empower
- * (a positive version of the same mechanism).
+ * (Blind) to the same target, but only if the bolt actually dealt damage
+ * — a target that fully blocked it (Shield, Invulnerability, Dodge)
+ * blinds nobody, same reasoning as turnEngine.ts's landedHitTargetIds.
+ * Reuses buffs.ts's timed-modifier system with a negative percent amount,
+ * same convention as Empower (a positive version of the same mechanism).
  */
 export const BlindingBoltAction: Action = {
   id: 'blinding-bolt',
@@ -378,8 +503,9 @@ export const BlindingBoltAction: Action = {
   resolve(context: ActionContext): ActionOutcome {
     const damage = effectiveAttackPower(context, 'blinding-bolt');
     const attackHit = applyAttackToTarget(context, damage, context.target);
+    const dealtDamage = attackHit.damage > 0;
 
-    if (attackHit.hit) {
+    if (dealtDamage) {
       applyBuff(
         context.target,
         BLIND_BUFF_ID,
@@ -391,7 +517,7 @@ export const BlindingBoltAction: Action = {
     return {
       type: 'attack-and-debuff',
       ...attackHit,
-      debuffApplied: attackHit.hit,
+      debuffApplied: dealtDamage,
       attackPowerPercent: BLIND_ATTACK_PERCENT_PENALTY,
       durationTurns: BLIND_DURATION_TURNS,
     };
@@ -479,12 +605,71 @@ export const SneakStrikeAction: Action = {
   resolve(context: ActionContext): ActionOutcome {
     const damage = effectiveAttackPower(context, 'sneak-strike');
     const livingBackRow = getOpposingRoster(context.battle, context.actor).filter(
-      (unit) => unit.hp > 0 && unit.row === 'back',
+      (unit) => unit.hp > 0 && unit.position.rank === 2,
     );
     const sneaksPastFrontRow = livingBackRow.length > 0 && context.rng() < SNEAK_STRIKE_BACK_ROW_CHANCE;
     const target = sneaksPastFrontRow ? livingBackRow[Math.floor(context.rng() * livingBackRow.length)] : context.target;
 
     return applyAttack({ ...context, target }, damage);
+  },
+};
+
+/**
+ * Caladwen's restored signature flavor (roadmap: "do existing characters
+ * have the abilities they need?" pass) — a per-face Poison enchant used to
+ * live on one of her Sneak Strike die faces, lost when per-face
+ * enchantments were retired (step 2 of the combat overhaul) and never
+ * ported to anything in the new system. This is that mechanism's
+ * replacement: a Special Action that poisons whichever living enemy its
+ * own targeting picks, same "independent targeting, not necessarily the
+ * exact unit the triggering hit landed on" convention already established
+ * by Ring of Embers' Ember Burn (see actions/itemEffects.ts). Same
+ * POISON_DAMAGE_PER_TICK/POISON_TICKS magnitude the old enchantment used
+ * (see enchantments.ts) — a deliberate restoration, not a retune.
+ */
+export const VenomStingAction: Action = {
+  id: 'venom-sting',
+  name: 'Venom Sting',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyPoison(context.target, POISON_DAMAGE_PER_TICK, POISON_TICKS);
+    return { type: 'inflict-status', targetId: context.target.id, effectId: 'poison' };
+  },
+};
+
+/** Percent of damage dealt Lifesteal Strike heals the attacker for — placeholder pending the balance pass. */
+export const LIFESTEAL_PERCENT = 50;
+
+/**
+ * Caladwen's second signature mechanic (the Lifesteal ability type from
+ * docs/missing-ability-types.md): a normal front-row melee attack that
+ * also heals the attacker for LIFESTEAL_PERCENT of the damage actually
+ * dealt — 0 on a miss, and 0 if a Shield fully absorbed the hit (damage
+ * dealt was 0), since there's nothing to steal from either. The heal is
+ * clamped to the attacker's own effective maxHp, same as any other heal.
+ */
+export const LifestealStrikeAction: Action = {
+  id: 'lifesteal-strike',
+  name: 'Lifesteal Strike',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'lifesteal-strike');
+    const attackHit = applyAttackToTarget(context, damage, context.target);
+
+    let healedAmount = 0;
+    if (attackHit.damage > 0) {
+      const effectiveMaxHp = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
+      healedAmount = Math.round(attackHit.damage * (LIFESTEAL_PERCENT / 100));
+      context.actor.hp = Math.min(effectiveMaxHp, context.actor.hp + healedAmount);
+    }
+
+    return { type: 'attack-and-heal-self', ...attackHit, healedAmount };
   },
 };
 
@@ -506,5 +691,33 @@ export const FocusedShotAction: Action = {
   },
   resolve(context: ActionContext) {
     return applyAttack(context, effectiveAttackPower(context, 'focused-shot'));
+  },
+};
+
+/** How many living enemies Scatter Shot hits at once — placeholder pending the balance pass. */
+export const SCATTER_SHOT_TARGET_COUNT = 2;
+
+/**
+ * Melpomene's second signature mechanic (the AoE-beyond-rank ability type
+ * from docs/missing-ability-types.md): hits SCATTER_SHOT_TARGET_COUNT
+ * distinct living enemies at once, picked uniformly at random from the
+ * whole opposing roster — no row restriction, and unlike Cleave (which is
+ * rank-scoped), each hit lands at full normal damage, not a reduced
+ * falloff. Fewer hits land if there aren't enough living enemies to reach.
+ */
+export const ScatterShotAction: Action = {
+  id: 'scatter-shot',
+  name: 'Scatter Shot',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'scatter-shot');
+    const livingEnemies = getOpposingRoster(context.battle, context.actor).filter((unit) => unit.hp > 0);
+    const targets = pickRandomDistinct(livingEnemies, SCATTER_SHOT_TARGET_COUNT, context.rng);
+    const hits = targets.map((target) => applyAttackToTarget(context, damage, target));
+
+    return { type: 'attack-multi', hits };
   },
 };

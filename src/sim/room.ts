@@ -1,8 +1,8 @@
 import type { Adventurer } from './adventurer';
+import type { ActionOutcome } from './action';
 import type { BattleState, RoomOutcome } from './battle';
 import { checkRoomOutcome } from './battle';
 import { resolveTurn, type TurnResult } from './turnEngine';
-import { awardRoomXp } from './leveling';
 import { getEffectiveStat } from './stats';
 import type { RngSource } from './rng';
 
@@ -24,9 +24,6 @@ function recordDownIfNeeded(
   target.downedSummary = {
     roomIndex,
     killerArchetype,
-    // Every party member starts a run at xp 0 now (resetToTemplateBaseline runs at the *end* of
-    // the previous run), so current xp already IS this run's delta — no separate start snapshot needed.
-    xpGained: target.xp,
     damageDone: target.runDamageDealt,
     damageTaken: target.runDamageTaken,
     healed: target.runHealingDone,
@@ -34,62 +31,74 @@ function recordDownIfNeeded(
   };
 }
 
+/** The 'action'/'special-action' outcome-handling body shared by both event types — see applyTurnStats. */
+function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: BattleState, roomIndex: number): void {
+  if (
+    outcome.type === 'attack' ||
+    outcome.type === 'attack-and-buff' ||
+    outcome.type === 'attack-and-gold' ||
+    outcome.type === 'attack-and-debuff'
+  ) {
+    const target = findUnitById(battle, outcome.targetId);
+    unit.runDamageDealt += outcome.damage;
+    if (target) {
+      target.runDamageTaken += outcome.damage;
+      if (outcome.hit) {
+        recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
+      }
+    }
+  } else if (outcome.type === 'attack-multi') {
+    for (const hit of outcome.hits) {
+      const target = findUnitById(battle, hit.targetId);
+      unit.runDamageDealt += hit.damage;
+      if (target) {
+        target.runDamageTaken += hit.damage;
+        if (hit.hit) {
+          recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
+        }
+      }
+    }
+  } else if (outcome.type === 'heal' || outcome.type === 'heal-and-charge') {
+    unit.runHealingDone += outcome.amount;
+  } else if (outcome.type === 'command' && outcome.attackOutcome) {
+    // Credited to the commanded ally, not `unit` (Fallacy) — she didn't land the hit, they did.
+    const commandedAlly = findUnitById(battle, outcome.commandedAllyId);
+    const target = findUnitById(battle, outcome.attackOutcome.targetId);
+    if (commandedAlly) {
+      commandedAlly.runDamageDealt += outcome.attackOutcome.damage;
+    }
+    if (target) {
+      target.runDamageTaken += outcome.attackOutcome.damage;
+      if (outcome.attackOutcome.hit && commandedAlly) {
+        recordDownIfNeeded(battle, target, commandedAlly.archetype, roomIndex);
+      }
+    }
+  }
+}
+
 /**
  * Updates run-scoped damage/healing counters (Adventurer.runDamageDealt etc.
  * — see adventurer.ts) from one unit's turn, and captures a DownedSummary
  * the moment a party member's hp first hits 0 this run (attributing the
  * kill to whichever enemy's attack landed it, or null for a status-tick
- * kill like Burn, which has no single attacker to credit).
+ * kill like Burn, which has no single attacker to credit). A
+ * 'special-action' event is credited to whoever the Special Action actually
+ * belongs to (event.actorId) — not necessarily `unit`, since e.g. an
+ * on-hit-taken special fires on the unit that got hit, during the attacker's
+ * own turn (see turnEngine.ts) — and skipped entirely if its outcome is null
+ * (no valid target).
  */
 function applyTurnStats(unit: Adventurer, battle: BattleState, turn: TurnResult, roomIndex: number): void {
   for (const event of turn.events) {
     if (event.type === 'status-tick') {
       unit.runDamageTaken += event.damage;
       recordDownIfNeeded(battle, unit, null, roomIndex);
-      continue;
-    }
-
-    const outcome = event.outcome;
-    if (
-      outcome.type === 'attack' ||
-      outcome.type === 'attack-and-buff' ||
-      outcome.type === 'attack-and-gold' ||
-      outcome.type === 'attack-and-debuff'
-    ) {
-      const target = findUnitById(battle, outcome.targetId);
-      unit.runDamageDealt += outcome.damage;
-      if (target) {
-        target.runDamageTaken += outcome.damage;
-        if (outcome.hit) {
-          recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
-        }
+    } else if (event.type === 'special-action') {
+      if (event.outcome) {
+        applyOutcomeStats(findUnitById(battle, event.actorId) ?? unit, event.outcome, battle, roomIndex);
       }
-    } else if (outcome.type === 'attack-multi') {
-      for (const hit of outcome.hits) {
-        const target = findUnitById(battle, hit.targetId);
-        unit.runDamageDealt += hit.damage;
-        if (target) {
-          target.runDamageTaken += hit.damage;
-          if (hit.hit) {
-            recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
-          }
-        }
-      }
-    } else if (outcome.type === 'heal' || outcome.type === 'heal-and-charge') {
-      unit.runHealingDone += outcome.amount;
-    } else if (outcome.type === 'command' && outcome.attackOutcome) {
-      // Credited to the commanded ally, not `unit` (Fallacy) — she didn't land the hit, they did.
-      const commandedAlly = findUnitById(battle, outcome.commandedAllyId);
-      const target = findUnitById(battle, outcome.attackOutcome.targetId);
-      if (commandedAlly) {
-        commandedAlly.runDamageDealt += outcome.attackOutcome.damage;
-      }
-      if (target) {
-        target.runDamageTaken += outcome.attackOutcome.damage;
-        if (outcome.attackOutcome.hit && commandedAlly) {
-          recordDownIfNeeded(battle, target, commandedAlly.archetype, roomIndex);
-        }
-      }
+    } else {
+      applyOutcomeStats(unit, event.outcome, battle, roomIndex);
     }
   }
 }
@@ -159,11 +168,6 @@ export function resolveRoom(battle: BattleState, rng: RngSource, maxRounds = 100
     }
 
     rounds.push({ round, turnOrder: turns.map((t) => t.unitId), turns });
-  }
-
-  if (outcome === 'win') {
-    const totalXp = battle.enemies.reduce((sum, enemy) => sum + (enemy.xpReward ?? 0), 0);
-    awardRoomXp(battle.adventurers, totalXp);
   }
 
   return { rounds, outcome: outcome ?? 'retreat' };

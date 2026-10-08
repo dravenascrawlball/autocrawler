@@ -68,6 +68,7 @@ describe('recruitmentPool createInitialPool (module init)', () => {
       activeRun: null,
       recruitmentPool: [gudrunCandidate, envyCandidate],
       runHistory: { clearedWithIds: [] },
+      metaProgression: { renown: 0, unlockedKitIds: {} },
     };
 
     vi.doMock('./persistence', () => ({ INITIAL_SAVE: savedState }));

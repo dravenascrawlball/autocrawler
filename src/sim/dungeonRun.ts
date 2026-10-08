@@ -3,6 +3,7 @@ import type { BattleState } from './battle';
 import { createBattleState } from './battle';
 import { resolveRoom, type RoomResult } from './room';
 import { getEffectiveStat } from './stats';
+import type { Relic } from './relics';
 import type { RngSource } from './rng';
 
 /** How a completed dungeon run ended. */
@@ -10,6 +11,8 @@ export type DungeonOutcome = 'completed' | 'loss' | 'retreat';
 
 /** Base heal applied between rooms, run through getEffectiveStat so StatModifiers can adjust it later. */
 export const DEFAULT_INTER_ROOM_HEAL_FLAT = 5;
+/** Fraction of effective maxHp a Downed party member is revived to between rooms — part of the Autobattle Revision Cleanup's "Heal Downed Characters Between Fights" pass (see docs/roadmap.md). */
+export const DOWNED_REVIVE_HP_FRACTION = 0.7;
 
 export interface RoomDefinition {
   enemies: Adventurer[];
@@ -48,10 +51,13 @@ export interface DungeonRunState {
   rooms: RoomDefinition[];
   /** Index into `rooms` of the room resolveNextRoom will resolve next. */
   roomIndex: number;
+  /** Ids of every party member who was Downed at least once this run — "was", not "is still": healBetweenRooms now revives a Downed member before the next room (see its own doc comment), so this no longer implies they're currently out. Not consumed anywhere today; kept for a future run-recap/achievement surface. */
   downedDuringRun: Set<string>;
   roomRecords: DungeonRoomRecord[];
   /** The town's banked gold at run start — threaded into each room's BattleState for Nerissa's Gilded Strike (see battle.ts's BattleState.partyGold doc comment). */
   partyGold: number;
+  /** Relics bought from the between-room shop so far this run — see state/dungeonOrchestrator.ts's buyRelicOffer. Granted to every current party member on purchase, and to anyone who joins afterward (see buyRecruitOffer). */
+  activeRelics: Relic[];
 }
 
 function snapshotParty(party: Adventurer[]): PartyMemberSnapshot[] {
@@ -62,16 +68,27 @@ function snapshotParty(party: Adventurer[]): PartyMemberSnapshot[] {
 }
 
 /**
- * Applies the automatic between-room heal, capped at maxHp. Skips anyone
- * currently Downed (hp === 0) — Downed lasts for the rest of the run, so
- * this never revives them; see DungeonRunState's downedDuringRun.
+ * Applies the automatic between-room heal, capped at maxHp. A Downed party
+ * member (hp <= 0) is revived instead, at DOWNED_REVIVE_HP_FRACTION of
+ * their effective maxHp — no longer a permanent-for-the-run state (the
+ * Autobattle Revision Cleanup's "Heal Downed Characters Between Fights"
+ * pass, see docs/roadmap.md; DungeonRunState's downedDuringRun tracking
+ * predates this and is now a "was Downed at some point" record, not "is
+ * still Downed"). Also clears `downedSummary` so a later down this run
+ * produces a fresh one, rather than silently reusing the old one — same
+ * reasoning as Mira's Revive ability (see actions/heal.ts's ReviveAction).
  */
 function healBetweenRooms(party: Adventurer[]): void {
   for (const adventurer of party) {
-    if (adventurer.hp <= 0) continue;
+    const effectiveMaxHp = getEffectiveStat(adventurer.maxHp, 'maxHp', adventurer.modifiers);
+
+    if (adventurer.hp <= 0) {
+      adventurer.hp = Math.round(effectiveMaxHp * DOWNED_REVIVE_HP_FRACTION);
+      adventurer.downedSummary = undefined;
+      continue;
+    }
 
     const heal = getEffectiveStat(DEFAULT_INTER_ROOM_HEAL_FLAT, 'interRoomHeal', adventurer.modifiers);
-    const effectiveMaxHp = getEffectiveStat(adventurer.maxHp, 'maxHp', adventurer.modifiers);
     adventurer.hp = Math.min(effectiveMaxHp, adventurer.hp + heal);
   }
 }
@@ -88,16 +105,17 @@ export function startDungeonRun(party: Adventurer[], rooms: RoomDefinition[], pa
     throw new Error('startDungeonRun requires at least one room');
   }
 
-  return { party, rooms, roomIndex: 0, downedDuringRun: new Set(), roomRecords: [], partyGold };
+  return { party, rooms, roomIndex: 0, downedDuringRun: new Set(), roomRecords: [], partyGold, activeRelics: [] };
 }
 
 /**
  * Resolves exactly one room — `state.rooms[state.roomIndex]` — and advances
  * `state.roomIndex`. Between rooms (roomIndex > 0): heals the party via
- * `healBetweenRooms` (HP is never reset, only healed, and never above
- * maxHp). Formation (each member's front/back row) is a player choice that
- * persists across rooms, not reset here — see state/townActions.ts's
- * setAdventurerRow.
+ * `healBetweenRooms` (HP is never reset, only healed/revived, and never
+ * above maxHp — see that function's own doc comment for Downed revival).
+ * Formation (each member's full lane/rank grid position) is a player
+ * choice that persists across rooms, not reset here — see
+ * state/townActions.ts's setAdventurerPosition.
  *
  * Returns the run's final outcome once it ends (Loss or a room-level
  * Retreat outcome ends it immediately; a Win on the last room completes

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { recruitmentPool } from '../state/recruitmentPool';
-  import { townStorage } from '../state/townStorage';
+  import { metaProgression } from '../state/metaProgression';
   import { recruitAdventurer } from '../state/townActions';
   import { ENCHANTMENT_REGISTRY } from '../sim/enchantments';
   import { portraitAssetPath } from './portraits';
@@ -87,10 +87,8 @@
             <dd>{adventurer.attackPower}</dd>
             <dt>Speed</dt>
             <dd>{adventurer.speed}</dd>
-            <dt>Accuracy</dt>
-            <dd>{adventurer.accuracy}%</dd>
-            <dt>Evasion</dt>
-            <dd>{adventurer.evasion}%</dd>
+            <dt>Crit Chance</dt>
+            <dd>{adventurer.critChance}%</dd>
             {#if adventurer.healPower > 0}
               <dt>Heal Power</dt>
               <dd>{adventurer.healPower}</dd>
@@ -117,8 +115,8 @@
         </section>
 
         <div class="recruit-footer">
-          <span class="recruit-footer__cost">Cost: {candidate.cost}g</span>
-          <button type="button" disabled={$townStorage.gold < candidate.cost} on:click={handleRecruit}>
+          <span class="recruit-footer__cost">Cost: {candidate.cost} Renown</span>
+          <button type="button" disabled={$metaProgression.renown < candidate.cost} on:click={handleRecruit}>
             Recruit
           </button>
         </div>

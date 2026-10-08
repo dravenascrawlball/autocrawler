@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { plainFaces } from './dieFace';
 import { createAdventurer, type AdventurerTemplate } from './adventurer';
-import { AttackLowestHpAction, PowerAttackAction } from './actions/attack';
+import { AttackLowestHpAction } from './actions/attack';
 import { rollRoomLoot, ROOM_LOOT_DROP_CHANCE } from './loot';
 import { createSeededRng } from './rng';
 import type { Item, ItemLookup } from './items';
@@ -9,16 +9,8 @@ import type { Item, ItemLookup } from './items';
 const SWORD: Item = { id: 'sword', name: 'Sword', slot: 'weapon', modifiers: [], price: 0 };
 const RING: Item = { id: 'ring', name: 'Ring', slot: 'trinket', modifiers: [], price: 0 };
 const SHIELD: Item = { id: 'shield', name: 'Shield', slot: 'armor', modifiers: [], price: 0 };
-const TOME: Item = {
-  id: 'tome',
-  name: 'Tome of Power',
-  slot: 'trinket',
-  modifiers: [],
-  price: 0,
-  faceEffect: { faceIndex: 0, effect: { kind: 'replace-action', action: PowerAttackAction } },
-};
 
-const ITEMS: Record<string, Item> = { sword: SWORD, ring: RING, shield: SHIELD, tome: TOME };
+const ITEMS: Record<string, Item> = { sword: SWORD, ring: RING, shield: SHIELD };
 const lookupItem: ItemLookup = (itemId) => ITEMS[itemId];
 
 function enemyTemplate(overrides: Partial<AdventurerTemplate>): AdventurerTemplate {
@@ -96,18 +88,6 @@ describe('rollRoomLoot', () => {
 
     const drops = rollRoomLoot([lootless, survivor], lookupItem, createSeededRng(1));
     expect(drops).toEqual([]);
-  });
-
-  it('rolls a fresh faceIndex for a magic-item drop, not always the same one', () => {
-    const enemy = defeatedEnemy({ lootTable: [{ itemId: 'tome', dropChance: 1 }] });
-
-    // A 4th rng() call rolls the faceIndex, on top of room-roll/enemy-pick/weighted-pick.
-    const first = rollRoomLoot([enemy], lookupItem, sequence([0, 0, 0, 0.1]));
-    const second = rollRoomLoot([enemy], lookupItem, sequence([0, 0, 0, 0.9]));
-
-    expect(first[0].faceEffect?.faceIndex).not.toBe(second[0].faceEffect?.faceIndex);
-    // The shared TOME definition itself is never mutated by a drop.
-    expect(TOME.faceEffect?.faceIndex).toBe(0);
   });
 });
 

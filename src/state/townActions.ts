@@ -1,16 +1,11 @@
 import { get } from 'svelte/store';
 import { roster } from './roster';
-import { townStorage } from './townStorage';
-import type { Item, EquipmentSlot } from '../sim/items';
-import type { Row } from '../sim/formation';
-import {
-  equipItem as simEquipItem,
-  unequipItem as simUnequipItem,
-  setRow as simSetRow,
-} from '../sim/partyManagement';
+import { metaProgression } from './metaProgression';
+import type { GridPosition } from '../sim/formation';
+import { setPosition as simSetPosition } from '../sim/partyManagement';
 import { recruitAdventurer as simRecruitAdventurer } from '../sim/recruitment';
-import { buyShopItem as simBuyShopItem } from '../sim/shop';
-import { ITEM_REGISTRY } from '../data/items';
+import { buyKit as simBuyKit } from '../sim/shop';
+import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { recruitmentPool } from './recruitmentPool';
 
 /**
@@ -23,59 +18,30 @@ function touchRoster(): void {
   roster.update((state) => ({ ...state }));
 }
 
-function touchTownStorage(): void {
-  townStorage.update((state) => ({ ...state }));
+function touchMetaProgression(): void {
+  metaProgression.update((state) => ({ ...state }));
 }
 
 function findAdventurer(id: string) {
   return get(roster).adventurers.find((adventurer) => adventurer.id === id) ?? null;
 }
 
-/** Equips `item` (pulled from town storage) onto `adventurerId`'s matching slot, per item.slot. */
-export function equipItemForAdventurer(adventurerId: string, item: Item): void {
+/** Reassigns `adventurerId`'s full grid position (lane + rank) — see sim/formation.ts. Used by the pre-fight layout-choice scene (ui/DungeonPauseView.svelte); works equally whether `adventurerId` is currently in Town or mid-run, since both read the same live roster record. */
+export function setAdventurerPosition(adventurerId: string, position: GridPosition): void {
   const adventurer = findAdventurer(adventurerId);
   if (!adventurer) {
     return;
   }
 
-  try {
-    simEquipItem(adventurer, get(townStorage), item, item.slot);
-  } catch {
-    return; // e.g. item no longer in inventory; leave state untouched
-  }
-
-  touchRoster();
-  touchTownStorage();
-}
-
-/** Unequips whatever `adventurerId` has in `slot`, returning it to town storage. */
-export function unequipItemForAdventurer(adventurerId: string, slot: EquipmentSlot): void {
-  const adventurer = findAdventurer(adventurerId);
-  if (!adventurer) {
-    return;
-  }
-
-  simUnequipItem(adventurer, get(townStorage), slot);
-  touchRoster();
-  touchTownStorage();
-}
-
-/** Reassigns `adventurerId`'s formation row (front/back) — see sim/formation.ts. */
-export function setAdventurerRow(adventurerId: string, row: Row): void {
-  const adventurer = findAdventurer(adventurerId);
-  if (!adventurer) {
-    return;
-  }
-
-  simSetRow(adventurer, row);
+  simSetPosition(adventurer, position);
   touchRoster();
 }
 
 /**
- * Recruits the candidate with `candidateId`: deducts their cost from town
- * gold and adds their id to `roster.recruitedIds` (granting "always
+ * Recruits the candidate with `candidateId`: deducts their cost from
+ * Renown and adds their id to `roster.recruitedIds` (granting "always
  * offerable as a draft substitute" rights — see sim/recruitment.ts), then
- * removes them from the pool. No-ops (returns false) if gold is
+ * removes them from the pool. No-ops (returns false) if Renown is
  * insufficient or the candidate is gone.
  */
 export function recruitAdventurer(candidateId: string): boolean {
@@ -88,24 +54,31 @@ export function recruitAdventurer(candidateId: string): boolean {
   const nextPool = [...pool];
   const state = get(roster);
   const nextRecruitedIds = [...state.recruitedIds];
-  const succeeded = simRecruitAdventurer(candidate, nextPool, nextRecruitedIds, get(townStorage));
+  const wallet = get(metaProgression);
+  const succeeded = simRecruitAdventurer(candidate, nextPool, nextRecruitedIds, wallet);
   if (!succeeded) {
     return false;
   }
 
   recruitmentPool.set(nextPool);
   roster.set({ ...state, recruitedIds: nextRecruitedIds });
-  touchTownStorage();
+  touchMetaProgression();
   return true;
 }
 
-/** Buys `itemId` from the shop's item roster, deducting its price from town gold. No-ops (returns false) if unaffordable. */
-export function buyShopItem(itemId: string): boolean {
-  const succeeded = simBuyShopItem(itemId, (id) => ITEM_REGISTRY[id], get(townStorage));
+/** Buys `kitId` (for `characterName`) from the Shop's Kit catalog (see data/kitShop.ts), deducting its price from Renown. No-ops (returns false) if unaffordable or already owned. */
+export function buyKitFromShop(characterName: string, kitId: string): boolean {
+  const entry = KIT_SHOP_CATALOG.find((candidate) => candidate.characterName === characterName && candidate.kit.id === kitId);
+  if (!entry) {
+    return false;
+  }
+
+  const wallet = get(metaProgression);
+  const succeeded = simBuyKit(entry.characterName, entry.kit, entry.price, wallet, wallet.unlockedKitIds);
   if (!succeeded) {
     return false;
   }
 
-  touchTownStorage();
+  touchMetaProgression();
   return true;
 }

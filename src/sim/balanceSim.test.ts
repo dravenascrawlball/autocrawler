@@ -1,22 +1,51 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from './rng';
 import { startDungeonRun, resolveNextRoom } from './dungeonRun';
+import { MAX_PARTY_SIZE } from './draft';
 import { createStarterRoster } from '../data/roster';
 import { createStarterDungeonRooms } from '../data/rooms';
+import { CHARACTER_TEMPLATES } from '../data/characters';
+import { rollRecruitOffers, DEFAULT_RECRUIT_PRICE } from './shopOffers';
 import { rollRoomGold } from './gold';
+import type { Adventurer } from './adventurer';
 
 /**
- * Not part of the regular suite — a dev tool for the balance pass (roadmap
- * item 6), skipped unless BALANCE_SIM is set so it doesn't slow down or
- * clutter `npx vitest run`. Run it directly:
+ * Not part of the regular suite — a dev tool for the balance pass (see
+ * docs/roadmap.md's Renown section), skipped unless BALANCE_SIM is set so
+ * it doesn't slow down or clutter `npx vitest run`. Run it directly:
  *   BALANCE_SIM=1 npx vitest run src/sim/balanceSim.test.ts
- * Reruns after changing any placeholder number (XP curve, xpReward, damage,
- * etc.) to see the effect on win rate / attrition / leveling speed.
+ * Reruns after changing any placeholder number (gold income, recruit
+ * prices, damage, etc.) to see the effect on win rate / attrition.
  */
 const RUNS = 500;
+const STARTING_SHOP_GOLD = 200;
 
 function average(values: number[]): number {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function recruitCostFor(adventurer: Adventurer): number {
+  return CHARACTER_TEMPLATES.find((t) => t.name === adventurer.name)?.recruitCost ?? DEFAULT_RECRUIT_PRICE;
+}
+
+/**
+ * Greedily spends `gold` on the cheapest roster members first, modeling a
+ * cost-conscious player at the opening shop (see state/openingShop.ts) —
+ * maximizes starting party size for a given gold grant, rather than a
+ * random sample.
+ */
+function buildStartingParty(roster: Adventurer[], gold: number): { party: Adventurer[]; goldLeft: number } {
+  const byPrice = [...roster].sort((a, b) => recruitCostFor(a) - recruitCostFor(b));
+  const party: Adventurer[] = [];
+  let remaining = gold;
+  for (const candidate of byPrice) {
+    const cost = recruitCostFor(candidate);
+    if (remaining >= cost && party.length < MAX_PARTY_SIZE) {
+      party.push(candidate);
+      remaining -= cost;
+    }
+  }
+  return { party, goldLeft: remaining };
 }
 
 describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
@@ -39,25 +68,35 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
 
     for (let seed = 0; seed < RUNS; seed++) {
       const rng = createSeededRng(seed);
-      const roster = createStarterRoster();
-      // A rotating 4-window over the whole roster, not a fixed slice(0, 4) — otherwise only
-      // whichever 4 characters happen to sit first in CHARACTER_TEMPLATES ever get simulated,
-      // silently leaving the rest of the (now 14-character) cast completely unreported. Every
-      // character appears in a comparable number of runs across the full RUNS sweep, and each
-      // individual run still has a normal, but varied, 4-person party.
-      const party = [0, 1, 2, 3].map((offset) => roster[(seed + offset) % roster.length]);
+      const fullRoster = createStarterRoster();
+      const { party, goldLeft } = buildStartingParty(fullRoster, STARTING_SHOP_GOLD);
       const rooms = createStarterDungeonRooms(rng);
 
       try {
-        const state = startDungeonRun(party, rooms);
+        const state = startDungeonRun(party, rooms, goldLeft);
         let outcome: ReturnType<typeof resolveNextRoom> = null;
         let roomIndex = 0;
         let goldEarned = 0;
+        let gold = goldLeft;
         while (outcome === null) {
           outcome = resolveNextRoom(state, rng);
           const record = state.roomRecords[roomIndex];
           if (record.result.outcome === 'win') {
-            goldEarned += rollRoomGold(state.rooms[roomIndex].enemies, rng);
+            const roomGold = rollRoomGold(state.rooms[roomIndex].enemies, rng);
+            goldEarned += roomGold;
+            gold += roomGold;
+          }
+          // Mirror a greedy between-room Shop player: if a pause follows (outcome still null) and
+          // the cheapest of this pause's 3 rolled Recruit offers fits the budget, buy it.
+          if (outcome === null && state.party.length < MAX_PARTY_SIZE) {
+            const recruitOffers = rollRecruitOffers(fullRoster, state.party, recruitCostFor, rng);
+            const cheapest = recruitOffers
+              .filter((offer) => !offer.alreadyInParty)
+              .sort((a, b) => a.price - b.price)[0];
+            if (cheapest && gold >= cheapest.price) {
+              gold -= cheapest.price;
+              state.party.push(cheapest.adventurer);
+            }
           }
           for (const member of party) {
             levelsAfterRoom[roomIndex].push(member.level);

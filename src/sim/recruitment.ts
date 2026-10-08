@@ -1,5 +1,5 @@
 import type { Adventurer } from './adventurer';
-import type { TownStorage } from './townStorage';
+import type { RenownWallet } from './shop';
 
 export const DEFAULT_RECRUITMENT_POOL_SIZE = 3;
 /** Roughly 3 moderately successful runs' worth of gold (placeholder, per the ~42g/run net measured in the balance pass) — recruiting is meta-progression now, not a cheap early buy. */
@@ -36,24 +36,26 @@ export function generateRecruitmentPool(
 }
 
 /**
- * Recruits `candidate`: deducts its cost from `townStorage.gold` (no-ops,
- * returning false, if that's insufficient) — adds the candidate's id to
- * `recruitedIds` and removes it from `pool`. Doesn't touch the adventurer
- * itself: the persistent record already exists (every unlocked character
- * has one — see state/roster.ts), recruiting only grants "always offerable
- * as a draft substitute" rights.
+ * Recruits `candidate`: deducts its cost from `wallet.renown` (no-ops,
+ * returning false, if that's insufficient — see state/metaProgression.ts;
+ * Recruit moved off town gold entirely once gold stopped banking to town
+ * at all, Town Storage Cleanup, see docs/roadmap.md) — adds the
+ * candidate's id to `recruitedIds` and removes it from `pool`. Doesn't
+ * touch the adventurer itself: the persistent record already exists
+ * (every unlocked character has one — see state/roster.ts), recruiting
+ * only grants "always offerable as a draft substitute" rights.
  */
 export function recruitAdventurer(
   candidate: RecruitCandidate,
   pool: RecruitCandidate[],
   recruitedIds: string[],
-  townStorage: TownStorage,
+  wallet: RenownWallet,
 ): boolean {
-  if (townStorage.gold < candidate.cost) {
+  if (wallet.renown < candidate.cost) {
     return false;
   }
 
-  townStorage.gold -= candidate.cost;
+  wallet.renown -= candidate.cost;
   recruitedIds.push(candidate.id);
 
   const index = pool.indexOf(candidate);

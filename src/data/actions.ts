@@ -15,10 +15,29 @@ import {
   MourningStrikeAction,
   SneakStrikeAction,
   FocusedShotAction,
+  VenomStingAction,
+  LifestealStrikeAction,
+  ExecuteStrikeAction,
+  ChainStrikeAction,
+  ScatterShotAction,
 } from '../sim/actions/attack';
-import { HealAction, SelfHealAction, MendingChargeAction } from '../sim/actions/heal';
+import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction } from '../sim/actions/heal';
 import { RetreatAction } from '../sim/actions/retreat';
-import { EmpowerAction, CommandAction, InspireAction, PotionTossAllyAction, PotionTossEnemyAction } from '../sim/actions/support';
+import {
+  EmpowerAction,
+  CommandAction,
+  InspireAction,
+  PotionTossAllyAction,
+  PotionTossEnemyAction,
+  ShieldWallAction,
+  TauntAction,
+  MarkAction,
+  SilenceAction,
+  StunAction,
+  GuardiansWardAction,
+  VanishAction,
+} from '../sim/actions/support';
+import { EmberBurnAction } from '../sim/actions/itemEffects';
 
 export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'attack-nearest': AttackNearestAction,
@@ -42,7 +61,22 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'mourning-strike': MourningStrikeAction,
   inspire: InspireAction,
   'sneak-strike': SneakStrikeAction,
+  'venom-sting': VenomStingAction,
   'focused-shot': FocusedShotAction,
   'potion-toss-ally': PotionTossAllyAction,
   'potion-toss-enemy': PotionTossEnemyAction,
+  'ember-burn': EmberBurnAction,
+  'shield-wall': ShieldWallAction,
+  'lifesteal-strike': LifestealStrikeAction,
+  taunt: TauntAction,
+  cleanse: CleanseAction,
+  mark: MarkAction,
+  'execute-strike': ExecuteStrikeAction,
+  silence: SilenceAction,
+  stun: StunAction,
+  'chain-strike': ChainStrikeAction,
+  'scatter-shot': ScatterShotAction,
+  revive: ReviveAction,
+  'guardians-ward': GuardiansWardAction,
+  vanish: VanishAction,
 };

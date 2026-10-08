@@ -1,7 +1,15 @@
 <script lang="ts">
-  import { townStorage } from '../state/townStorage';
-  import { buyShopItem } from '../state/townActions';
-  import { ALL_ITEMS } from '../data/items';
+  import { metaProgression } from '../state/metaProgression';
+  import { buyKitFromShop } from '../state/townActions';
+  import { KIT_SHOP_CATALOG } from '../data/kitShop';
+
+  // Takes `unlockedKitIds` as a parameter (rather than closing over $metaProgression) so its call
+  // site below can reference `$metaProgression` directly — Svelte's dependency tracking for a
+  // template block only sees identifiers textually present in that block's own expressions, not
+  // ones a called function merely closes over, so a plain closure here would silently go stale.
+  function isOwned(unlockedKitIds: Record<string, string[]>, characterName: string, kitId: string): boolean {
+    return (unlockedKitIds[characterName] ?? []).includes(kitId);
+  }
 </script>
 
 <section class="shop">
@@ -9,17 +17,26 @@
   <span class="shop__scrim" aria-hidden="true"></span>
 
   <div class="shop__content">
-    <h2>Shop</h2>
+    <h2>Shop <span class="shop__renown">{$metaProgression.renown} Renown</span></h2>
 
-    <div class="shop-box shop-box--items">
-      <h3>Items</h3>
+    <div class="shop-box shop-box--kits">
+      <h3>Kits</h3>
       <ul>
-        {#each ALL_ITEMS as item (item.id)}
+        {#each KIT_SHOP_CATALOG as entry (entry.characterName + ':' + entry.kit.id)}
           <li>
-            {item.name} — {item.slot} — {item.price}g
-            <button type="button" disabled={$townStorage.gold < item.price} on:click={() => buyShopItem(item.id)}>
-              Buy
-            </button>
+            <strong>{entry.characterName}</strong> — <span class="kit-name">{entry.kit.name}</span>
+            <p class="kit-description">{entry.kit.description}</p>
+            {#if isOwned($metaProgression.unlockedKitIds, entry.characterName, entry.kit.id)}
+              <span class="kit-owned">Owned</span>
+            {:else}
+              <button
+                type="button"
+                disabled={$metaProgression.renown < entry.price}
+                on:click={() => buyKitFromShop(entry.characterName, entry.kit.id)}
+              >
+                Buy — {entry.price} Renown
+              </button>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -68,6 +85,12 @@
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
   }
 
+  .shop__renown {
+    font-size: 14px;
+    color: var(--gold-bright);
+    margin-left: 8px;
+  }
+
   .shop-box {
     background: var(--bg-inset);
     border: 1px solid var(--panel-border);
@@ -75,8 +98,8 @@
     padding: 12px 14px;
     box-shadow: var(--shadow);
     /* Narrow so the background art stays visible beside it, rather than the panel spanning the
-       whole section — this is a placeholder item roster (roadmap: item system likely gets
-       reworked), so this isn't tuned around today's specific item count. */
+       whole section — this is a placeholder Kit roster (pending the balance pass), not tuned
+       around today's specific count. */
     width: min(420px, 100%);
   }
 
@@ -84,8 +107,35 @@
     margin-top: 0;
   }
 
-  .shop-box--items ul {
+  .shop-box--kits ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     max-height: 340px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .shop-box--kits li {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .shop-box--kits li:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .kit-description {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 4px 0 8px;
+  }
+
+  .kit-owned {
+    font-size: 13px;
+    color: var(--gold-bright);
   }
 </style>

@@ -46,8 +46,6 @@
             {adventurer.name} was defeated{summary.killerArchetype ? ` by a ${summary.killerArchetype}` : ''}!
           </h2>
           <dl class="modal__stats">
-            <dt>XP Gained</dt>
-            <dd>{summary.xpGained}</dd>
             <dt>Damage Done</dt>
             <dd>{summary.damageDone}</dd>
             <dt>Damage Taken</dt>

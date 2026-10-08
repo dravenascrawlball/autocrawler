@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import type { DungeonOutcome, RoomDefinition } from '../sim/dungeonRun';
 import type { RunInventory } from '../sim/items';
+import type { Relic } from '../sim/relics';
 import { INITIAL_SAVE } from './persistence';
 
 /**
@@ -23,6 +24,8 @@ export interface ActiveDungeonRunState {
   inventory: RunInventory;
   /** Non-null once the run has ended but the player hasn't hit "Return to Town" yet. */
   outcome: DungeonOutcome | null;
+  /** Relics bought from the between-room shop so far — see sim/dungeonRun.ts's DungeonRunState.activeRelics. */
+  activeRelics: Relic[];
 }
 
 /** Sourced from a save if one exists; null means no run is in progress. */

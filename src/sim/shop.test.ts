@@ -1,34 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { createTownStorage } from './townStorage';
-import type { Item, ItemLookup } from './items';
-import { buyShopItem } from './shop';
+import type { Kit } from './kits';
+import { buyKit } from './shop';
 
-const SWORD: Item = { id: 'sword', name: 'Sword', slot: 'weapon', modifiers: [], price: 25 };
-const lookupItem: ItemLookup = (id) => {
-  if (id === SWORD.id) return SWORD;
-  throw new Error(`unknown item ${id}`);
+const FURY_KIT: Kit = {
+  id: 'fury-kit',
+  name: 'Fury',
+  description: 'test kit',
+  modifiers: [],
+  artKey: 'fury',
 };
 
-describe('buyShopItem', () => {
-  it('deducts the item price and adds it to town storage when affordable', () => {
-    const townStorage = createTownStorage();
-    townStorage.gold = 30;
+describe('buyKit', () => {
+  it('deducts the price and records the unlock when affordable', () => {
+    const wallet = { renown: 50 };
+    const unlockedKitIds: Record<string, string[]> = {};
 
-    const succeeded = buyShopItem('sword', lookupItem, townStorage);
+    const succeeded = buyKit('Gudrun', FURY_KIT, 40, wallet, unlockedKitIds);
 
     expect(succeeded).toBe(true);
-    expect(townStorage.gold).toBe(5);
-    expect(townStorage.items).toEqual([SWORD]);
+    expect(wallet.renown).toBe(10);
+    expect(unlockedKitIds.Gudrun).toEqual(['fury-kit']);
   });
 
-  it('fails cleanly with no side effects when gold is insufficient', () => {
-    const townStorage = createTownStorage();
-    townStorage.gold = 10;
+  it('fails cleanly with no side effects when Renown is insufficient', () => {
+    const wallet = { renown: 10 };
+    const unlockedKitIds: Record<string, string[]> = {};
 
-    const succeeded = buyShopItem('sword', lookupItem, townStorage);
+    const succeeded = buyKit('Gudrun', FURY_KIT, 40, wallet, unlockedKitIds);
 
     expect(succeeded).toBe(false);
-    expect(townStorage.gold).toBe(10);
-    expect(townStorage.items).toEqual([]);
+    expect(wallet.renown).toBe(10);
+    expect(unlockedKitIds.Gudrun).toBeUndefined();
+  });
+
+  it('fails cleanly when the character already owns this Kit, without double-charging', () => {
+    const wallet = { renown: 100 };
+    const unlockedKitIds: Record<string, string[]> = { Gudrun: ['fury-kit'] };
+
+    const succeeded = buyKit('Gudrun', FURY_KIT, 40, wallet, unlockedKitIds);
+
+    expect(succeeded).toBe(false);
+    expect(wallet.renown).toBe(100);
+    expect(unlockedKitIds.Gudrun).toEqual(['fury-kit']);
+  });
+
+  it('keeps each character\'s unlocked list independent', () => {
+    const wallet = { renown: 100 };
+    const unlockedKitIds: Record<string, string[]> = { Gudrun: ['fury-kit'] };
+
+    buyKit('Nerissa', FURY_KIT, 40, wallet, unlockedKitIds);
+
+    expect(unlockedKitIds.Gudrun).toEqual(['fury-kit']);
+    expect(unlockedKitIds.Nerissa).toEqual(['fury-kit']);
   });
 });

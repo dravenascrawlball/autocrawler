@@ -14,11 +14,9 @@
     return `${modifier.amount >= 0 ? '+' : ''}${amount} ${modifier.stat}`;
   }
 
-  function faceEffectDescription(current: Item): string | null {
-    if (!current.faceEffect) return null;
-    return current.faceEffect.effect.kind === 'enchant'
-      ? 'Enchants a die face with Burning.'
-      : `Replaces a die face with ${current.faceEffect.effect.action.name}.`;
+  function grantedSpecialActionDescription(current: Item): string | null {
+    if (!current.grantedSpecialAction) return null;
+    return `Grants the Special Action: ${current.grantedSpecialAction.name}.`;
   }
 
   function equip(adventurerId: string): void {
@@ -46,8 +44,8 @@
         </ul>
       {/if}
 
-      {#if faceEffectDescription(item)}
-        <p class="modal__effect">{faceEffectDescription(item)}</p>
+      {#if grantedSpecialActionDescription(item)}
+        <p class="modal__effect">{grantedSpecialActionDescription(item)}</p>
       {/if}
 
       <h3>Equip on</h3>
@@ -113,10 +111,9 @@
 
   .modal__party {
     display: grid;
-    /* Fixed 2 columns rather than auto-fill: the party is always exactly 4 (DRAFT_ROUND_COUNT), so
-       this always lands as a clean 2x2 instead of a lopsided 3-then-1 the old auto-fill produced
-       at this modal's width. */
-    grid-template-columns: repeat(2, 1fr);
+    /* Auto-fill, not a fixed column count: party size now varies run to run (starts at 1, grows via
+       mid-run recruit offers up to MAX_PARTY_SIZE) rather than always being exactly 4. */
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
     list-style: none;
     padding: 0;

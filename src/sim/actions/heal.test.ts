@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { plainFaces } from '../dieFace';
 import { createAdventurer, type AdventurerTemplate } from '../adventurer';
-import { HealAction, SelfHealAction, MendingChargeAction, MENDING_CHARGE_ENERGY_PER_ROLL } from './heal';
+import { HealAction, SelfHealAction, MendingChargeAction, MENDING_CHARGE_ENERGY_PER_ROLL, CleanseAction, ReviveAction, REVIVE_HP_FRACTION } from './heal';
 import { AttackNearestAction } from './attack';
 import { createBattleState, getHealEnergy } from '../battle';
 import { resolveTurn } from '../turnEngine';
+import { applyBurn, applyPoison } from '../statusEffects';
 
 function allyTemplate(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -201,5 +202,78 @@ describe('MendingChargeAction (Dawneth\'s signature mechanic — roadmap item 11
 
     expect(getHealEnergy(battle, 'dawneth')).toBe(3 * MENDING_CHARGE_ENERGY_PER_ROLL);
     expect(third).toMatchObject({ totalEnergy: 3 * MENDING_CHARGE_ENERGY_PER_ROLL });
+  });
+});
+
+describe("CleanseAction (Dawneth's second signature mechanic)", () => {
+  it('clears every active status effect from the lowest-HP living ally', () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), 'front');
+    const woundedAlly = createAdventurer('ally', allyTemplate(), 'front');
+    woundedAlly.hp = 5;
+    applyBurn(woundedAlly, 2, 3);
+    applyPoison(woundedAlly, 1, 5);
+    const battle = createBattleState([dawneth, woundedAlly], []);
+
+    const target = CleanseAction.selectTarget({ actor: dawneth, battle });
+    expect(target).toBe(woundedAlly);
+
+    const outcome = CleanseAction.resolve({ actor: dawneth, target: woundedAlly, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'cleanse', targetId: 'ally', clearedEffectIds: ['burn', 'poison'] });
+    expect(woundedAlly.statusEffects).toEqual([]);
+  });
+
+  it('still resolves with an empty clearedEffectIds when the target has nothing to cleanse', () => {
+    const dawneth = createAdventurer('dawneth', allyTemplate(), 'front');
+    const battle = createBattleState([dawneth], []);
+
+    const outcome = CleanseAction.resolve({ actor: dawneth, target: dawneth, battle, rng: () => 0.5 });
+
+    expect(outcome).toEqual({ type: 'cleanse', targetId: 'dawneth', clearedEffectIds: [] });
+  });
+});
+
+describe("ReviveAction (Mira's second signature mechanic)", () => {
+  it('targets the first Downed ally and brings them back at REVIVE_HP_FRACTION of effective maxHp', () => {
+    const mira = createAdventurer('mira', allyTemplate(), 'front');
+    const downedAlly = createAdventurer('ally', allyTemplate({ maxHp: 20 }), 'front');
+    downedAlly.hp = 0;
+    const battle = createBattleState([mira, downedAlly], []);
+
+    const target = ReviveAction.selectTarget({ actor: mira, battle });
+    expect(target).toBe(downedAlly);
+
+    const outcome = ReviveAction.resolve({ actor: mira, target: downedAlly, battle, rng: () => 0.5 });
+
+    const expectedAmount = Math.round(20 * REVIVE_HP_FRACTION);
+    expect(outcome).toEqual({ type: 'revive', targetId: 'ally', amount: expectedAmount });
+    expect(downedAlly.hp).toBe(expectedAmount);
+  });
+
+  it('clears downedSummary on the revived ally so a later down this run gets a fresh summary', () => {
+    const mira = createAdventurer('mira', allyTemplate(), 'front');
+    const downedAlly = createAdventurer('ally', allyTemplate(), 'front');
+    downedAlly.hp = 0;
+    downedAlly.downedSummary = {
+      roomIndex: 0,
+      killerArchetype: 'Grunt',
+      damageDone: 0,
+      damageTaken: 0,
+      healed: 0,
+      acknowledged: true,
+    };
+    const battle = createBattleState([mira, downedAlly], []);
+
+    ReviveAction.resolve({ actor: mira, target: downedAlly, battle, rng: () => 0.5 });
+
+    expect(downedAlly.downedSummary).toBeUndefined();
+  });
+
+  it('selectTarget returns null when nobody on the side is Downed', () => {
+    const mira = createAdventurer('mira', allyTemplate(), 'front');
+    const healthyAlly = createAdventurer('ally', allyTemplate(), 'front');
+    const battle = createBattleState([mira, healthyAlly], []);
+
+    expect(ReviveAction.selectTarget({ actor: mira, battle })).toBeNull();
   });
 });

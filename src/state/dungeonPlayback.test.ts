@@ -34,10 +34,12 @@ function baseSave(overrides: Partial<GameState['activeRun']> = {}): GameState {
       partyGold: 0,
       inventory: { items: [], gold: 0 },
       outcome: null,
+      activeRelics: [],
       ...overrides,
     },
     recruitmentPool: [],
     runHistory: { clearedWithIds: [] },
+    metaProgression: { renown: 0, unlockedKitIds: {} },
   };
 }
 
@@ -118,5 +120,31 @@ describe('dungeonPlayback resumeFromSave (module init)', () => {
 
     const { dungeonPlayback } = await import('./dungeonPlayback');
     expect(get(dungeonPlayback)).toBeNull();
+  });
+
+  it('rolls fresh shop offers on resume (not persisted — see ActiveDungeonRunState) when the run is still paused', async () => {
+    const hero = createAdventurer('hero', template(), 'front');
+    const bench = createAdventurer('bench', template({ name: 'Bodil' }), 'front');
+    const savedState = baseSave({ partyIds: ['hero'] });
+    savedState.roster = { adventurers: [hero, bench], recruitedIds: [] };
+
+    vi.doMock('./persistence', () => ({ INITIAL_SAVE: savedState }));
+
+    const { dungeonPlayback } = await import('./dungeonPlayback');
+    const playback = get(dungeonPlayback);
+    expect(playback?.shopOffers.recruits.map((o) => o.adventurer.id).sort()).toEqual(['bench', 'hero']);
+  });
+
+  it('rolls no shop offers on resume once the run has already ended', async () => {
+    const hero = createAdventurer('hero', template(), 'front');
+    const bench = createAdventurer('bench', template({ name: 'Bodil' }), 'front');
+    const savedState = baseSave({ partyIds: ['hero'], outcome: 'completed' });
+    savedState.roster = { adventurers: [hero, bench], recruitedIds: [] };
+
+    vi.doMock('./persistence', () => ({ INITIAL_SAVE: savedState }));
+
+    const { dungeonPlayback } = await import('./dungeonPlayback');
+    const playback = get(dungeonPlayback);
+    expect(playback?.shopOffers).toEqual({ recruits: [], relics: [], equipment: [] });
   });
 });

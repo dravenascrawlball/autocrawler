@@ -7,8 +7,10 @@ import LootModal from './LootModal.svelte';
 import { roster } from '../state/roster';
 import { dungeonPlayback, type DungeonPlaybackState } from '../state/dungeonPlayback';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
-import { AttackNearestAction, PowerAttackAction } from '../sim/actions/attack';
+import { AttackNearestAction } from '../sim/actions/attack';
+import { EmpowerAction } from '../sim/actions/support';
 import { createRunInventory, type Item } from '../sim/items';
+import type { SpecialAction } from '../sim/specialActions';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -29,13 +31,14 @@ const PLAIN_ITEM: Item = {
   modifiers: [{ stat: 'speed', type: 'flat', amount: 1, source: 'item:ring' }],
   price: 0,
 };
+const TEST_SPECIAL: SpecialAction = { id: 'test-special', name: 'Test Special', trigger: 'on-turn-start', action: EmpowerAction };
 const MAGIC_ITEM: Item = {
   id: 'tome',
   name: 'Tome of Power',
   slot: 'trinket',
   modifiers: [],
   price: 0,
-  faceEffect: { faceIndex: 0, effect: { kind: 'replace-action', action: PowerAttackAction } },
+  grantedSpecialAction: TEST_SPECIAL,
 };
 
 function setUpPlayback(hero: ReturnType<typeof createAdventurer>, item: Item) {
@@ -59,7 +62,7 @@ describe('LootModal', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders the item name, modifiers, faceEffect description, and party members', () => {
+  it('renders the item name, modifiers, granted Special Action description, and party members', () => {
     const hero = createAdventurer('hero', template(), 'front');
     roster.set({ adventurers: [hero], recruitedIds: [] });
     setUpPlayback(hero, MAGIC_ITEM);
@@ -67,11 +70,11 @@ describe('LootModal', () => {
     render(LootModal, { item: MAGIC_ITEM });
 
     expect(screen.getByText(/You found Tome of Power/)).toBeInTheDocument();
-    expect(screen.getByText(`Replaces a die face with ${PowerAttackAction.name}.`)).toBeInTheDocument();
+    expect(screen.getByText(`Grants the Special Action: ${TEST_SPECIAL.name}.`)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hero' })).toBeInTheDocument();
   });
 
-  it('renders a plain modifier list for an item with no faceEffect', () => {
+  it('renders a plain modifier list for an item with no grantedSpecialAction', () => {
     const hero = createAdventurer('hero', template(), 'front');
     roster.set({ adventurers: [hero], recruitedIds: [] });
     setUpPlayback(hero, PLAIN_ITEM);

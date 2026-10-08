@@ -3,7 +3,14 @@ import { plainFaces } from './dieFace';
 import { createAdventurer, type AdventurerTemplate } from './adventurer';
 import { AttackNearestAction, GildedStrikeAction } from './actions/attack';
 import { RetreatAction } from './actions/retreat';
-import { runDungeon, startDungeonRun, resolveNextRoom, retreatDungeonRun, type RoomDefinition } from './dungeonRun';
+import {
+  runDungeon,
+  startDungeonRun,
+  resolveNextRoom,
+  retreatDungeonRun,
+  DOWNED_REVIVE_HP_FRACTION,
+  type RoomDefinition,
+} from './dungeonRun';
 
 function heroTemplate(): AdventurerTemplate {
   return {
@@ -88,8 +95,8 @@ describe('runDungeon', () => {
   });
 });
 
-describe('Downed lasts for the rest of the run', () => {
-  it('does not revive a Downed party member with the between-room heal, and keeps their DownedSummary', () => {
+describe('Downed is revived between rooms (Autobattle Revision Cleanup — Heal Downed Characters Between Fights)', () => {
+  it('revives a Downed party member to DOWNED_REVIVE_HP_FRACTION of maxHp with the between-room heal, and clears their DownedSummary', () => {
     // Party order matters here: battle.adventurers === party, and melee targeting picks the
     // first living front-row candidate in that order — so the grunt hits heroB (front-row,
     // index 0) before heroA ever gets a turn.
@@ -136,21 +143,45 @@ describe('Downed lasts for the rest of the run', () => {
     const run = runDungeon([heroB, heroA], rooms, () => 0.5);
 
     expect(run.outcome).toBe('completed');
-    // heroB went down in room 1 (grunt outspeeds both heroes and hits first) and stayed there —
-    // the room 2 between-room heal (a flat +5) never touched them.
+    // heroB went down in room 1 (grunt outspeeds both heroes and hits first), but is revived
+    // (Math.round(1 * DOWNED_REVIVE_HP_FRACTION) = 1 at her tiny maxHp of 1) before room 2 starts,
+    // rather than staying Downed for the rest of the run.
     expect(run.rooms[1].partyAtRoomStart).toEqual(
-      expect.arrayContaining([{ id: 'heroB', hp: 0 }]),
+      expect.arrayContaining([{ id: 'heroB', hp: 1 }]),
     );
-    expect(heroB.hp).toBe(0);
-    expect(heroB.downedSummary).toEqual({
+    expect(heroB.hp).toBeGreaterThan(0);
+    expect(heroB.downedSummary).toBeUndefined();
+  });
+
+  it('revives to exactly DOWNED_REVIVE_HP_FRACTION of effective maxHp, distinct from the flat living-member heal', () => {
+    // 1 HP so the hero's first hit (speed 10 > enemy's 5, acts first each round) always kills it
+    // before the enemy ever gets a turn — MIN_DAMAGE_AFTER_ARMOR means even a 0-attackPower enemy
+    // would otherwise chip 1 damage in, which would make the final HP off by one from the revive
+    // math this test is actually checking.
+    const trivialRoom = (): RoomDefinition => ({ enemies: [createAdventurer('goblin', enemyTemplate(1, 0), 'front')] });
+    const hero = createAdventurer('hero', heroTemplate(), 'front'); // maxHp 20
+    const state = startDungeonRun([hero], [trivialRoom(), trivialRoom()]);
+
+    resolveNextRoom(state, () => 0.5); // room 1: hero wins before the enemy ever acts, stays alive
+    expect(hero.hp).toBeGreaterThan(0);
+
+    // Simulate hero having been Downed by some other means (e.g. a later room's combat, or a
+    // status tick) right before the next between-room heal runs.
+    hero.hp = 0;
+    hero.downedSummary = {
       roomIndex: 0,
-      killerArchetype: 'Grunt',
-      xpGained: 0,
+      killerArchetype: 'Goblin',
       damageDone: 0,
-      damageTaken: 5,
+      damageTaken: 20,
       healed: 0,
-      acknowledged: false,
-    });
+      acknowledged: true,
+    };
+
+    resolveNextRoom(state, () => 0.5); // room 2: healBetweenRooms runs first and revives it
+    // The enemy dies before ever acting (see trivialRoom's own comment), so nothing changes
+    // hero's HP further during room 2 combat itself — the revived value is the final value.
+    expect(hero.hp).toBe(Math.round(20 * DOWNED_REVIVE_HP_FRACTION));
+    expect(hero.downedSummary).toBeUndefined();
   });
 });
 

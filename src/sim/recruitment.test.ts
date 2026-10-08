@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { plainFaces } from './dieFace';
 import { createAdventurer, type Adventurer, type AdventurerTemplate } from './adventurer';
 import { AttackNearestAction } from './actions/attack';
-import { createTownStorage } from './townStorage';
 import {
   generateRecruitmentPool,
   recruitAdventurer,
@@ -74,28 +73,26 @@ describe('recruitAdventurer', () => {
     const otherCandidate = makeCandidate(60);
     const pool = [candidate, otherCandidate];
     const recruitedIds: string[] = [];
-    const townStorage = createTownStorage();
-    townStorage.gold = 100;
+    const wallet = { renown: 100 };
 
-    const succeeded = recruitAdventurer(candidate, pool, recruitedIds, townStorage);
+    const succeeded = recruitAdventurer(candidate, pool, recruitedIds, wallet);
 
     expect(succeeded).toBe(true);
-    expect(townStorage.gold).toBe(50);
+    expect(wallet.renown).toBe(50);
     expect(recruitedIds).toEqual(['candidate-x']);
     expect(pool).toEqual([otherCandidate]);
   });
 
-  it('fails cleanly with no side effects when gold is insufficient', () => {
+  it('fails cleanly with no side effects when Renown is insufficient', () => {
     const candidate = makeCandidate(50);
     const pool = [candidate];
     const recruitedIds: string[] = [];
-    const townStorage = createTownStorage();
-    townStorage.gold = 49; // just short
+    const wallet = { renown: 49 }; // just short
 
-    const succeeded = recruitAdventurer(candidate, pool, recruitedIds, townStorage);
+    const succeeded = recruitAdventurer(candidate, pool, recruitedIds, wallet);
 
     expect(succeeded).toBe(false);
-    expect(townStorage.gold).toBe(49);
+    expect(wallet.renown).toBe(49);
     expect(recruitedIds).toEqual([]);
     expect(pool).toEqual([candidate]);
   });

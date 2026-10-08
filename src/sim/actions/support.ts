@@ -1,7 +1,8 @@
 import type { Action, ActionContext, ActionOutcome, TargetingContext } from '../action';
 import { getOwnRoster, getOpposingRoster } from '../battle';
 import { applyBuff } from '../buffs';
-import { selectHighestAttackPowerAlly, selectFirstEnemy } from './targeting';
+import { applyShield } from '../shields';
+import { selectHighestAttackPowerAlly, selectFirstEnemy, selectLowestHpAlly } from './targeting';
 import { AttackNearestAction } from './attack';
 
 /** Percent attackPower bonus Empower grants — placeholder pending the balance pass, same as every other combat number. */
@@ -46,8 +47,8 @@ export const EmpowerAction: Action = {
  * living ally (never herself) a genuine bonus attack right now — they
  * still take their own normal turn later in the round unaffected, this is
  * a real extra action, not a redirect. The commanded ally attacks exactly
- * like AttackNearestAction would for them (their own attackPower/accuracy,
- * normal melee targeting) — reused directly rather than reimplemented.
+ * like AttackNearestAction would for them (their own attackPower, normal
+ * melee targeting) — reused directly rather than reimplemented.
  * `selectTarget` only gates on "is there anyone to command" (deterministic,
  * no rng available there); the actual random pick happens in `resolve`,
  * which does have `context.rng`.
@@ -87,21 +88,19 @@ export const CommandAction: Action = {
   },
 };
 
-/** Flat accuracy and critChance bonuses Inspire grants, and how many of each buffed ally's own turns they last — placeholders pending the balance pass. */
-export const INSPIRE_ACCURACY_BONUS = 10;
-export const INSPIRE_CRIT_CHANCE_BONUS = 10;
+/** Consolidated from two separate bonuses (10 accuracy + 10 crit) into one stronger crit buff once Accuracy was removed (the "pure auto-battler" pass — see docs/roadmap.md). */
+export const INSPIRE_CRIT_CHANCE_BONUS = 20;
 export const INSPIRE_DURATION_TURNS = 3;
-const INSPIRE_ACCURACY_BUFF_ID = 'inspire-accuracy';
 const INSPIRE_CRIT_BUFF_ID = 'inspire-crit';
 
 /**
  * Tharavel's signature mechanic (roadmap item 11): no attack of her own —
- * grants every living ally at once (herself included) a timed accuracy
- * buff and a timed critChance buff, same whole-party scope as Glint's
- * Rallying Strike but with no attack half (like Fallacy's Empower's shape,
- * just party-wide instead of single-target). Two separate applyBuff calls
- * per ally since they're independent stats with independent ids — a
- * refresh of one never clobbers the other.
+ * grants every living ally at once (herself included) a timed critChance
+ * buff, same whole-party scope as Glint's Rallying Strike but with no
+ * attack half (like Fallacy's Empower's shape, just party-wide instead of
+ * single-target). Used to be two separate buffs (accuracy + crit);
+ * consolidated into one stronger crit buff once Accuracy was removed as a
+ * baseline stat.
  */
 export const InspireAction: Action = {
   id: 'inspire',
@@ -116,12 +115,6 @@ export const InspireAction: Action = {
     for (const ally of allies) {
       applyBuff(
         ally,
-        INSPIRE_ACCURACY_BUFF_ID,
-        { stat: 'accuracy', type: 'flat', amount: INSPIRE_ACCURACY_BONUS, source: 'buff:inspire' },
-        INSPIRE_DURATION_TURNS,
-      );
-      applyBuff(
-        ally,
         INSPIRE_CRIT_BUFF_ID,
         { stat: 'critChance', type: 'flat', amount: INSPIRE_CRIT_CHANCE_BONUS, source: 'buff:inspire' },
         INSPIRE_DURATION_TURNS,
@@ -131,30 +124,260 @@ export const InspireAction: Action = {
     return {
       type: 'party-buff',
       buffedAllyIds: allies.map((ally) => ally.id),
-      accuracyAmount: INSPIRE_ACCURACY_BONUS,
       critChanceAmount: INSPIRE_CRIT_CHANCE_BONUS,
       durationTurns: INSPIRE_DURATION_TURNS,
     };
   },
 };
 
-/** Magnitudes and duration for Mira's potion tosses (roadmap item 3) — placeholder pending the balance pass, same shape as Empower/Fear/Blind's own numbers. */
+/** Shield amount and duration Shield Wall grants — placeholders pending the balance pass, same as every other combat number. */
+export const SHIELD_WALL_AMOUNT = 8;
+export const SHIELD_WALL_DURATION_TURNS = 3;
+const SHIELD_WALL_ID = 'shield-wall';
+
+/**
+ * Glint's second signature mechanic (the Shield ability type from
+ * docs/missing-ability-types.md — a depletable damage-absorb pool,
+ * distinct from Rallying Strike/Guard Up's flat armor/attackPower buffs):
+ * no attack of her own — grants SHIELD_WALL_AMOUNT Shield to whichever
+ * living ally (herself included) currently has the lowest HP, same
+ * "always resolves, never gated on anyone being hurt enough" targeting as
+ * Dawneth's Mending Charge (selectLowestHpAlly, not the
+ * below-threshold variant).
+ */
+export const ShieldWallAction: Action = {
+  id: 'shield-wall',
+  name: 'Shield Wall',
+  reach: 'melee', // unused — Shield Wall targets an ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyShield(context.target, SHIELD_WALL_ID, SHIELD_WALL_AMOUNT, SHIELD_WALL_DURATION_TURNS);
+    return {
+      type: 'support-shield',
+      targetId: context.target.id,
+      amount: SHIELD_WALL_AMOUNT,
+      durationTurns: SHIELD_WALL_DURATION_TURNS,
+    };
+  },
+};
+
+/** How many of her own turns Taunt lasts before expiring — placeholder pending the balance pass. */
+export const TAUNT_DURATION_TURNS = 3;
+const TAUNT_BUFF_ID = 'taunt-self';
+
+/**
+ * Bodil's second signature mechanic (the Taunt ability type from
+ * docs/missing-ability-types.md): no attack of her own — grants herself a
+ * timed buff on a synthetic 'taunt' stat (same "encode a flag as a
+ * StatModifier" convention as Fear/Blind, just on a stat nothing else
+ * reads for its numeric value) that forces every opposing basic-attack-style
+ * targeting call (selectFirstEnemy/selectLowestHpEnemy — see
+ * actions/targeting.ts) onto her specifically, regardless of row/reach,
+ * for as long as it's active. Does not yet override every special-cased
+ * targeting roll (Card Throw/Sneak Strike's own random picks, Fear/
+ * Cleave's row grab, Potion Toss Enemy) — flagged as a follow-up, not
+ * silently assumed covered.
+ */
+export const TauntAction: Action = {
+  id: 'taunt',
+  name: 'Taunt',
+  reach: 'melee', // unused — Taunt targets herself only
+  selectTarget(context: TargetingContext) {
+    return context.actor;
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(context.actor, TAUNT_BUFF_ID, { stat: 'taunt', type: 'flat', amount: 1, source: 'buff:taunt' }, TAUNT_DURATION_TURNS);
+    return { type: 'support-buff', targetId: context.actor.id, stat: 'taunt', amount: 1, durationTurns: TAUNT_DURATION_TURNS };
+  },
+};
+
+/** Percent extra damage Mark causes its target to take, and how long it lasts — placeholders pending the balance pass. */
+export const MARK_VULNERABILITY_PERCENT = 30;
+export const MARK_DURATION_TURNS = 3;
+const MARK_DEBUFF_ID = 'mark-vulnerability';
+
+/**
+ * Isilwen's second signature mechanic (the Mark ability type from
+ * docs/missing-ability-types.md): no attack of her own — applies a timed
+ * positive StatModifier on a synthetic 'vulnerability' stat to a single
+ * living enemy, read directly by actions/attack.ts's applyAttackToTarget
+ * to scale up whatever damage they next take, distinct from
+ * support-debuff's existing stat-lowering flavor (this raises incoming
+ * damage rather than lowering the target's own stats). Deliberately a
+ * 'flat' StatModifier even though `amount` is itself a percentage —
+ * attack.ts reads the summed amount directly as the bonus-damage percent,
+ * rather than running it through getEffectiveStat's usual `(base +
+ * flat) * (1 + percent/100)` formula, which would always evaluate to 0
+ * against a 0 base (there's no real "vulnerability" stat to have a base
+ * value in the first place — same reasoning as Taunt/Silence/Stun/
+ * Stealth/Invulnerable's own flag-as-flat-buff convention).
+ */
+export const MarkAction: Action = {
+  id: 'mark',
+  name: 'Mark',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(
+      context.target,
+      MARK_DEBUFF_ID,
+      { stat: 'vulnerability', type: 'flat', amount: MARK_VULNERABILITY_PERCENT, source: 'buff:mark' },
+      MARK_DURATION_TURNS,
+    );
+    return {
+      type: 'support-debuff',
+      targetId: context.target.id,
+      stat: 'vulnerability',
+      amount: MARK_VULNERABILITY_PERCENT,
+      durationTurns: MARK_DURATION_TURNS,
+    };
+  },
+};
+
+/** How long Silence lasts — placeholder pending the balance pass. */
+export const SILENCE_DURATION_TURNS = 3;
+const SILENCE_DEBUFF_ID = 'silence';
+
+/**
+ * Fallacy's second signature mechanic (the Silence ability type from
+ * docs/missing-ability-types.md): no attack of her own — applies a timed
+ * flag-as-buff on a synthetic 'silence' stat to a single living enemy,
+ * checked by specialActions.ts's resolveSpecialActionTriggers to suppress
+ * every one of that unit's Special Actions for the duration — their Basic
+ * Action still fires normally every turn, unlike Stun, which stops both.
+ */
+export const SilenceAction: Action = {
+  id: 'silence',
+  name: 'Silence',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(context.target, SILENCE_DEBUFF_ID, { stat: 'silence', type: 'flat', amount: 1, source: 'buff:silence' }, SILENCE_DURATION_TURNS);
+    return { type: 'support-debuff', targetId: context.target.id, stat: 'silence', amount: 1, durationTurns: SILENCE_DURATION_TURNS };
+  },
+};
+
+/** How long Stun lasts — shorter than Silence/Mark since it suppresses a whole turn outright, not just one half of it — placeholder pending the balance pass. */
+export const STUN_DURATION_TURNS = 2;
+const STUN_DEBUFF_ID = 'stun';
+
+/**
+ * Mirka's second signature mechanic (the Stun ability type from
+ * docs/missing-ability-types.md): no attack of her own — applies a timed
+ * flag-as-buff on a synthetic 'stun' stat to a single living enemy,
+ * checked by turnEngine.ts's resolveTurn to skip that unit's entire next
+ * turn (both Basic Action and any 'on-turn-start' Special Action) —
+ * stronger than Silence, which only suppresses the Special Action half.
+ */
+export const StunAction: Action = {
+  id: 'stun',
+  name: 'Stun',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(context.target, STUN_DEBUFF_ID, { stat: 'stun', type: 'flat', amount: 1, source: 'buff:stun' }, STUN_DURATION_TURNS);
+    return { type: 'support-debuff', targetId: context.target.id, stat: 'stun', amount: 1, durationTurns: STUN_DURATION_TURNS };
+  },
+};
+
+/** How long Guardian's Ward lasts — short, since full damage immunity is powerful — placeholder pending the balance pass. */
+export const GUARDIANS_WARD_DURATION_TURNS = 1;
+const GUARDIANS_WARD_BUFF_ID = 'guardians-ward';
+
+/**
+ * Tharavel's second Special (the Invulnerability ability type from
+ * docs/missing-ability-types.md, picked as a stand-in since her originally
+ * intended ability — resource denial — is blocked on the charge-meter
+ * system not existing yet, see docs/kit-trait-tag-framework.md): no attack
+ * of her own — grants whichever living ally currently has the lowest HP
+ * (herself included, same always-resolves targeting as Shield Wall/
+ * Mending Charge) a timed flag-as-buff on a synthetic 'invulnerable' stat,
+ * read directly by actions/attack.ts's applyAttackToTarget to zero out any
+ * damage they'd otherwise take — no absorb cap, unlike Shield; just immune.
+ */
+export const GuardiansWardAction: Action = {
+  id: 'guardians-ward',
+  name: "Guardian's Ward",
+  reach: 'melee', // unused — targets an ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(
+      context.target,
+      GUARDIANS_WARD_BUFF_ID,
+      { stat: 'invulnerable', type: 'flat', amount: 1, source: 'buff:guardians-ward' },
+      GUARDIANS_WARD_DURATION_TURNS,
+    );
+    return {
+      type: 'support-buff',
+      targetId: context.target.id,
+      stat: 'invulnerable',
+      amount: 1,
+      durationTurns: GUARDIANS_WARD_DURATION_TURNS,
+    };
+  },
+};
+
+/** How long Vanish lasts — placeholder pending the balance pass. */
+export const VANISH_DURATION_TURNS = 2;
+const VANISH_BUFF_ID = 'vanish-stealth';
+
+/**
+ * Dravena's second Special (the Stealth/untargetable ability type from
+ * docs/missing-ability-types.md, picked as a stand-in since her originally
+ * intended ability — a typed-damage layer — is blocked on the
+ * damage-type/resistance system not existing yet, see
+ * docs/kit-trait-tag-framework.md): no attack of her own — grants herself
+ * a timed flag-as-buff on a synthetic 'stealth' stat, checked by
+ * actions/targeting.ts's livingOpponents to remove her from every opposing
+ * targeting pool entirely for the duration (genuinely unselectable, not
+ * just harder to hit — distinct from evasion).
+ */
+export const VanishAction: Action = {
+  id: 'vanish',
+  name: 'Vanish',
+  reach: 'melee', // unused — targets herself only
+  selectTarget(context: TargetingContext) {
+    return context.actor;
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(context.actor, VANISH_BUFF_ID, { stat: 'stealth', type: 'flat', amount: 1, source: 'buff:vanish' }, VANISH_DURATION_TURNS);
+    return { type: 'support-buff', targetId: context.actor.id, stat: 'stealth', amount: 1, durationTurns: VANISH_DURATION_TURNS };
+  },
+};
+
+/**
+ * Magnitudes and duration for Mira's potion tosses (roadmap item 3) —
+ * placeholder pending the balance pass, same shape as Empower/Fear/Blind's
+ * own numbers. The accuracy half of each pair was replaced with a crit
+ * chance buff / vulnerability debuff once Accuracy/Evasion were removed
+ * as baseline stats (the "pure auto-battler" pass — see docs/roadmap.md).
+ */
 export const POTION_BUFF_ATTACK_PERCENT = 20;
-export const POTION_BUFF_ACCURACY = 10;
+export const POTION_BUFF_CRIT_CHANCE = 10;
 export const POTION_DEBUFF_ATTACK_PERCENT = -20;
-export const POTION_DEBUFF_ACCURACY = -10;
+export const POTION_DEBUFF_VULNERABILITY_PERCENT = 20;
 export const POTION_EFFECT_DURATION_TURNS = 3;
 const POTION_BUFF_ATTACK_ID = 'potion-buff-attack';
-const POTION_BUFF_ACCURACY_ID = 'potion-buff-accuracy';
+const POTION_BUFF_CRIT_ID = 'potion-buff-crit';
 const POTION_DEBUFF_ATTACK_ID = 'potion-debuff-attack';
-const POTION_DEBUFF_ACCURACY_ID = 'potion-debuff-accuracy';
+const POTION_DEBUFF_VULNERABILITY_ID = 'potion-debuff-vulnerability';
 
 /**
  * Mira's first signature mechanic (roadmap item 3, "chaotic healer/
  * support"): throws a potion at a uniformly random living ally (herself
  * included), granting a random one of two possible timed buffs —
- * attackPower or accuracy. Both the target and the effect are rolled here
- * in `resolve`, not `selectTarget` (no rng there) — same reasoning as
+ * attackPower or critChance. Both the target and the effect are rolled
+ * here in `resolve`, not `selectTarget` (no rng there) — same reasoning as
  * Fallacy's Command re-picking who it commands.
  */
 export const PotionTossAllyAction: Action = {
@@ -170,9 +393,9 @@ export const PotionTossAllyAction: Action = {
     const target = allies[Math.floor(context.rng() * allies.length)];
 
     const isAttackBuff = context.rng() < 0.5;
-    const stat = isAttackBuff ? 'attackPower' : 'accuracy';
-    const amount = isAttackBuff ? POTION_BUFF_ATTACK_PERCENT : POTION_BUFF_ACCURACY;
-    const buffId = isAttackBuff ? POTION_BUFF_ATTACK_ID : POTION_BUFF_ACCURACY_ID;
+    const stat = isAttackBuff ? 'attackPower' : 'critChance';
+    const amount = isAttackBuff ? POTION_BUFF_ATTACK_PERCENT : POTION_BUFF_CRIT_CHANCE;
+    const buffId = isAttackBuff ? POTION_BUFF_ATTACK_ID : POTION_BUFF_CRIT_ID;
 
     applyBuff(
       target,
@@ -189,8 +412,10 @@ export const PotionTossAllyAction: Action = {
  * Mira's second signature mechanic: throws a potion at a uniformly random
  * living enemy (either row — no melee front-row bias, same as a ranged
  * action), applying a random one of two possible timed debuffs —
- * attackPower or accuracy. Same "roll both in resolve" pattern as her ally
- * version above; never deals damage of its own, purely a debuff.
+ * attackPower or vulnerability (the Mark ability type, making the target
+ * take more damage from the party). Same "roll both in resolve" pattern
+ * as her ally version above; never deals damage of its own, purely a
+ * debuff.
  */
 export const PotionTossEnemyAction: Action = {
   id: 'potion-toss-enemy',
@@ -204,9 +429,9 @@ export const PotionTossEnemyAction: Action = {
     const target = livingEnemies[Math.floor(context.rng() * livingEnemies.length)];
 
     const isAttackDebuff = context.rng() < 0.5;
-    const stat = isAttackDebuff ? 'attackPower' : 'accuracy';
-    const amount = isAttackDebuff ? POTION_DEBUFF_ATTACK_PERCENT : POTION_DEBUFF_ACCURACY;
-    const debuffId = isAttackDebuff ? POTION_DEBUFF_ATTACK_ID : POTION_DEBUFF_ACCURACY_ID;
+    const stat = isAttackDebuff ? 'attackPower' : 'vulnerability';
+    const amount = isAttackDebuff ? POTION_DEBUFF_ATTACK_PERCENT : POTION_DEBUFF_VULNERABILITY_PERCENT;
+    const debuffId = isAttackDebuff ? POTION_DEBUFF_ATTACK_ID : POTION_DEBUFF_VULNERABILITY_ID;
 
     applyBuff(
       target,

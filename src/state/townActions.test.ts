@@ -2,15 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { plainFaces } from '../sim/dieFace';
 import { get } from 'svelte/store';
 import { roster } from './roster';
-import { townStorage } from './townStorage';
+import { metaProgression } from './metaProgression';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
 import { AttackNearestAction } from '../sim/actions/attack';
-import { createTownStorage } from '../sim/townStorage';
-import type { Item } from '../sim/items';
 import type { RecruitCandidate } from '../sim/recruitment';
 import { recruitmentPool } from './recruitmentPool';
-import { equipItemForAdventurer, unequipItemForAdventurer, recruitAdventurer, buyShopItem } from './townActions';
-import { RUSTY_DAGGER_ITEM } from '../data/items';
+import { recruitAdventurer, buyKitFromShop } from './townActions';
+import { KIT_SHOP_CATALOG } from '../data/kitShop';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -27,52 +25,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 describe('townActions', () => {
   beforeEach(() => {
     roster.set({ adventurers: [], recruitedIds: [] });
-    townStorage.set(createTownStorage());
-  });
-
-  describe('equipItemForAdventurer / unequipItemForAdventurer', () => {
-    it('moves an item between town storage and the adventurer, applying/removing modifiers', () => {
-      const hero = createAdventurer('hero', template(), 'front');
-      roster.set({ adventurers: [hero], recruitedIds: [] });
-
-      const sword: Item = {
-        id: 'sword',
-        name: 'Sword',
-        slot: 'weapon',
-        modifiers: [{ stat: 'attackPower', type: 'flat', amount: 5, source: 'item:sword' }],
-        price: 0,
-      };
-      const betterSword: Item = {
-        id: 'better-sword',
-        name: 'Better Sword',
-        slot: 'weapon',
-        modifiers: [{ stat: 'attackPower', type: 'flat', amount: 9, source: 'item:better-sword' }],
-        price: 0,
-      };
-      const storage = createTownStorage();
-      storage.items.push(sword, betterSword);
-      townStorage.set(storage);
-
-      equipItemForAdventurer('hero', sword);
-
-      let updatedHero = get(roster).adventurers.find((a) => a.id === 'hero')!;
-      expect(updatedHero.equipment.weapon).toBe(sword);
-      expect(get(townStorage).items).toEqual([betterSword]);
-      expect(updatedHero.modifiers).toEqual([sword.modifiers[0]]);
-
-      // Equipping a second weapon swaps the first back into town storage.
-      equipItemForAdventurer('hero', betterSword);
-      updatedHero = get(roster).adventurers.find((a) => a.id === 'hero')!;
-      expect(updatedHero.equipment.weapon).toBe(betterSword);
-      expect(get(townStorage).items).toEqual([sword]);
-
-      unequipItemForAdventurer('hero', 'weapon');
-      updatedHero = get(roster).adventurers.find((a) => a.id === 'hero')!;
-      expect(updatedHero.equipment.weapon).toBeNull();
-      expect(updatedHero.modifiers).toEqual([]);
-      expect(get(townStorage).items).toEqual(expect.arrayContaining([sword, betterSword]));
-      expect(get(townStorage).items).toHaveLength(2);
-    });
+    metaProgression.set({ renown: 0, unlockedKitIds: {} });
   });
 
   describe('recruitAdventurer', () => {
@@ -82,35 +35,31 @@ describe('townActions', () => {
       return { id, adventurer, cost };
     }
 
-    it('deducts gold, marks the candidate recruited, and removes them from the pool', () => {
+    it('deducts Renown, marks the candidate recruited, and removes them from the pool', () => {
       const candidate = makeCandidate('candidate-a', 50);
       const other = makeCandidate('candidate-b', 60);
       recruitmentPool.set([candidate, other]);
       roster.set({ adventurers: [candidate.adventurer, other.adventurer], recruitedIds: [] });
-      const storage = createTownStorage();
-      storage.gold = 100;
-      townStorage.set(storage);
+      metaProgression.set({ renown: 100, unlockedKitIds: {} });
 
       const succeeded = recruitAdventurer('candidate-a');
 
       expect(succeeded).toBe(true);
-      expect(get(townStorage).gold).toBe(50);
+      expect(get(metaProgression).renown).toBe(50);
       expect(get(roster).recruitedIds).toEqual(['candidate-a']);
       expect(get(recruitmentPool).map((c) => c.id)).toEqual(['candidate-b']);
     });
 
-    it('fails cleanly with no side effects when gold is insufficient', () => {
+    it('fails cleanly with no side effects when Renown is insufficient', () => {
       const candidate = makeCandidate('candidate-a', 50);
       recruitmentPool.set([candidate]);
       roster.set({ adventurers: [candidate.adventurer], recruitedIds: [] });
-      const storage = createTownStorage();
-      storage.gold = 10;
-      townStorage.set(storage);
+      metaProgression.set({ renown: 10, unlockedKitIds: {} });
 
       const succeeded = recruitAdventurer('candidate-a');
 
       expect(succeeded).toBe(false);
-      expect(get(townStorage).gold).toBe(10);
+      expect(get(metaProgression).renown).toBe(10);
       expect(get(roster).recruitedIds).toEqual([]);
       expect(get(recruitmentPool).map((c) => c.id)).toEqual(['candidate-a']);
     });
@@ -119,32 +68,34 @@ describe('townActions', () => {
       recruitmentPool.set([]);
       expect(recruitAdventurer('nonexistent')).toBe(false);
     });
-
   });
 
-  describe('buyShopItem', () => {
-    it('deducts the item price and adds it to town storage when affordable', () => {
-      const storage = createTownStorage();
-      storage.gold = 100;
-      townStorage.set(storage);
+  describe('buyKitFromShop', () => {
+    const [firstEntry] = KIT_SHOP_CATALOG;
 
-      const succeeded = buyShopItem(RUSTY_DAGGER_ITEM.id);
+    it('deducts the Kit price and records the unlock when affordable', () => {
+      metaProgression.set({ renown: 100, unlockedKitIds: {} });
+
+      const succeeded = buyKitFromShop(firstEntry.characterName, firstEntry.kit.id);
 
       expect(succeeded).toBe(true);
-      expect(get(townStorage).gold).toBe(100 - RUSTY_DAGGER_ITEM.price);
-      expect(get(townStorage).items).toEqual([RUSTY_DAGGER_ITEM]);
+      expect(get(metaProgression).renown).toBe(100 - firstEntry.price);
+      expect(get(metaProgression).unlockedKitIds[firstEntry.characterName]).toEqual([firstEntry.kit.id]);
     });
 
-    it('fails cleanly when gold is insufficient', () => {
-      const storage = createTownStorage();
-      storage.gold = 0;
-      townStorage.set(storage);
+    it('fails cleanly when Renown is insufficient', () => {
+      metaProgression.set({ renown: 0, unlockedKitIds: {} });
 
-      const succeeded = buyShopItem(RUSTY_DAGGER_ITEM.id);
+      const succeeded = buyKitFromShop(firstEntry.characterName, firstEntry.kit.id);
 
       expect(succeeded).toBe(false);
-      expect(get(townStorage).gold).toBe(0);
-      expect(get(townStorage).items).toEqual([]);
+      expect(get(metaProgression).renown).toBe(0);
+      expect(get(metaProgression).unlockedKitIds[firstEntry.characterName]).toBeUndefined();
+    });
+
+    it('returns false for a kit/character pairing not in the catalog', () => {
+      metaProgression.set({ renown: 1000, unlockedKitIds: {} });
+      expect(buyKitFromShop('Nobody', 'nonexistent-kit')).toBe(false);
     });
   });
 });

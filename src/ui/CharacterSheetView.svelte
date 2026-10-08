@@ -1,55 +1,13 @@
 <script lang="ts">
   import { roster } from '../state/roster';
-  import { townStorage } from '../state/townStorage';
-  import { unequipItemForAdventurer, equipItemForAdventurer, setAdventurerRow } from '../state/townActions';
-  import { ENCHANTMENT_REGISTRY } from '../sim/enchantments';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
-  import type { EquipmentSlot } from '../sim/items';
-  import type { Row } from '../sim/formation';
-  import type { Adventurer } from '../sim/adventurer';
   import { portraitAssetPath } from './portraits';
-  import Tooltip from './Tooltip.svelte';
   import ImageReportButton from './ImageReportButton.svelte';
 
   export let adventurerId: string | null = null;
   export let onClose: () => void = () => {};
 
-  const SLOTS: EquipmentSlot[] = ['weapon', 'armor', 'trinket'];
-
-  interface FaceGroup {
-    label: string;
-    count: number;
-    description: string;
-  }
-
-  /** Groups the 6 fixed dice faces by (action, enchantment) so e.g. 4 identical Attack faces show as one row — see the Roster Dice Faces roadmap note: faces are no longer player-alterable, character + equipment fully determine them. */
-  function groupFaces(adventurer: Adventurer): FaceGroup[] {
-    const groups = new Map<string, FaceGroup>();
-    for (const face of adventurer.dieFaces) {
-      const enchantmentName = face.enchantmentId ? ENCHANTMENT_REGISTRY[face.enchantmentId].name : null;
-      const key = `${face.action.id}:${enchantmentName ?? ''}`;
-      const existing = groups.get(key);
-      if (existing) {
-        existing.count += 1;
-        continue;
-      }
-      const description = ACTION_DESCRIPTIONS[face.action.id] ?? '';
-      groups.set(key, {
-        label: enchantmentName ? `${face.action.name} (${enchantmentName})` : face.action.name,
-        count: 1,
-        description: enchantmentName ? `${description}\nEnchanted: ${enchantmentName}` : description,
-      });
-    }
-    return [...groups.values()];
-  }
-
   $: adventurer = adventurerId ? ($roster.adventurers.find((a) => a.id === adventurerId) ?? null) : null;
-  $: faceGroups = adventurer ? groupFaces(adventurer) : [];
-
-  function setRow(row: Row): void {
-    if (!adventurer) return;
-    setAdventurerRow(adventurer.id, row);
-  }
 
   function fallbackToIdle(event: Event, archetype: string): void {
     const img = event.currentTarget as HTMLImageElement;
@@ -121,82 +79,60 @@
             <dd>{adventurer.attackPower}</dd>
             <dt>Speed</dt>
             <dd>{adventurer.speed}</dd>
-            <dt>Accuracy</dt>
-            <dd>{adventurer.accuracy}%</dd>
-            <dt>Evasion</dt>
-            <dd>{adventurer.evasion}%</dd>
+            <dt>Crit Chance</dt>
+            <dd>{adventurer.critChance}%</dd>
             {#if adventurer.healPower > 0}
               <dt>Heal Power</dt>
               <dd>{adventurer.healPower}</dd>
             {/if}
-            <dt>XP</dt>
-            <dd>{adventurer.xp} / {adventurer.xp + adventurer.xpToNextLevel}</dd>
+            <dt>Level</dt>
+            <dd>{adventurer.level}</dd>
           </dl>
-
-          <div class="row-toggle">
-            <span class="row-toggle__label">Formation</span>
-            <button type="button" aria-pressed={adventurer.row === 'front'} on:click={() => setRow('front')}>
-              Front
-            </button>
-            <button type="button" aria-pressed={adventurer.row === 'back'} on:click={() => setRow('back')}>
-              Back
-            </button>
-          </div>
-
-          {#if adventurer.traits.length > 0}
-            <p class="traits">Traits: {adventurer.traits.map((trait) => trait.name).join(', ')}</p>
-          {/if}
         </section>
 
-        <section class="sheet-box sheet-box--equipment">
-          <h3>Equipment</h3>
-          <ul class="slot-list">
-            {#each SLOTS as slot (slot)}
-              <li class="slot-row">
-                <span class="slot-row__label">{slot}</span>
-                <span class="slot-row__value">{adventurer.equipment[slot]?.name ?? '(empty)'}</span>
-                {#if adventurer.equipment[slot]}
-                  <button type="button" on:click={() => adventurer && unequipItemForAdventurer(adventurer.id, slot)}>
-                    Unequip
-                  </button>
-                {:else}
-                  <select
-                    value=""
-                    on:change={(event) => {
-                      // Resolved by index into this exact filtered list, not by name — two items
-                      // can share a name (e.g. two Ring of Embers drops with different rolled
-                      // faceEffect.faceIndex values), and a name-string lookup would silently
-                      // equip whichever same-named instance happened to match first.
-                      const index = Number((event.target as HTMLSelectElement).value);
-                      const item = $townStorage.items.filter((i) => i.slot === slot)[index];
-                      if (item && adventurer) equipItemForAdventurer(adventurer.id, item);
-                      (event.target as HTMLSelectElement).value = '';
-                    }}
-                  >
-                    <option value="">Equip from storage…</option>
-                    {#each $townStorage.items.filter((i) => i.slot === slot) as item, index (index)}
-                      <option value={index}>{item.name}</option>
-                    {/each}
-                  </select>
-                {/if}
-              </li>
-            {/each}
-          </ul>
+        <section class="sheet-box sheet-box--traits">
+          <h3>Traits</h3>
+          {#if adventurer.traits.length > 0}
+            <ul class="trait-list">
+              {#each adventurer.traits as trait (trait.id)}
+                <li class="trait-row">
+                  <span class="trait-row__name">{trait.name}</span>
+                  <span class="trait-row__description">{trait.description}</span>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="empty-state">No traits yet.</p>
+          {/if}
         </section>
       </div>
 
       <div class="sheet__column sheet__column--right">
-        <section class="sheet-box sheet-box--dice">
-          <h3>Dice Faces</h3>
-          <ul class="face-list">
-            {#each faceGroups as group (group.label)}
-              <li class="face-row">
-                <Tooltip text={group.description || 'No description yet.'}>
-                  <span class="face-row__name">{group.count} {group.label}</span>
-                </Tooltip>
-              </li>
-            {/each}
-          </ul>
+        <section class="sheet-box sheet-box--kits">
+          <h3>Kit &amp; Specials</h3>
+          {#if adventurer.activeKit}
+            <div class="kit-row">
+              <span class="kit-row__name">{adventurer.activeKit.name}</span>
+              <span class="kit-row__description">{adventurer.activeKit.description}</span>
+            </div>
+          {:else}
+            <p class="empty-state">No Kit yet.</p>
+          {/if}
+
+          {#if adventurer.activeSpecialActions.length > 0}
+            <ul class="trait-list">
+              {#each adventurer.activeSpecialActions as special (special.id)}
+                <li class="trait-row">
+                  <span class="trait-row__name">{special.name}</span>
+                  <span class="trait-row__description">
+                    {ACTION_DESCRIPTIONS[special.action.id] ?? 'No description yet.'}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="empty-state">No Special Action yet.</p>
+          {/if}
         </section>
       </div>
     </div>
@@ -353,73 +289,60 @@
     color: var(--text-heading);
   }
 
-  .row-toggle {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-
-  .row-toggle__label {
+  .empty-state {
     color: var(--text-muted);
-    font-size: 14px;
-  }
-
-  .traits {
-    color: var(--gold-bright);
     font-size: 13px;
     margin: 0;
   }
 
-  .slot-list,
-  .face-list {
+  .trait-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
-  .slot-row {
+  .trait-row {
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .slot-row__label {
-    text-transform: capitalize;
-    color: var(--text-muted);
-    width: 60px;
-  }
-
-  .slot-row__value {
-    flex: 1;
-  }
-
-  .face-row {
+    flex-direction: column;
+    gap: 2px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--panel-border);
   }
 
-  .face-list li.face-row:last-child {
+  .trait-list li.trait-row:last-child {
     padding-bottom: 0;
     border-bottom: none;
   }
 
-  .face-row__name {
-    color: var(--text-heading);
-    cursor: default;
+  .trait-row__name {
+    color: var(--gold-bright);
+    font-family: var(--font-heading);
   }
 
-  .sheet-box select {
-    width: 100%;
-    min-width: 0;
+  .trait-row__description {
     font-size: 13px;
-    padding: 3px 6px;
+    color: var(--text);
   }
 
-  .sheet-box button {
+  .kit-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .kit-row__name {
+    color: var(--gold-bright);
+    font-family: var(--font-heading);
+  }
+
+  .kit-row__description {
     font-size: 13px;
-    padding: 3px 10px;
+    color: var(--text);
   }
 </style>

@@ -2,7 +2,7 @@ import { get } from 'svelte/store';
 import { roster } from './roster';
 import { townStorage } from './townStorage';
 import { currentView } from './view';
-import { dungeonPlayback } from './dungeonPlayback';
+import { dungeonPlayback, rollShopOffers } from './dungeonPlayback';
 import { activeRun } from './activeRun';
 import { runHistory } from './runHistory';
 import {
@@ -18,19 +18,23 @@ import { resetToTemplateBaseline, type Adventurer } from '../sim/adventurer';
 import { createRunInventory, type Item, type EquipmentSlot, type ItemLookup, type RunInventory } from '../sim/items';
 import { rollRoomLoot } from '../sim/loot';
 import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
-import { mergeRunInventoryIntoTown } from '../sim/townStorage';
+import { levelUpAdventurer } from '../sim/leveling';
+import { applyRelicToAdventurer, applyActiveRelicsToAdventurer, type Relic } from '../sim/relics';
+import { calculateRunRenown } from '../sim/renown';
+import type { Kit } from '../sim/kits';
 import type { RngSource } from '../sim/rng';
+import { MAX_PARTY_SIZE } from '../sim/draft';
 import { createStarterDungeonRooms } from '../data/rooms';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
+import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
+import { KIT_SHOP_CATALOG } from '../data/kitShop';
+import { UNIVERSAL_TRAIT_POOL } from '../data/traits';
 import { refreshRecruitmentPool } from './recruitmentPool';
+import { metaProgression } from './metaProgression';
 
 function touchRoster(): void {
   roster.update((state) => ({ ...state }));
-}
-
-function touchTownStorage(): void {
-  townStorage.update((state) => ({ ...state }));
 }
 
 /**
@@ -52,6 +56,7 @@ function touchActiveRun(): void {
           partyGold: playback.runState.partyGold,
           inventory: playback.inventory,
           outcome: playback.outcome,
+          activeRelics: playback.runState.activeRelics,
         }
       : null,
   );
@@ -83,38 +88,51 @@ function rollLootForRoom(
 }
 
 /**
- * Starts a dungeon run for `party` (the drafted 4 — see state/draft.ts's
- * DraftState) against `rooms` (defaults to a freshly rolled run — see
- * data/rooms.ts's per-slot composition pools — using the same `rng` passed
- * here, so it can't be supplied as a plain default parameter value).
- * Resolves the first room only — resolveNextRoom/continueDungeonRun
- * advance the rest one room at a time, pausing between rooms for the
- * player (see DungeonPauseView) — then switches to the dungeon view so the
- * Phaser layer can replay it.
+ * Starts a dungeon run for `party` (built by the player at the opening gold
+ * shop — see state/openingShop.ts's embarkFromOpeningShop; the rest join
+ * mid-run via recruit offers) against `rooms` (defaults to a freshly rolled
+ * run — see data/rooms.ts's per-slot composition pools — using the same
+ * `rng` passed here, so it can't be supplied as a plain default parameter
+ * value). `seed` carries over whatever the opening shop left: leftover
+ * gold, Relics already bought (so they also apply to anyone recruited from
+ * here on, same convention as buyRelicOffer below), and Equipment bought
+ * there (staged straight into the run's inventory, already acknowledged).
+ * Resolves the first room only — resolveNextRoom/continueDungeonRun advance
+ * the rest one room at a time, pausing between rooms for the player (see
+ * DungeonPauseView) — then switches to the dungeon view so the Phaser layer
+ * can replay it.
  */
 export function startDungeon(
   party: Adventurer[],
   rooms?: RoomDefinition[],
   rng: RngSource = () => Math.random(),
   lookupItem: ItemLookup = (id) => ITEM_REGISTRY[id],
+  seed?: { partyGold?: number; activeRelics?: Relic[]; items?: Item[] },
 ): void {
   if (party.length === 0) {
-    return; // shouldn't happen given the draft's own enforcement; guard defensively
+    return; // shouldn't happen given the opening shop's own enforcement; guard defensively
   }
 
   const actualRooms = rooms ?? createStarterDungeonRooms(rng);
-  const partyGold = get(townStorage).gold;
+  const partyGold = seed?.partyGold ?? get(townStorage).gold;
   const runState = startDungeonRun(party, actualRooms, partyGold);
+  if (seed?.activeRelics) {
+    runState.activeRelics = seed.activeRelics;
+  }
   // Embarking consumes the day — the recruitment pool refreshes on that trigger (Resting no longer
   // exists to also trigger it from).
   refreshRecruitmentPool();
 
   const inventory = createRunInventory();
+  if (seed?.items) {
+    inventory.items.push(...seed.items);
+  }
   const outcome = resolveNextRoom(runState, rng);
   const record = runState.roomRecords.at(-1)!;
   rollLootForRoom(runState, record, inventory, rng, lookupItem);
+  const shopOffers = outcome === null ? rollShopOffers(runState, rng) : { recruits: [], relics: [], equipment: [] };
 
-  dungeonPlayback.set({ runState, inventory, currentRecord: record, outcome });
+  dungeonPlayback.set({ runState, inventory, currentRecord: record, outcome, shopOffers });
   touchActiveRun();
   currentView.set('dungeon');
 }
@@ -137,8 +155,10 @@ export function continueDungeonRun(
   const outcome = resolveNextRoom(playback.runState, rng);
   const record = playback.runState.roomRecords.at(-1)!;
   rollLootForRoom(playback.runState, record, playback.inventory, rng, lookupItem);
+  const shopOffers =
+    outcome === null ? rollShopOffers(playback.runState, rng) : { recruits: [], relics: [], equipment: [] };
 
-  dungeonPlayback.set({ ...playback, currentRecord: record, outcome });
+  dungeonPlayback.set({ ...playback, currentRecord: record, outcome, shopOffers });
   touchActiveRun();
 }
 
@@ -205,6 +225,105 @@ export function acknowledgeDowned(adventurerId: string): void {
   touchActiveRun();
 }
 
+/**
+ * Buys `adventurerId` from the current pause's Recruit shop offer, spending
+ * gold from the run's own inventory (see sim/items.ts's RunInventory.gold —
+ * this is the in-run currency, distinct from town gold/future meta-progression
+ * Renown). If the offer landed on someone already in the party
+ * (offer.alreadyInParty), this levels them up instead of adding a
+ * duplicate — see sim/leveling.ts's levelUpAdventurer. Otherwise adds them
+ * to the party (capped at MAX_PARTY_SIZE) and grants every currently active
+ * Relic, same as anyone already in the party already has. No-ops if there's
+ * no run in progress, the run has already ended, the offer isn't actually
+ * current, there isn't enough gold, or (for a new recruit) the party is
+ * already full.
+ */
+export function buyRecruitOffer(adventurerId: string): void {
+  const playback = get(dungeonPlayback);
+  if (!playback || playback.outcome !== null) {
+    return;
+  }
+
+  const offer = playback.shopOffers.recruits.find((candidate) => candidate.adventurer.id === adventurerId);
+  if (!offer || playback.inventory.gold < offer.price) {
+    return;
+  }
+
+  if (offer.alreadyInParty) {
+    const member = playback.runState.party.find((candidate) => candidate.id === adventurerId);
+    if (!member) {
+      return;
+    }
+    levelUpAdventurer(member);
+  } else {
+    if (playback.runState.party.length >= MAX_PARTY_SIZE) {
+      return;
+    }
+    applyActiveRelicsToAdventurer(offer.adventurer, playback.runState.activeRelics);
+    playback.runState.party.push(offer.adventurer);
+  }
+
+  playback.inventory.gold -= offer.price;
+  playback.shopOffers.recruits = playback.shopOffers.recruits.filter((candidate) => candidate !== offer);
+  touchRoster();
+  dungeonPlayback.set({ ...playback });
+  touchActiveRun();
+}
+
+/**
+ * Buys `relicId` from the current pause's Relics shop offer: grants its
+ * modifiers to every current party member and records it on
+ * `runState.activeRelics` so it also applies to anyone who joins
+ * afterward (see buyRecruitOffer) — for the rest of the run, same as
+ * every other relic. No-ops the same way as buyRecruitOffer.
+ */
+export function buyRelicOffer(relicId: string): void {
+  const playback = get(dungeonPlayback);
+  if (!playback || playback.outcome !== null) {
+    return;
+  }
+
+  const offer = playback.shopOffers.relics.find((candidate) => candidate.relic.id === relicId);
+  if (!offer || playback.inventory.gold < offer.price) {
+    return;
+  }
+
+  for (const adventurer of playback.runState.party) {
+    applyRelicToAdventurer(adventurer, offer.relic);
+  }
+  playback.runState.activeRelics = [...playback.runState.activeRelics, offer.relic];
+  playback.inventory.gold -= offer.price;
+  playback.shopOffers.relics = playback.shopOffers.relics.filter((candidate) => candidate !== offer);
+  touchRoster();
+  dungeonPlayback.set({ ...playback });
+  touchActiveRun();
+}
+
+/**
+ * Buys `itemId` from the current pause's Equipment shop offer: adds it
+ * straight to the run's inventory, already acknowledged (promptDismissed)
+ * since the player just deliberately chose it — no LootModal popup, just
+ * available to equip from the existing Run Inventory list. No-ops the same
+ * way as buyRecruitOffer.
+ */
+export function buyEquipmentOffer(itemId: string): void {
+  const playback = get(dungeonPlayback);
+  if (!playback || playback.outcome !== null) {
+    return;
+  }
+
+  const offer = playback.shopOffers.equipment.find((candidate) => candidate.item.id === itemId);
+  if (!offer || playback.inventory.gold < offer.price) {
+    return;
+  }
+
+  playback.inventory.gold -= offer.price;
+  playback.inventory.items.push({ ...offer.item, promptDismissed: true });
+  playback.shopOffers.equipment = playback.shopOffers.equipment.filter((candidate) => candidate !== offer);
+  dungeonPlayback.set({ ...playback });
+  touchActiveRun();
+}
+
 /** Dismisses the loot prompt for `item` at a between-room pause (see LootModal.svelte) without equipping it — no-ops if there's no run in progress. */
 export function dismissLootPrompt(item: Item): void {
   const playback = get(dungeonPlayback);
@@ -221,11 +340,15 @@ export function dismissLootPrompt(item: Item): void {
  * Called once the Phaser layer finishes replaying the run's last room
  * (outcome already resolved) or after a Retreat: records a completed run
  * against every party member (see state/runHistory.ts — a foundation for
- * future achievements/branching paths, not surfaced anywhere yet), resets
- * every party member back to their template baseline (level/XP/earned
- * Faces/passives clear — only equipment survives, see sim/adventurer.ts's
- * resetToTemplateBaseline), merges the run's loot into town storage,
- * refreshes the roster store to reflect it all, and returns to town.
+ * future achievements/branching paths, not surfaced anywhere yet), awards
+ * Renown for the run (see sim/renown.ts's calculateRunRenown — the
+ * meta-progression currency Recruit/the Shop spend, state/
+ * metaProgression.ts), resets every party member back to their template
+ * baseline — level and equipment both clear, see sim/adventurer.ts's
+ * resetToTemplateBaseline, folding in any Kits bought from the Shop —
+ * discards the run's inventory (gold/items are purely run-scoped now,
+ * Town Storage Cleanup, see docs/roadmap.md), refreshes the roster store
+ * to reflect it all, and returns to town.
  */
 export function finishDungeonRun(): void {
   const playback = get(dungeonPlayback);
@@ -242,15 +365,28 @@ export function finishDungeonRun(): void {
     runHistory.set({ clearedWithIds: [...clearedWithIds] });
   }
 
+  const renownEarned = calculateRunRenown(playback.runState.roomRecords, playback.outcome);
+  metaProgression.update((state) => ({ ...state, renown: state.renown + renownEarned }));
+
+  // Resolved after runHistory is updated above, so a character who just cleared their first run
+  // this very call already has their unlock available for this reset, not just their next one.
+  const clearedWithIds = new Set(get(runHistory).clearedWithIds);
+  const unlockedKitIds = get(metaProgression).unlockedKitIds;
   for (const adventurer of playback.runState.party) {
     const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === adventurer.name);
     if (template) {
-      resetToTemplateBaseline(adventurer, template);
+      const unlockedPoolEntries = clearedWithIds.has(adventurer.id) ? (CHARACTER_UNLOCK_POOL[template.name] ?? []) : [];
+      const ownedKitIds = new Set(unlockedKitIds[template.name] ?? []);
+      const unlockedKits: Kit[] = KIT_SHOP_CATALOG.filter(
+        (entry) => entry.characterName === template.name && ownedKitIds.has(entry.kit.id),
+      ).map((entry) => entry.kit);
+      resetToTemplateBaseline(adventurer, template, unlockedPoolEntries, UNIVERSAL_TRAIT_POOL, undefined, unlockedKits);
     }
   }
 
-  mergeRunInventoryIntoTown(playback.inventory, get(townStorage));
-  touchTownStorage();
+  // Run-scoped gold/items (sim/items.ts's RunInventory) never bank to town storage at all — see
+  // Town Storage Cleanup, docs/roadmap.md: `playback.inventory` is simply discarded here. Renown
+  // (above) is the only thing a run leaves behind.
   touchRoster();
 
   dungeonPlayback.set(null);

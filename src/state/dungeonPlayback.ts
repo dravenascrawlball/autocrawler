@@ -1,8 +1,26 @@
 import { get, writable } from 'svelte/store';
 import type { DungeonOutcome, DungeonRoomRecord, DungeonRunState } from '../sim/dungeonRun';
 import type { RunInventory } from '../sim/items';
+import { ITEM_REGISTRY } from '../data/items';
+import { CHARACTER_TEMPLATES } from '../data/characters';
+import { RELIC_REGISTRY } from '../data/relics';
+import { rollRecruitOffers, rollRelicOffers, rollEquipmentOffers, type ShopOffers, DEFAULT_RECRUIT_PRICE } from '../sim/shopOffers';
 import { INITIAL_SAVE } from './persistence';
 import { roster } from './roster';
+
+/** Shared by resumeFromSave and dungeonOrchestrator.ts's startDungeon/continueDungeonRun — looks up a character's town recruit price by name, falling back to DEFAULT_RECRUIT_PRICE for anyone without one set. */
+export function recruitPriceFor(name: string): number {
+  return CHARACTER_TEMPLATES.find((template) => template.name === name)?.recruitCost ?? DEFAULT_RECRUIT_PRICE;
+}
+
+/** Rolls a fresh ShopOffers for a pause — shared by resumeFromSave (below) and dungeonOrchestrator.ts, which can't import each other (circular). */
+export function rollShopOffers(runState: DungeonRunState, rng: () => number): ShopOffers {
+  return {
+    recruits: rollRecruitOffers(get(roster).adventurers, runState.party, (adventurer) => recruitPriceFor(adventurer.name), rng),
+    relics: rollRelicOffers(RELIC_REGISTRY, runState.activeRelics, rng),
+    equipment: rollEquipmentOffers(Object.values(ITEM_REGISTRY), rng),
+  };
+}
 
 export interface DungeonPlaybackState {
   /** Live sim state for the run in progress — resolveNextRoom mutates it in place as rooms are resolved. */
@@ -18,6 +36,15 @@ export interface DungeonPlaybackState {
   currentRecord?: DungeonRoomRecord;
   /** Non-null once the run has ended (this is the last room to replay); null means more rooms remain and the run pauses, once this room finishes replaying, for the player to act (equip, retreat) before continuing. */
   outcome: DungeonOutcome | null;
+  /**
+   * This pause's between-room shop offers (see rollShopOffers above) —
+   * rerolled every pause; buying from one section (see
+   * state/dungeonOrchestrator.ts's buyRecruitOffer/buyRelicOffer/
+   * buyEquipmentOffer) only removes that specific offer, not the whole
+   * section. Not persisted across a save/reload (see resumeFromSave below);
+   * a resumed run just rolls a fresh one, same as a newly-reached pause.
+   */
+  shopOffers: ShopOffers;
 }
 
 /**
@@ -28,9 +55,12 @@ export interface DungeonPlaybackState {
  * id against the already-loaded roster, so it shares the exact same live
  * Adventurer references the rest of the app expects — equip/unequip, HP,
  * etc. all stay in sync automatically, same as during a live run.
- * `downedDuringRun` is re-derived from current HP (Downed persists for the
- * rest of a run once triggered, so anyone at 0 HP now was necessarily
- * downed during it). `roomRecords` starts fresh empty — see
+ * `downedDuringRun` is re-derived from current HP — anyone at 0 HP right
+ * now is necessarily Downed, so definitely belongs in the set; this
+ * undercounts anyone who was Downed earlier in the run and already
+ * revived by `healBetweenRooms` before this save happened, a known gap in
+ * an otherwise-unconsumed field (see DungeonRunState's own doc comment).
+ * `roomRecords` starts fresh empty — see
  * ActiveDungeonRunState's own doc comment for why that log never needs to
  * survive a reload.
  */
@@ -52,18 +82,22 @@ function resumeFromSave(): DungeonPlaybackState | null {
     party.filter((adventurer) => adventurer.hp <= 0).map((adventurer) => adventurer.id),
   );
 
-  return {
-    runState: {
-      party,
-      rooms: saved.rooms,
-      roomIndex: saved.currentRoomIndex,
-      downedDuringRun,
-      roomRecords: [],
-      partyGold: saved.partyGold,
-    },
-    inventory: saved.inventory,
-    outcome: saved.outcome,
+  const runState: DungeonRunState = {
+    party,
+    rooms: saved.rooms,
+    roomIndex: saved.currentRoomIndex,
+    downedDuringRun,
+    roomRecords: [],
+    partyGold: saved.partyGold,
+    activeRelics: saved.activeRelics ?? [],
   };
+
+  const shopOffers: ShopOffers =
+    saved.outcome === null
+      ? rollShopOffers(runState, () => Math.random())
+      : { recruits: [], relics: [], equipment: [] };
+
+  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers };
 }
 
 /** Set by startDungeon (or reconstructed from a save at boot — see resumeFromSave), read/advanced by the Phaser replay layer and the between-room pause UI, cleared by finishDungeonRun. */

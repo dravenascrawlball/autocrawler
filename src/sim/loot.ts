@@ -1,6 +1,5 @@
 import type { Adventurer } from './adventurer';
 import type { Item, ItemLookup, LootTableEntry } from './items';
-import { rollItemInstance } from './items';
 import type { RngSource } from './rng';
 
 /**
@@ -28,10 +27,10 @@ function pickWeightedItem(lootTable: LootTableEntry[], lookupItem: ItemLookup, r
   for (const entry of lootTable) {
     roll -= entry.dropChance;
     if (roll <= 0) {
-      return rollItemInstance(lookupItem(entry.itemId), rng);
+      return lookupItem(entry.itemId);
     }
   }
-  return rollItemInstance(lookupItem(lootTable[lootTable.length - 1].itemId), rng); // floating-point rounding safety net
+  return lookupItem(lootTable[lootTable.length - 1].itemId); // floating-point rounding safety net
 }
 
 /**

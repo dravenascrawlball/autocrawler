@@ -1,5 +1,5 @@
 import type { Action, ActionContext, ActionId, ActionOutcome, TargetingContext } from '../action';
-import { selectLowestHpAlly } from './targeting';
+import { selectLowestHpAlly, selectDownedAlly } from './targeting';
 import { getEffectiveStat } from '../stats';
 import { actionLevelPercentBonus } from '../leveling';
 import { getHealEnergy } from '../battle';
@@ -62,6 +62,62 @@ export const SelfHealAction: Action = {
   },
   resolve(context: ActionContext): ActionOutcome {
     return resolveHeal(context, 'self-heal');
+  },
+};
+
+/**
+ * Dawneth's second signature mechanic (the Cleanse ability type from
+ * docs/missing-ability-types.md): no attack of her own — always resolves
+ * against the lowest-HP living ally (herself included, same "never an
+ * idle roll" targeting as Mending Charge), clearing every active status
+ * effect (Burn/Poison) they're carrying. Scoped to status effects only
+ * for now, not StatModifier debuffs like Blind — see the 'cleanse'
+ * ActionOutcome's own doc comment.
+ */
+export const CleanseAction: Action = {
+  id: 'cleanse',
+  name: 'Cleanse',
+  reach: 'ranged', // unused — Cleanse targets an ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const clearedEffectIds = context.target.statusEffects.map((effect) => effect.id);
+    context.target.statusEffects = [];
+    return { type: 'cleanse', targetId: context.target.id, clearedEffectIds };
+  },
+};
+
+/** Fraction of effective maxHp a revived ally comes back with — placeholder pending the balance pass. */
+export const REVIVE_HP_FRACTION = 0.3;
+
+/**
+ * Mira's second signature mechanic (the Revive ability type from
+ * docs/missing-ability-types.md): brings a Downed ally (hp <= 0) back into
+ * the fight at REVIVE_HP_FRACTION of their effective maxHp — see
+ * targeting.ts's selectDownedAlly (first Downed ally found, deterministic
+ * tie-break, same convention as every other "first eligible" selector).
+ * Also clears `downedSummary` so a later down this same run (post-revival)
+ * produces a fresh summary instead of silently reusing the original one —
+ * see adventurer.ts's DownedSummary doc comment for the "never overwritten
+ * within a run" invariant this is the one deliberate exception to.
+ * `selectTarget` returns null (an idle roll) when nobody's Downed, unlike
+ * Mending Charge/Cleanse's always-resolves convention — there's nothing
+ * sensible to do with no valid target at all.
+ */
+export const ReviveAction: Action = {
+  id: 'revive',
+  name: 'Revive',
+  reach: 'melee', // unused — Revive targets a Downed ally, never the opposing roster
+  selectTarget(context: TargetingContext) {
+    return selectDownedAlly(context);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const effectiveMaxHp = getEffectiveStat(context.target.maxHp, 'maxHp', context.target.modifiers);
+    const amount = Math.round(effectiveMaxHp * REVIVE_HP_FRACTION);
+    context.target.hp = amount;
+    context.target.downedSummary = undefined;
+    return { type: 'revive', targetId: context.target.id, amount };
   },
 };
 

@@ -8,7 +8,7 @@ import { activeRun } from './activeRun';
 import { dungeonPlayback } from './dungeonPlayback';
 import { currentView } from './view';
 import { recruitmentPool } from './recruitmentPool';
-import { draftState, startDraft } from './draft';
+import { openingShop, startOpeningShop } from './openingShop';
 import { resetGame } from './newGame';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
 import { AttackNearestAction } from '../sim/actions/attack';
@@ -51,17 +51,18 @@ describe('resetGame', () => {
       partyGold: 0,
       inventory: { items: [], gold: 0 },
       outcome: null,
+      activeRelics: [],
     });
 
     currentView.set('dungeon');
     recruitmentPool.set([]);
-    startDraft();
+    startOpeningShop();
 
     resetGame();
 
     expect(get(roster).adventurers.map((a) => a.id)).toEqual(createStarterRoster().map((a) => a.id));
     expect(get(roster).recruitedIds).toEqual([]);
-    expect(get(draftState)).toBeNull();
+    expect(get(openingShop)).toBeNull();
 
     expect(get(townStorage).gold).toBe(0);
     expect(get(townStorage).items).toEqual(STARTER_TOWN_ITEMS);

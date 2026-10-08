@@ -66,7 +66,7 @@
         hp: snapshot.hp,
         maxHp: adventurer?.maxHp ?? snapshot.hp,
         side: 'party',
-        row: adventurer?.row ?? 'front',
+        position: adventurer?.position ?? { lane: 1, rank: 0 },
         hasRageTrait: adventurer?.traits.some((trait) => trait.id === RAGE_TRAIT.id) ?? false,
       };
     });
@@ -78,7 +78,7 @@
       hp: enemy.maxHp,
       maxHp: enemy.maxHp,
       side: 'enemy',
-      row: enemy.row,
+      position: enemy.position,
     }));
 
     const events: ReplayEvent[] = [];
@@ -162,31 +162,84 @@
                 color: '#cc66ff',
               });
             }
+          } else if (event.type === 'action' && event.outcome.type === 'attack-and-heal-self') {
+            // Caladwen's Lifesteal Strike (second-Special pass) — the attack half plays exactly like
+            // a plain 'attack'; a landed hit that actually stole HP gets its own heal pulse on her.
+            events.push({
+              type: 'attack',
+              actorId: roundTurn.unitId,
+              targetId: event.outcome.targetId,
+              damage: event.outcome.damage,
+              hit: event.outcome.hit,
+            });
+            if (event.outcome.healedAmount > 0) {
+              events.push({
+                type: 'heal',
+                actorId: roundTurn.unitId,
+                targetId: roundTurn.unitId,
+                amount: event.outcome.healedAmount,
+              });
+            }
           } else if (event.type === 'action' && event.outcome.type === 'support-buff') {
-            // Fallacy's Empower / Mira's Potion Toss (Ally) (roadmap items 11/3) — no attack of its
-            // own, just an announcement over whichever ally got buffed. Named after whichever action
-            // actually fired (rolledActionId), not hardcoded, since this outcome type is shared.
+            // Fallacy's Empower / Mira's Potion Toss (Ally) / Bodil's Taunt / Tharavel's Guardian's
+            // Ward / Dravena's Vanish (second-Special pass) — no attack of its own, just an
+            // announcement over whichever ally got buffed. Named after whichever action actually
+            // fired (rolledActionId), not hardcoded, since this outcome type is shared. Taunt/
+            // Invulnerability/Stealth are flags encoded as buffs (see actions/support.ts), not
+            // numeric stats worth displaying a magnitude for — just announce the effect.
             const outcome = event.outcome;
             const actionName = ACTION_REGISTRY[roundTurn.turn.rolledActionId].name;
             const buffedName = rosterAdventurers.find((a) => a.id === outcome.targetId)?.name ?? 'Ally';
             const statLabel = outcome.stat === 'attackPower' ? 'ATK' : outcome.stat;
+            const flagText: Partial<Record<string, string>> = {
+              taunt: 'locks enemy targeting',
+              invulnerable: 'is Invulnerable',
+              stealth: 'Vanishes (untargetable)',
+            };
+            const text = flagText[outcome.stat]
+              ? `${actionName}! ${buffedName} ${flagText[outcome.stat]} (${outcome.durationTurns}t)`
+              : `${actionName}! ${buffedName} +${outcome.amount}% ${statLabel} (${outcome.durationTurns}t)`;
             events.push({
               type: 'announce',
               actorId: outcome.targetId,
-              text: `${actionName}! ${buffedName} +${outcome.amount}% ${statLabel} (${outcome.durationTurns}t)`,
+              text,
               color: '#ffcc66',
             });
+          } else if (event.type === 'action' && event.outcome.type === 'support-shield') {
+            // Glint's Shield Wall (second-Special pass) — no attack of its own, just an
+            // announcement over whoever got shielded. Named after whichever action actually fired,
+            // same convention as support-buff, since this outcome type could be shared later too.
+            const outcome = event.outcome;
+            const actionName = ACTION_REGISTRY[roundTurn.turn.rolledActionId].name;
+            const shieldedName = rosterAdventurers.find((a) => a.id === outcome.targetId)?.name ?? 'Ally';
+            events.push({
+              type: 'announce',
+              actorId: outcome.targetId,
+              text: `${actionName}! ${shieldedName} +${outcome.amount} Shield (${outcome.durationTurns}t)`,
+              color: '#66e0ff',
+            });
           } else if (event.type === 'action' && event.outcome.type === 'support-debuff') {
-            // Mira's Potion Toss (Enemy) (roadmap item 3) — the debuff counterpart to support-buff
-            // above: no attack of its own, an announcement over whichever enemy got debuffed.
+            // Mira's Potion Toss (Enemy) / Isilwen's Mark / Fallacy's Silence / Mirka's Stun
+            // (second-Special pass) — the debuff counterpart to support-buff above: no attack of
+            // its own, an announcement over whichever enemy got debuffed. Silence/Stun are flags
+            // encoded as debuffs, not numeric stats worth displaying a magnitude for.
             const outcome = event.outcome;
             const actionName = ACTION_REGISTRY[roundTurn.turn.rolledActionId].name;
             const debuffedName = roomDef.enemies.find((e) => e.id === outcome.targetId)?.name ?? 'Enemy';
-            const statLabel = outcome.stat === 'attackPower' ? 'ATK' : outcome.stat;
+            const statLabel = outcome.stat === 'attackPower' ? 'ATK' : outcome.stat === 'vulnerability' ? 'DMG Taken' : outcome.stat;
+            const flagText: Partial<Record<string, string>> = {
+              silence: 'is Silenced (Special Actions suppressed)',
+              stun: 'is Stunned (skips next turn)',
+            };
+            // Mark's amount is a positive bonus-damage percent (prefixed with +); Potion Toss
+            // Enemy's own debuff amounts are already negative (e.g. -20), so no extra sign needed.
+            const text = flagText[outcome.stat]
+              ? `${actionName}! ${debuffedName} ${flagText[outcome.stat]} (${outcome.durationTurns}t)`
+              : `${actionName}! ${debuffedName} ${outcome.stat === 'vulnerability' ? '+' : ''}${outcome.amount}% ${statLabel} (${outcome.durationTurns}t)`;
             events.push({
               type: 'announce',
               actorId: outcome.targetId,
-              text: `${actionName}! ${debuffedName} ${outcome.amount}% ${statLabel} (${outcome.durationTurns}t)`,
+              text,
               color: '#cc66ff',
             });
           } else if (event.type === 'action' && event.outcome.type === 'command') {
@@ -204,22 +257,59 @@
             }
           } else if (event.type === 'action' && event.outcome.type === 'party-buff') {
             // Tharavel's Inspire (roadmap item 11) — no attack of her own, one announcement over her
-            // summarizing the whole-party accuracy + crit buff.
+            // summarizing the whole-party crit buff (consolidated from a separate accuracy + crit
+            // pair once Accuracy was removed as a baseline stat — see docs/roadmap.md).
             events.push({
               type: 'announce',
               actorId: roundTurn.unitId,
-              text: `Inspire! +${event.outcome.accuracyAmount} ACC / +${event.outcome.critChanceAmount}% Crit (${event.outcome.durationTurns}t)`,
+              text: `Inspire! +${event.outcome.critChanceAmount}% Crit (${event.outcome.durationTurns}t)`,
               color: '#ffee88',
             });
           } else if (event.type === 'action' && event.outcome.type === 'fear') {
             // Mirka's Fear (roadmap item 11) — no attack of her own, one announcement over her
-            // summarizing the row-wide accuracy debuff (the debuff's own effect, missed enemy
-            // attacks, is still visible normally once it's in play).
+            // summarizing the row-wide vulnerability debuff (reframed from an accuracy debuff once
+            // Accuracy/Evasion were removed — the debuff's own effect, extra damage taken, is still
+            // visible normally once it's in play).
             events.push({
               type: 'announce',
               actorId: roundTurn.unitId,
-              text: `Fear! ${event.outcome.accuracyAmount} ACC (${event.outcome.durationTurns}t)`,
+              text: `Fear! +${event.outcome.vulnerabilityAmount}% DMG Taken (${event.outcome.durationTurns}t)`,
               color: '#cc99ff',
+            });
+          } else if (event.type === 'action' && event.outcome.type === 'attack-with-execute') {
+            // Drifta's Execute Strike (second-Special pass) — the hit half plays exactly like a
+            // plain 'attack'; a finishing blow gets its own callout over the target.
+            events.push({
+              type: 'attack',
+              actorId: roundTurn.unitId,
+              targetId: event.outcome.targetId,
+              damage: event.outcome.damage,
+              hit: event.outcome.hit,
+            });
+            if (event.outcome.executed) {
+              events.push({ type: 'announce', actorId: event.outcome.targetId, text: 'Executed!', color: '#ff4444' });
+            }
+          } else if (event.type === 'action' && event.outcome.type === 'cleanse') {
+            // Dawneth's Cleanse (second-Special pass) — no attack of her own; only announces when it
+            // actually cleared something (always resolves, same as Mending Charge, but a no-op
+            // cleanse is silent rather than cluttering the log).
+            if (event.outcome.clearedEffectIds.length > 0) {
+              events.push({
+                type: 'announce',
+                actorId: event.outcome.targetId,
+                text: `Cleanse! ${event.outcome.clearedEffectIds.join(', ')} removed`,
+                color: '#88ddaa',
+              });
+            }
+          } else if (event.type === 'action' && event.outcome.type === 'revive') {
+            // Mira's Revive (second-Special pass) — no attack of her own; always announces (never an
+            // idle no-op the way Cleanse can be, since selectTarget already gates on someone being
+            // Downed before this ever resolves).
+            events.push({
+              type: 'announce',
+              actorId: event.outcome.targetId,
+              text: `Revive! +${event.outcome.amount} HP`,
+              color: '#ffee88',
             });
           } else if (event.type === 'action' && event.outcome.type === 'heal') {
             events.push({
@@ -282,14 +372,7 @@
 
     destroyGame();
     battlePaused = false;
-    const countOf = (side: 'party' | 'enemy', row: 'front' | 'back') =>
-      data.units.filter((unit) => unit.side === side && unit.row === row).length;
-    const { width, height } = replayCanvasSize(
-      countOf('party', 'front'),
-      countOf('party', 'back'),
-      countOf('enemy', 'front'),
-      countOf('enemy', 'back'),
-    );
+    const { width, height } = replayCanvasSize(data.units);
     // The container claims the section's full width (see the `.dungeon-canvas` style below); its
     // aspect-ratio is set to match this room's fixed resolution so Phaser's FIT scale mode has a
     // correctly-proportioned box to scale the canvas into, up or down, instead of leaving it at
@@ -391,11 +474,17 @@
 
 <style>
   /* The Phaser game itself is created at a fixed pixel resolution (see replayCanvasSize) and
-     scaled to fit via Phaser.Scale.FIT — this wrapper just needs to claim the section's full
-     width so FIT has real room to scale into, instead of collapsing to the canvas's own intrinsic
-     size and leaving the rest of the section empty. */
+     scaled to fit via Phaser.Scale.FIT — this wrapper claims up to DUNGEON_CANVAS_MAX_WIDTH so
+     FIT has real room to scale into, instead of collapsing to the canvas's own intrinsic size and
+     leaving the rest of the section empty. Capped (not just 100%) and centered — the native
+     resolution is quite narrow/tall (6 lane-columns, 3+ ranks deep), so letting it claim the
+     page's full ~1220px width (see app.css) blew it up to an enormous, "zoomed in" size once the
+     old fixed-size HUD card strip (which used to share this space) was removed — see
+     docs/roadmap.md's Autobattle Revision Cleanup. */
   .dungeon-canvas {
     width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
   }
 
   .dungeon-canvas :global(canvas) {

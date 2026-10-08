@@ -1,39 +1,87 @@
 import type { Adventurer } from './adventurer';
 import type { Action, ActionOutcome } from './action';
 import type { BattleState } from './battle';
-import { triggerRetreat, getOpposingRoster } from './battle';
+import { triggerRetreat, getOpposingRoster, getOwnRoster } from './battle';
 import type { RngSource } from './rng';
-import { ENCHANTMENT_REGISTRY } from './enchantments';
 import { tickStatusEffects, type StatusEffectId } from './statusEffects';
 import { tickBuffs } from './buffs';
+import { tickAuras } from './auras';
+import { tickShields } from './shields';
+import { resolveSpecialActionTriggers, type SpecialActionOutcome } from './specialActions';
+import { getEffectiveStat } from './stats';
+
+/** Whether `unit` currently has an active Stun (see actions/support.ts's StunAction) — a timed buff on a synthetic 'stun' stat, same convention as Taunt/Silence. */
+function isStunned(unit: Adventurer): boolean {
+  return getEffectiveStat(0, 'stun', unit.modifiers) > 0;
+}
 
 export type TurnEvent =
   | { type: 'action'; actionId: Action['id']; outcome: ActionOutcome }
   /** A status effect (e.g. Burn) dealing its per-turn damage — see statusEffects.ts. */
-  | { type: 'status-tick'; effectId: StatusEffectId; damage: number };
+  | { type: 'status-tick'; effectId: StatusEffectId; damage: number }
+  /**
+   * A Special Action's trigger matched and was resolved — see
+   * specialActions.ts. `actorId` is whoever the Special Action belongs to,
+   * which may differ from whoever's turn this is (e.g. an 'on-hit-taken'
+   * special fires on the unit that got hit, during the attacker's turn).
+   * `outcome` is null when the Special Action found no valid target.
+   */
+  | { type: 'special-action'; actorId: string; specialActionId: string; outcome: ActionOutcome | null };
 
 export interface TurnResult {
   events: TurnEvent[];
-  /** Which of the 6 die faces (0-5) was rolled this turn — for the future dice-roll animation. */
+  /** Which of the 6 die faces (0-5) the Basic Action was derived from — for the future dice-face-art UI. */
   rolledFaceIndex: number;
   rolledActionId: Action['id'];
 }
 
-const DIE_FACE_COUNT = 6;
+/**
+ * Every targetId `outcome` actually dealt damage to — [] for an outcome
+ * shape with no damage payload at all (heal, support-buff, etc). Every
+ * attack always "hits" now (`hit` is vestigially always `true` — see
+ * action.ts's doc comments on the "pure auto-battler" pass), so this
+ * checks `damage > 0` instead: a target that fully blocked the hit
+ * (Shield, Invulnerability, Dodge) took no damage and shouldn't fire
+ * 'on-hit-landed'/'on-hit-taken' triggers, even though the attack
+ * "landed" in the sense of resolving at all.
+ */
+function landedHitTargetIds(outcome: ActionOutcome): string[] {
+  switch (outcome.type) {
+    case 'attack':
+    case 'attack-and-buff':
+    case 'attack-and-gold':
+    case 'attack-and-debuff':
+    case 'attack-with-execute':
+    case 'attack-and-heal-self':
+      return outcome.damage > 0 ? [outcome.targetId] : [];
+    case 'attack-multi':
+      return outcome.hits.filter((hit) => hit.damage > 0).map((hit) => hit.targetId);
+    default:
+      return [];
+  }
+}
+
+function pushSpecialActionEvents(events: TurnEvent[], outcomes: SpecialActionOutcome[], actorId: string): void {
+  for (const outcome of outcomes) {
+    events.push({ type: 'special-action', actorId, specialActionId: outcome.specialActionId, outcome: outcome.outcome });
+  }
+}
 
 /**
- * Resolves one turn for `adventurer`: first ticks its own active status
- * effects (e.g. Burn), then rolls one of its 6 die faces uniformly at
- * random and attempts that face's action. If the rolled face is enchanted
- * and its action lands a hit, the enchantment's effect is applied to the
- * target (see enchantments.ts). If the action finds no valid target at all
- * (e.g. a Heal roll with nobody hurt, or a Retreat roll while the party is
- * healthy), the rest of the turn is simply idle — no movement to fall back
- * to since the front/back formation system replaced the grid entirely (see
- * formation.ts / actions/targeting.ts). No energy, no deck cursor: every
- * turn is a status tick plus exactly one roll, one action attempt. Timed
- * buffs (e.g. Glint's Rallying Strike armor — see buffs.ts) tick down here
- * too, silently, right alongside status effects.
+ * Resolves one turn for `adventurer`: ticks its own status effects/buffs/
+ * shields and recomputes active Auras affecting it, then — unless Stunned
+ * (see isStunned), which skips the rest of this entirely — fires any
+ * 'on-turn-start' Special Action triggers, then always resolves
+ * its deterministic `basicAction` (see adventurer.ts) — no roll, no
+ * randomness in which action fires. If the action landed a hit, fires
+ * 'on-hit-landed' (on the actor) and 'on-hit-taken' (on whoever was hit)
+ * triggers; if it downed one or more units (checked once the whole outcome
+ * has finished resolving, so a multi-hit action like Cleave is evaluated as
+ * a batch rather than unit-by-unit mid-resolution), fires
+ * 'on-ally-downed'/'on-enemy-downed' for every other living unit on the
+ * relevant side(s). None of this consumes anyone's turn, and a hit caused
+ * by a Special Action's own effect does not itself fire further triggers —
+ * see specialActions.ts's own doc comment for why.
  */
 export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: RngSource): TurnResult {
   const events: TurnEvent[] = tickStatusEffects(adventurer).map((tick) => ({
@@ -42,53 +90,93 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
     damage: tick.damage,
   }));
   tickBuffs(adventurer);
+  tickShields(adventurer);
+  tickAuras(adventurer, battle);
 
-  const faceIndex = Math.floor(rng() * DIE_FACE_COUNT);
-  const face = adventurer.dieFaces[faceIndex];
-  const action = face.action;
-  const result = { events, rolledFaceIndex: faceIndex, rolledActionId: action.id };
+  const action = adventurer.basicAction;
+  // Reports whichever die face currently shows the Basic Action, for the dice-face-art UI — falls
+  // back to 0 if none does (the Basic Action was explicitly authored rather than derived from
+  // dieFaces at all — see adventurer.ts's createAdventurer).
+  const faceIndex = adventurer.dieFaces.findIndex((face) => face.action.id === action.id);
+  const result: TurnResult = { events, rolledFaceIndex: faceIndex === -1 ? 0 : faceIndex, rolledActionId: action.id };
 
   if (adventurer.hp <= 0) {
     // A lethal status tick just downed this unit before it could act.
     return result;
   }
 
+  if (isStunned(adventurer)) {
+    // Stun (the Stun ability type — see actions/support.ts's StunAction) skips the whole turn: no
+    // 'on-turn-start' Special Action, no Basic Action — stronger than Silence, which only
+    // suppresses the Special Action half (see specialActions.ts's isSilenced). The Stun buff itself
+    // already ticked down above (tickBuffs), so it still counts toward expiring normally.
+    return result;
+  }
+
+  pushSpecialActionEvents(
+    events,
+    resolveSpecialActionTriggers(adventurer, adventurer.activeSpecialActions, { trigger: 'on-turn-start' }, battle, rng),
+    adventurer.id,
+  );
+
   const target = action.selectTarget({ actor: adventurer, battle });
   if (target === null) {
     return result;
   }
 
+  const hpBefore = new Map<string, number>();
+  for (const unit of [...battle.adventurers, ...battle.enemies]) {
+    hpBefore.set(unit.id, unit.hp);
+  }
+
   const outcome = action.resolve({ actor: adventurer, target, rng, battle });
   events.push({ type: 'action', actionId: action.id, outcome });
 
-  if (
-    face.enchantmentId &&
-    (outcome.type === 'attack' ||
-      outcome.type === 'attack-and-buff' ||
-      outcome.type === 'attack-and-gold' ||
-      outcome.type === 'attack-and-debuff') &&
-    outcome.hit
-  ) {
-    // Looked up by outcome.targetId, not the pre-resolve `target` above — most actions hit exactly
-    // who they selected, but one that re-picks its real target inside resolve() (e.g. Isilwen's
-    // Card Throw, which selectTarget can't randomize since it has no rng) would otherwise enchant
-    // the wrong enemy.
-    const hitTarget = getOpposingRoster(battle, adventurer).find((unit) => unit.id === outcome.targetId);
-    if (hitTarget) {
-      ENCHANTMENT_REGISTRY[face.enchantmentId].applyOnHit(hitTarget);
-    }
+  if (outcome.type === 'retreat') {
+    triggerRetreat(battle);
   }
-  if (face.enchantmentId && outcome.type === 'attack-multi') {
-    for (const hit of outcome.hits) {
-      if (!hit.hit) continue;
-      const hitTarget = getOpposingRoster(battle, adventurer).find((unit) => unit.id === hit.targetId);
-      if (hitTarget) {
-        ENCHANTMENT_REGISTRY[face.enchantmentId].applyOnHit(hitTarget);
+
+  const hitTargetIds = landedHitTargetIds(outcome);
+  if (hitTargetIds.length > 0) {
+    pushSpecialActionEvents(
+      events,
+      resolveSpecialActionTriggers(adventurer, adventurer.activeSpecialActions, { trigger: 'on-hit-landed' }, battle, rng),
+      adventurer.id,
+    );
+
+    const opposing = getOpposingRoster(battle, adventurer);
+    for (const targetId of hitTargetIds) {
+      const hitUnit = opposing.find((unit) => unit.id === targetId);
+      if (hitUnit) {
+        pushSpecialActionEvents(
+          events,
+          resolveSpecialActionTriggers(hitUnit, hitUnit.activeSpecialActions, { trigger: 'on-hit-taken', source: adventurer }, battle, rng),
+          hitUnit.id,
+        );
       }
     }
   }
-  if (outcome.type === 'retreat') {
-    triggerRetreat(battle);
+
+  for (const unit of [...battle.adventurers, ...battle.enemies]) {
+    const wasAlive = (hpBefore.get(unit.id) ?? 0) > 0;
+    if (!wasAlive || unit.hp > 0) {
+      continue;
+    }
+
+    for (const ally of getOwnRoster(battle, unit).filter((other) => other.id !== unit.id && other.hp > 0)) {
+      pushSpecialActionEvents(
+        events,
+        resolveSpecialActionTriggers(ally, ally.activeSpecialActions, { trigger: 'on-ally-downed', source: unit }, battle, rng),
+        ally.id,
+      );
+    }
+    for (const enemy of getOpposingRoster(battle, unit).filter((other) => other.hp > 0)) {
+      pushSpecialActionEvents(
+        events,
+        resolveSpecialActionTriggers(enemy, enemy.activeSpecialActions, { trigger: 'on-enemy-downed', source: unit }, battle, rng),
+        enemy.id,
+      );
+    }
   }
 
   return result;
