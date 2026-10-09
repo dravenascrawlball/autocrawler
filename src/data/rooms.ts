@@ -14,6 +14,10 @@ import {
   createTrollWarlord,
   createSuccubus,
   createDemonKing,
+  createChainWarden,
+  createHexWitch,
+  createInfernalBannerman,
+  createHellforgedGuardian,
   type EnemyFactory,
 } from './enemies';
 
@@ -34,6 +38,10 @@ export const ENEMY_RANK_OPTIONS: Record<string, Rank[]> = {
   'Troll Warlord': [0],
   Succubus: [2],
   'Demon King': [0],
+  'Chain Warden': [0],
+  'Hex Witch': [2],
+  'Infernal Bannerman': [1],
+  'Hellforged Guardian': [0],
 };
 
 const BACK_RANK: Rank = 2;
@@ -60,7 +68,12 @@ function freeLanesAt(rank: Rank, taken: GridPosition[]): Lane[] {
  */
 export function placeEnemies(enemies: Adventurer[], rng: RngSource): void {
   const isBackLine = (enemy: Adventurer) => rankOptionsFor(enemy).includes(BACK_RANK);
-  const ordered = [...enemies.filter((enemy) => !isBackLine(enemy)), ...enemies.filter(isBackLine)];
+  // Front/middle units first, most constrained (fewest allowed ranks) first, so a middle-only unit
+  // like the Infernal Bannerman isn't crowded out by flexible front-or-middle units.
+  const frontLine = enemies
+    .filter((enemy) => !isBackLine(enemy))
+    .sort((a, b) => rankOptionsFor(a).length - rankOptionsFor(b).length);
+  const ordered = [...frontLine, ...enemies.filter(isBackLine)];
   const taken: GridPosition[] = [];
 
   for (const enemy of ordered) {
@@ -127,6 +140,10 @@ const sentinel = createBoneSentinel;
 const troll = createTrollWarlord;
 const succubus = createSuccubus;
 const demonKing = createDemonKing;
+const warden = createChainWarden;
+const witch = createHexWitch;
+const bannerman = createInfernalBannerman;
+const guardian = createHellforgedGuardian;
 
 /**
  * Fifteen difficulty slots — three floors of ROOMS_PER_FLOOR (5) rooms,
@@ -139,7 +156,7 @@ const demonKing = createDemonKing;
  * rest of the escalation.
  */
 export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
-  // --- Floor 1 ---
+  // --- Floor 1: goblins, kobolds, grunts (an occasional Chain Warden late in the floor) ---
   // Slot 1 (opener): a single weak enemy, or a pair of weaker ones.
   [[grunt], [shaman], [kobold, kobold], [flanker, kobold], [imp, imp]],
   // Slot 2: a light pair/trio.
@@ -164,7 +181,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [brute, kobold, kobold],
     [brute, shaman],
     [sentinel, flanker, spitter],
-    [brute, imp, imp],
+    [warden, grunt, shaman],
   ],
   // Slot 5: floor 1 boss — the Troll Warlord plus support.
   [
@@ -172,58 +189,58 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [troll, spitter],
     [troll, flanker, kobold],
   ],
-  // --- Floor 2 ---
+  // --- Floor 2: the infernal court — Chain Wardens and Hex Witches lead (a Guardian now and then) ---
   [
-    [grunt, grunt, shaman],
-    [flanker, imp, kobold],
+    [warden, grunt, shaman],
+    [witch, flanker, imp],
     [sentinel, spitter],
   ],
   [
-    [brute, kobold, kobold],
-    [grunt, grunt, spitter],
+    [warden, warden, spitter],
+    [witch, brute, kobold],
     [flanker, flanker, shaman],
   ],
   [
-    [sentinel, grunt, shaman],
+    [warden, sentinel, witch],
     [brute, imp, imp],
-    [flanker, spitter, spitter],
+    [witch, flanker, spitter],
   ],
   [
-    [brute, sentinel],
-    [brute, flanker, shaman],
-    [sentinel, flanker, imp, spitter],
+    [brute, warden, witch],
+    [guardian, flanker, shaman],
+    [warden, flanker, imp, spitter],
   ],
-  // Slot 10: floor 2 boss — the Succubus, guarded.
+  // Slot 10: floor 2 boss — the Succubus and her court.
   [
-    [succubus, grunt, grunt],
-    [succubus, sentinel],
+    [succubus, warden, warden],
+    [succubus, sentinel, witch],
     [succubus, brute],
   ],
-  // --- Floor 3 ---
+  // --- Floor 3: the demon army — Bannermen and Hellforged Guardians lead (a Hex Witch now and then) ---
   [
-    [brute, flanker, spitter],
-    [sentinel, grunt, grunt, shaman],
-    [imp, imp, flanker, kobold],
+    [guardian, bannerman, spitter],
+    [sentinel, grunt, bannerman],
+    [imp, imp, flanker, bannerman],
   ],
   [
-    [brute, brute],
-    [sentinel, sentinel, spitter],
+    [guardian, brute, bannerman],
+    [sentinel, sentinel, witch],
     [brute, imp, shaman],
   ],
   [
-    [brute, sentinel, shaman],
-    [flanker, flanker, spitter, spitter],
+    [guardian, guardian, bannerman],
+    [warden, flanker, spitter, bannerman],
     [troll, imp],
   ],
   [
-    [troll, flanker],
-    [brute, brute, shaman],
-    [sentinel, sentinel, imp, imp],
+    [troll, bannerman],
+    [guardian, brute, witch],
+    [sentinel, warden, bannerman, imp],
   ],
-  // Slot 15: the finale — the Demon King and his court.
+  // Slot 15: the finale — the Demon King and his army.
   [
-    [demonKing, imp, imp],
-    [demonKing, sentinel],
+    [demonKing, bannerman, imp],
+    [demonKing, guardian],
     [demonKing, flanker, spitter],
   ],
 ];
@@ -242,9 +259,9 @@ export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [
   // Floor 1
   1.7, 1.8, 1.9, 2, 2.55,
   // Floor 2
-  4.8, 5.2, 5.6, 6, 6.6,
+  4.8, 5.2, 5.6, 6, 6.2,
   // Floor 3
-  5.8, 6.1, 6.4, 6.7, 7.4,
+  6.8, 7.2, 7.6, 8, 7.6,
 ];
 
 /**

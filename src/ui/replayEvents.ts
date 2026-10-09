@@ -73,6 +73,23 @@ export function outcomeToReplayEvents(
         color: '#ffd700',
       });
     }
+  } else if (outcome.type === 'attack-and-pull') {
+    // Chain Warden's Hook Chain (monster pass) — the swap animates first (both heroes slide to their
+    // new cells), then the hit lands on whoever was dragged forward.
+    if (outcome.pull) {
+      events.push({ type: 'announce', actorId: outcome.pull.pulledId, text: 'Hooked!', color: '#bbbbbb' });
+      events.push({ type: 'move', unitId: outcome.pull.pulledId, to: outcome.pull.to });
+      events.push({ type: 'move', unitId: outcome.pull.swappedWithId, to: outcome.pull.swappedTo });
+    }
+    events.push({ type: 'attack', actorId, targetId: outcome.targetId, damage: outcome.damage, hit: outcome.hit });
+  } else if (outcome.type === 'ally-rally') {
+    // Infernal Bannerman's War Banner (monster pass) — one announcement over the bannerman.
+    events.push({
+      type: 'announce',
+      actorId,
+      text: `${actionName}! Allies +${outcome.amount}% ATK (${outcome.durationTurns}t)`,
+      color: '#ff7744',
+    });
   } else if (outcome.type === 'attack-and-status') {
     // Venom Spit / Searing Touch (enemy variety pass) — a plain attack, plus an announcement over
     // the target if the poison/burn actually took hold.
@@ -166,6 +183,7 @@ export function outcomeToReplayEvents(
     const flagText: Partial<Record<string, string>> = {
       silence: 'is Silenced (Special Actions suppressed)',
       stun: 'is Stunned (skips next turn)',
+      hex: `is Hexed (${outcome.amount}% ATK, Specials silenced)`,
     };
     // Mark's amount is a positive bonus-damage percent (prefixed with +); Potion Toss
     // Enemy's own debuff amounts are already negative (e.g. -20), so no extra sign needed.

@@ -60,3 +60,22 @@ describe('outcomeToReplayEvents', () => {
     ]);
   });
 });
+
+describe('outcomeToReplayEvents: Hook Chain', () => {
+  it('animates the swap (two moves) before the hit', () => {
+    const events = outcomeToReplayEvents(
+      {
+        type: 'attack-and-pull',
+        damage: 4,
+        hit: true,
+        targetId: 'mira',
+        pull: { pulledId: 'mira', to: { lane: 1, rank: 0 }, swappedWithId: 'gudrun', swappedTo: { lane: 1, rank: 2 } },
+      },
+      'warden',
+      'Hook Chain',
+      nameOf,
+    );
+    expect(events.map((e) => e.type)).toEqual(['announce', 'move', 'move', 'attack']);
+    expect(events[1]).toEqual({ type: 'move', unitId: 'mira', to: { lane: 1, rank: 0 } });
+  });
+});

@@ -8,9 +8,11 @@ import {
   VenomSpitAction,
   SearingTouchAction,
   DrainingKissAction,
+  HookChainAction,
 } from '../sim/actions/attack';
 import { THORNS_TRAIT, ENRAGE_TRAIT } from '../sim/traits';
 import { HealAction } from '../sim/actions/heal';
+import { HexAction } from '../sim/actions/support';
 import { plainFaces } from '../sim/dieFace';
 import type { Row } from '../sim/formation';
 import {
@@ -22,6 +24,8 @@ import {
   SUCCUBUS_CHARM_SPECIAL,
   DEMON_KING_HELLFIRE_SPECIAL,
   DEMON_KING_RAISE_DEAD_SPECIAL,
+  BANNERMAN_WAR_BANNER_SPECIAL,
+  GUARDIAN_WARD_SPECIAL,
 } from './specialActions';
 
 /**
@@ -285,6 +289,65 @@ export const DEMON_KING_TEMPLATE: AdventurerTemplate = {
   innateSpecialActions: [DEMON_KING_HELLFIRE_SPECIAL, DEMON_KING_RAISE_DEAD_SPECIAL],
 };
 
+// --- Monster pass: infernal court (floor 2) / demon army (floor 3), not exclusively ---
+
+/** Infernal court (front): Hook Chain drags the rearmost hero in its target lane to the front, then hits them. */
+export const CHAIN_WARDEN_TEMPLATE: AdventurerTemplate = {
+  name: 'Chain Warden',
+  maxHp: 16,
+  attackPower: 5,
+  speed: 4,
+  actions: ['hook-chain'],
+  dieFaces: plainFaces(HookChainAction),
+  lootTable: LIGHT_LOOT,
+  goldDrop: { chance: 0.85, min: 12, max: 30 },
+  basicAction: HookChainAction,
+};
+
+/** Infernal court (back): Hex cuts your strongest hero's attack and Silences their Specials. Deals no damage itself. */
+export const HEX_WITCH_TEMPLATE: AdventurerTemplate = {
+  name: 'Hex Witch',
+  maxHp: 12,
+  attackPower: 3,
+  speed: 5,
+  actions: ['hex'],
+  dieFaces: plainFaces(HexAction),
+  lootTable: [{ itemId: 'tome-of-power', dropChance: 0.1 }, ...LIGHT_LOOT],
+  goldDrop: { chance: 0.85, min: 12, max: 30 },
+  basicAction: HexAction,
+};
+
+/** Demon army (middle): attacks normally, and War Banner buffs every allied monster's attack each turn. */
+export const INFERNAL_BANNERMAN_TEMPLATE: AdventurerTemplate = {
+  name: 'Infernal Bannerman',
+  maxHp: 18,
+  attackPower: 4,
+  speed: 4,
+  actions: ['attack-nearest'],
+  dieFaces: plainFaces(AttackNearestAction),
+  lootTable: LIGHT_LOOT,
+  goldDrop: { chance: 0.9, min: 15, max: 35 },
+  basicAction: AttackNearestAction,
+  innateSpecialActions: [BANNERMAN_WAR_BANNER_SPECIAL],
+};
+
+/** Demon army (front): a tough anchor that shields its most-hurt ally every turn. */
+export const HELLFORGED_GUARDIAN_TEMPLATE: AdventurerTemplate = {
+  name: 'Hellforged Guardian',
+  maxHp: 28,
+  attackPower: 5,
+  speed: 3,
+  actions: ['attack-nearest'],
+  dieFaces: plainFaces(AttackNearestAction),
+  lootTable: [
+    { itemId: 'chainmail', dropChance: 0.15 },
+    { itemId: 'wooden-shield', dropChance: 0.2 },
+  ],
+  goldDrop: { chance: 0.9, min: 18, max: 40 },
+  basicAction: AttackNearestAction,
+  innateSpecialActions: [GUARDIAN_WARD_SPECIAL],
+};
+
 export type EnemyFactory = (row: Row) => Adventurer;
 
 let nextEnemyInstanceId = 1;
@@ -338,5 +401,21 @@ export function createSuccubus(row: Row): Adventurer {
 
 export function createDemonKing(row: Row): Adventurer {
   return createEnemy(DEMON_KING_TEMPLATE, row);
+}
+
+export function createChainWarden(row: Row): Adventurer {
+  return createEnemy(CHAIN_WARDEN_TEMPLATE, row);
+}
+
+export function createHexWitch(row: Row): Adventurer {
+  return createEnemy(HEX_WITCH_TEMPLATE, row);
+}
+
+export function createInfernalBannerman(row: Row): Adventurer {
+  return createEnemy(INFERNAL_BANNERMAN_TEMPLATE, row);
+}
+
+export function createHellforgedGuardian(row: Row): Adventurer {
+  return createEnemy(HELLFORGED_GUARDIAN_TEMPLATE, row);
 }
 

@@ -36,6 +36,7 @@ import {
   GuardiansWardAction,
   VanishAction,
   BattleOrdersAction,
+  WarBannerAction,
 } from '../sim/actions/support';
 import { EmberBurnAction } from '../sim/actions/itemEffects';
 
@@ -582,6 +583,22 @@ export const DEMON_KING_RAISE_DEAD_SPECIAL: SpecialAction = {
   action: ReviveAction,
 };
 
+/** Infernal Bannerman (monster pass): War Banner every turn — all its allies hit harder. */
+export const BANNERMAN_WAR_BANNER_SPECIAL: SpecialAction = {
+  id: 'bannerman-war-banner',
+  name: 'War Banner',
+  trigger: 'on-turn-start',
+  action: WarBannerAction,
+};
+
+/** Hellforged Guardian (monster pass): shields its most-hurt ally every turn. */
+export const GUARDIAN_WARD_SPECIAL: SpecialAction = {
+  id: 'hellforged-ward',
+  name: 'Hellforged Ward',
+  trigger: 'on-turn-start',
+  action: ShieldWallAction,
+};
+
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
   id: 'grunt-power-attack',
   name: 'Heavy Swing',
@@ -660,6 +677,8 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'succubus-charm': SUCCUBUS_CHARM_SPECIAL,
   'demon-king-hellfire': DEMON_KING_HELLFIRE_SPECIAL,
   'demon-king-raise-dead': DEMON_KING_RAISE_DEAD_SPECIAL,
+  'bannerman-war-banner': BANNERMAN_WAR_BANNER_SPECIAL,
+  'hellforged-ward': GUARDIAN_WARD_SPECIAL,
 };
 
 /**

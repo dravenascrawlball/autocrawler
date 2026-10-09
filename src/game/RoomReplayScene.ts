@@ -34,7 +34,9 @@ export type ReplayEvent =
    * (roadmap item 11) to narrate a support effect that has no attack/heal
    * animation of its own to piggyback on.
    */
-  | { type: 'announce'; actorId: string; text: string; color: string };
+  | { type: 'announce'; actorId: string; text: string; color: string }
+  /** A unit sliding to a new grid cell mid-fight — e.g. the Chain Warden's Hook Chain dragging a hero forward. */
+  | { type: 'move'; unitId: string; to: GridPosition };
 
 export interface RoomReplaySceneData {
   units: ReplayUnit[];
@@ -270,6 +272,8 @@ export class RoomReplayScene extends Phaser.Scene {
   private badgeRageTexts = new Map<string, Phaser.GameObjects.Text>();
   /** A unit's feet position — the shared anchor every per-unit effect (badge, floating text, sparks) positions itself relative to. */
   private feetPositions = new Map<string, { x: number; y: number }>();
+  /** Each unit's status-badge container — kept so a mid-fight 'move' can slide the badge along with the sprite. */
+  private badgeContainers = new Map<string, Phaser.GameObjects.Container>();
   private currentHp = new Map<string, number>();
   private speedMultiplier = 1;
   private desiredPaused = false;
@@ -557,7 +561,7 @@ export class RoomReplayScene extends Phaser.Scene {
       children.push(rageText);
     }
 
-    this.add.container(feetX, badgeCenterY, children);
+    this.badgeContainers.set(unit.id, this.add.container(feetX, badgeCenterY, children));
   }
 
   /** "Raging +N%" once the bonus is non-zero, blank at full HP — see traits.ts's RAGE_TRAIT. */
@@ -613,7 +617,47 @@ export class RoomReplayScene extends Phaser.Scene {
       this.playAnnounce(event.actorId, event.text, event.color, next);
       return;
     }
+    if (event.type === 'move') {
+      this.playMove(event.unitId, event.to, next);
+      return;
+    }
     this.playHeal(event.actorId, event.targetId, event.amount, next);
+  }
+
+  /**
+   * Slides `unitId`'s sprite and status badge to `to` — the cell it now stands in after being
+   * displaced mid-fight. Updates the unit's stored position and feet position so later attacks
+   * lunge from (and floating numbers appear at) the new spot.
+   */
+  private playMove(unitId: string, to: GridPosition, onDone: () => void): void {
+    const unit = this.sceneData.units.find((candidate) => candidate.id === unitId);
+    const container = this.gridContainers.get(unitId);
+    if (!unit || !container) {
+      onDone();
+      return;
+    }
+
+    unit.position = { ...to };
+    const target = this.laneFeetPosition(columnForUnit(unit), to.lane);
+    this.feetPositions.set(unitId, target);
+    const badge = this.badgeContainers.get(unitId);
+    if (badge) {
+      this.tweens.add({
+        targets: badge,
+        x: target.x,
+        y: target.y + BADGE_TOP_GAP + BADGE_HEIGHT / 2,
+        duration: this.scaled(260),
+        ease: 'Quad.easeInOut',
+      });
+    }
+    this.tweens.add({
+      targets: container,
+      x: target.x,
+      y: target.y,
+      duration: this.scaled(260),
+      ease: 'Quad.easeInOut',
+      onComplete: onDone,
+    });
   }
 
   /** Floats a one-shot text announcement over `actorId`'s grid position, plus a soft glow pulse in the same color — see the 'announce' ReplayEvent doc comment for what uses this. */

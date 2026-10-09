@@ -58,6 +58,11 @@ systems that don't exist yet.
 | Succubus (floor 2 boss, room 10) | **Draining Kiss** — ranged hit on the weakest hero that heals her | Always: **Charm** (`on-hit-taken`) — Stun on the nearest hero |
 | Demon King (floor 3 boss, room 15) | Cleave | Always: **Hellfire** (`on-turn-start`) — half-damage hits on 3 heroes that Burn, and **Raise Dead** (`on-turn-start`) — revives a fallen demon |
 
+| Chain Warden (infernal court, mostly floor 2) | **Hook Chain** — drags the rearmost hero in its target lane to the front (swapping cells), then hits them | — |
+| Hex Witch (infernal court, mostly floor 2) | **Hex** — your hardest-hitting hero gets −25% attack and is Silenced for 3 turns | — |
+| Infernal Bannerman (demon army, mostly floor 3) | Attack Nearest | Always: **War Banner** (`on-turn-start`) — +20% attack for every allied monster |
+| Hellforged Guardian (demon army, mostly floor 3) | Attack Nearest | Always: **Hellforged Ward** (`on-turn-start`) — shields its most-hurt ally |
+
 Enemy-only mechanics (enemy variety pass): Flank Strike, Venom Spit,
 Searing Touch, Vengeance, Regenerate and Enrage. Enemy rank rules live in
 `data/rooms.ts`'s `ENEMY_RANK_OPTIONS`; all five new enemies use a

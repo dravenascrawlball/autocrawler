@@ -120,10 +120,10 @@ export const GUDRUN_TEMPLATE: AdventurerTemplate = {
 export const DAWNETH_TEMPLATE: AdventurerTemplate = {
   name: 'Dawneth',
   role: 'Healer',
-  maxHp: 18,
+  maxHp: 21,
   attackPower: 4,
   speed: 4,
-  healPower: 9,
+  healPower: 10,
   actions: ['mending-charge', 'mourning-strike'],
   dieFaces: [...plainFaces(MendingChargeAction, 4), ...plainFaces(MourningStrikeAction, 2)],
   recruitCost: 65,
@@ -216,7 +216,7 @@ export const THARAVEL_TEMPLATE: AdventurerTemplate = {
 export const BODIL_TEMPLATE: AdventurerTemplate = {
   name: 'Bodil',
   role: 'Fighter',
-  maxHp: 26,
+  maxHp: 30,
   attackPower: 4,
   speed: 4,
   healPower: 3,
@@ -252,8 +252,8 @@ export const BODIL_TEMPLATE: AdventurerTemplate = {
 export const GLINT_TEMPLATE: AdventurerTemplate = {
   name: 'Glint',
   role: 'Fighter',
-  maxHp: 24,
-  attackPower: 3,
+  maxHp: 28,
+  attackPower: 4,
   speed: 4,
   actions: ['rallying-strike', 'attack-nearest'],
   dieFaces: [...plainFaces(RallyingStrikeAction, 3), ...plainFaces(AttackNearestAction, 3)],
@@ -382,7 +382,7 @@ export const NERISSA_TEMPLATE: AdventurerTemplate = {
   name: 'Nerissa',
   role: 'Rogue',
   maxHp: 16,
-  attackPower: 5,
+  attackPower: 4,
   speed: 6,
   actions: ['pickpocket-strike', 'gilded-strike', 'attack-nearest'],
   dieFaces: [

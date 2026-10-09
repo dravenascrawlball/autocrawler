@@ -2,6 +2,7 @@ import type { Action, ActionContext, ActionOutcome, TargetingContext } from '../
 import { getOwnRoster, getOpposingRoster, getHealEnergy } from '../battle';
 import { applyBuff } from '../buffs';
 import { applyShield } from '../shields';
+import { getEffectiveStat } from '../stats';
 import { selectHighestAttackPowerAlly, selectFirstEnemy, selectLowestHpAlly, selectGuardAlly } from './targeting';
 import { AttackNearestAction } from './attack';
 
@@ -548,6 +549,77 @@ export const VengeanceAction: Action = {
       stat: 'attackPower',
       amount: VENGEANCE_ATTACK_PERCENT,
       durationTurns: VENGEANCE_DURATION_TURNS,
+    };
+  },
+};
+
+// --- Monster pass: infernal court / demon army ---
+
+/** Hex's attack penalty and duration (it also Silences for the same duration). */
+export const HEX_ATTACK_PERCENT = -25;
+export const HEX_DURATION_TURNS = 3;
+
+/**
+ * The Hex Witch's Basic Action (debuffer): targets the opposing unit with
+ * the highest effective attackPower — your strongest hero, at any range —
+ * cutting its attack by HEX_ATTACK_PERCENT and Silencing its Special
+ * Actions (same 'silence' flag as SilenceAction) for HEX_DURATION_TURNS.
+ */
+export const HexAction: Action = {
+  id: 'hex',
+  name: 'Hex',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    const living = getOpposingRoster(context.battle, context.actor).filter((unit) => unit.hp > 0);
+    if (living.length === 0) return null;
+    const attackOf = (unit: (typeof living)[number]) => getEffectiveStat(unit.attackPower, 'attackPower', unit.modifiers);
+    return living.reduce((strongest, unit) => (attackOf(unit) > attackOf(strongest) ? unit : strongest));
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    applyBuff(
+      context.target,
+      'hex-attack',
+      { stat: 'attackPower', type: 'percent', amount: HEX_ATTACK_PERCENT, source: 'buff:hex' },
+      HEX_DURATION_TURNS,
+    );
+    applyBuff(context.target, SILENCE_DEBUFF_ID, { stat: 'silence', type: 'flat', amount: 1, source: 'buff:silence' }, HEX_DURATION_TURNS);
+    return { type: 'support-debuff', targetId: context.target.id, stat: 'hex', amount: HEX_ATTACK_PERCENT, durationTurns: HEX_DURATION_TURNS };
+  },
+};
+
+/** War Banner's attack bonus for every allied monster, refreshed each turn rather than stacking. */
+export const WAR_BANNER_ATTACK_PERCENT = 20;
+export const WAR_BANNER_DURATION_TURNS = 2;
+
+/**
+ * The Infernal Bannerman's always-on Special (ally empower): every living
+ * ally (itself included) gets +WAR_BANNER_ATTACK_PERCENT attack for a
+ * couple of turns, refreshed each turn it lives — kill it first and the
+ * buff lapses.
+ */
+export const WarBannerAction: Action = {
+  id: 'war-banner',
+  name: 'War Banner',
+  reach: 'melee', // unused — buffs its own side
+  selectTarget(context: TargetingContext) {
+    return context.actor.hp > 0 ? context.actor : null;
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const allies = getOwnRoster(context.battle, context.actor).filter((unit) => unit.hp > 0);
+    for (const ally of allies) {
+      applyBuff(
+        ally,
+        'war-banner',
+        { stat: 'attackPower', type: 'percent', amount: WAR_BANNER_ATTACK_PERCENT, source: 'buff:war-banner' },
+        WAR_BANNER_DURATION_TURNS,
+      );
+    }
+    return {
+      type: 'ally-rally',
+      stat: 'attackPower',
+      amount: WAR_BANNER_ATTACK_PERCENT,
+      durationTurns: WAR_BANNER_DURATION_TURNS,
+      buffedIds: allies.map((ally) => ally.id),
     };
   },
 };

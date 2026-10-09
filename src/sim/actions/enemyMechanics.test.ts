@@ -8,9 +8,11 @@ import {
   SearingTouchAction,
   VENOM_SPIT_POISON_PER_TICK,
   SEARING_TOUCH_BURN_PER_TICK,
+  HookChainAction,
 } from './attack';
 import { RegenerateAction, REGENERATE_HP_FRACTION } from './heal';
-import { VengeanceAction, VENGEANCE_ATTACK_PERCENT } from './support';
+import { VengeanceAction, VENGEANCE_ATTACK_PERCENT, HexAction, HEX_ATTACK_PERCENT, WarBannerAction, WAR_BANNER_ATTACK_PERCENT } from './support';
+import { startDungeonRun, resolveNextRoom } from '../dungeonRun';
 import { createBattleState } from '../battle';
 import { getEffectiveStat } from '../stats';
 import { ENRAGE_TRAIT, ENRAGE_BONUS_FRACTION } from '../traits';
@@ -139,5 +141,75 @@ describe('Bone Sentinel Vengeance', () => {
     const result = resolveTurn(killer, battle, noVariance);
     expect(doomed.hp).toBeLessThanOrEqual(0);
     expect(result.events).toContainEqual(expect.objectContaining({ type: 'special-action', actorId: 'sentinel', specialActionId: 'sentinel-vengeance' }));
+  });
+});
+
+describe('Hook Chain (Chain Warden)', () => {
+  it('drags the rearmost hero in the target lane to the front, swapping cells, and hits them', () => {
+    const warden = createAdventurer('warden', template(), { lane: 1, rank: 0 });
+    const tank = createAdventurer('tank', template(), { lane: 1, rank: 0 });
+    const healer = createAdventurer('healer', template(), { lane: 1, rank: 2 });
+    const battle = createBattleState([tank, healer], [warden]);
+
+    const target = HookChainAction.selectTarget({ actor: warden, battle })!;
+    expect(target).toBe(tank);
+    const outcome = HookChainAction.resolve({ actor: warden, target, battle, rng: noVariance });
+
+    expect(healer.position).toEqual({ lane: 1, rank: 0 });
+    expect(tank.position).toEqual({ lane: 1, rank: 2 });
+    expect(outcome).toMatchObject({
+      type: 'attack-and-pull',
+      targetId: 'healer',
+      pull: { pulledId: 'healer', swappedWithId: 'tank' },
+    });
+  });
+
+  it('is a plain hit when nobody stands behind the target', () => {
+    const warden = createAdventurer('warden', template(), { lane: 1, rank: 0 });
+    const tank = createAdventurer('tank', template(), { lane: 1, rank: 0 });
+    const battle = createBattleState([tank], [warden]);
+    const outcome = HookChainAction.resolve({ actor: warden, target: tank, battle, rng: noVariance });
+    expect(outcome).toMatchObject({ targetId: 'tank', pull: null });
+  });
+
+  it('only displaces heroes for the fight — the formation is restored after the room', () => {
+    const tank = createAdventurer('tank', template({ maxHp: 200, attackPower: 50 }), { lane: 1, rank: 0 });
+    const healer = createAdventurer('healer', template({ maxHp: 200, attackPower: 50 }), { lane: 1, rank: 2 });
+    const warden = createAdventurer('warden', template({ speed: 99, maxHp: 30, actions: ['hook-chain'], basicAction: HookChainAction }), {
+      lane: 1,
+      rank: 0,
+    });
+    const state = startDungeonRun([tank, healer], [{ enemies: [warden] }]);
+    resolveNextRoom(state, noVariance);
+
+    expect(tank.position).toEqual({ lane: 1, rank: 0 });
+    expect(healer.position).toEqual({ lane: 1, rank: 2 });
+  });
+});
+
+describe('Hex (Hex Witch) and War Banner (Infernal Bannerman)', () => {
+  it('Hex targets the hardest-hitting hero, cutting attack and silencing them', () => {
+    const witch = createAdventurer('witch', template(), { lane: 1, rank: 2 });
+    const weak = createAdventurer('weak', template({ attackPower: 4 }), 'front');
+    const strong = createAdventurer('strong', template({ attackPower: 20 }), 'back');
+    const battle = createBattleState([weak, strong], [witch]);
+
+    const target = HexAction.selectTarget({ actor: witch, battle })!;
+    expect(target).toBe(strong);
+    HexAction.resolve({ actor: witch, target, battle, rng: noVariance });
+    expect(getEffectiveStat(strong.attackPower, 'attackPower', strong.modifiers)).toBe(20 * (1 + HEX_ATTACK_PERCENT / 100));
+    expect(getEffectiveStat(0, 'silence', strong.modifiers)).toBeGreaterThan(0);
+  });
+
+  it('War Banner buffs every living ally, itself included, without stacking', () => {
+    const bannerman = createAdventurer('bannerman', template({ attackPower: 10 }), 'front');
+    const ally = createAdventurer('ally', template({ attackPower: 10 }), 'front');
+    const battle = createBattleState([], [bannerman, ally]);
+
+    WarBannerAction.resolve({ actor: bannerman, target: bannerman, battle, rng: noVariance });
+    WarBannerAction.resolve({ actor: bannerman, target: bannerman, battle, rng: noVariance });
+    for (const unit of [bannerman, ally]) {
+      expect(getEffectiveStat(unit.attackPower, 'attackPower', unit.modifiers)).toBe(10 * (1 + WAR_BANNER_ATTACK_PERCENT / 100));
+    }
   });
 });

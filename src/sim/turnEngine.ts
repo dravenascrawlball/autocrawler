@@ -52,6 +52,7 @@ function landedHitTargetIds(outcome: ActionOutcome): string[] {
     case 'attack-and-gold':
     case 'attack-and-debuff':
     case 'attack-and-status':
+    case 'attack-and-pull':
     case 'attack-with-execute':
     case 'attack-and-heal-self':
       return outcome.damage > 0 ? [outcome.targetId] : [];

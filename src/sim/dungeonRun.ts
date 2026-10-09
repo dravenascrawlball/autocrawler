@@ -166,8 +166,12 @@ export function resolveNextRoom(state: DungeonRunState, rng: RngSource = () => M
   applyRelicScaling(party, state.activeRelics, roomIndex);
 
   const partyAtRoomStart = snapshotParty(party);
+  // Displacement (e.g. the Chain Warden's Hook Chain) moves heroes only for this fight — the
+  // player's chosen formation comes back afterward.
+  const formation = new Map(party.map((member) => [member.id, { ...member.position }]));
   const battle: BattleState = createBattleState(party, room.enemies, state.partyGold);
   const result = resolveRoom(battle, rng, room.maxRounds, roomIndex);
+  for (const member of party) member.position = formation.get(member.id) ?? member.position;
 
   state.roomRecords.push({ roomIndex, partyAtRoomStart, result });
 

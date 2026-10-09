@@ -26,6 +26,7 @@ import {
   VolleyAction,
   DrainingKissAction,
   HellfireAction,
+  HookChainAction,
 } from '../sim/actions/attack';
 import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import { RetreatAction } from '../sim/actions/retreat';
@@ -39,6 +40,8 @@ import {
   GuardiansVowAction,
   VengeanceAction,
   BattleOrdersAction,
+  HexAction,
+  WarBannerAction,
   TauntAction,
   MarkAction,
   SilenceAction,
@@ -87,6 +90,9 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'battle-orders': BattleOrdersAction,
   'draining-kiss': DrainingKissAction,
   hellfire: HellfireAction,
+  'hook-chain': HookChainAction,
+  hex: HexAction,
+  'war-banner': WarBannerAction,
   'lifesteal-strike': LifestealStrikeAction,
   taunt: TauntAction,
   cleanse: CleanseAction,

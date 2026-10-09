@@ -463,6 +463,35 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Monster pass: infernal court and demon army — shipped
+
+Four new monsters giving floors 2 and 3 their own identity (not
+exclusively — each also turns up occasionally elsewhere):
+
+| Monster | Mostly on | Mechanic |
+|---|---|---|
+| **Chain Warden** | floor 2 | Displacement — Hook Chain drags the rearmost hero in its target lane to the front, swapping cells, then hits them |
+| **Hex Witch** | floor 2 | Debuff — Hex: strongest hero gets −25% attack and is Silenced (3 turns) |
+| **Infernal Bannerman** | floor 3 | Ally empower — War Banner: +20% attack for every allied monster, refreshed each turn |
+| **Hellforged Guardian** | floor 3 | Ally shields — shields its most-hurt ally every turn |
+
+- Displacement is fight-only: `resolveNextRoom` restores the party's
+  formation after every room. New `attack-and-pull` outcome; the replay has
+  a new `move` event that slides sprite + HP badge to the new cell.
+- `placeEnemies` now places the most constrained enemies (fewest allowed
+  ranks) first, so a middle-only Bannerman isn't crowded to the front.
+- All four use placeholder sprites.
+- **Balance**: scaling re-tuned (floor 2 `[4.8, 5.2, 5.6, 6, 6.2]`, floor 3
+  `[6.8, 7.2, 7.6, 8, 7.6]`): fresh **34.1%** full clear (~76% clear floor
+  1, ~50% floor 2), fully grown 52.3%. Character nudges for the long run:
+  Nerissa attack 5→4; Dawneth HP 18→21, heal 9→10; Bodil HP 26→30; Glint
+  HP 24→28, attack 3→4. Spread narrowed from 30-43% to 29-40%.
+
+**Still open:** the healers (Dawneth ~29%, Mira ~30%) remain lowest —
+partly by design, since Hook Chain, Hex and the Succubus all go after
+back-row/support heroes. A Summoner monster is still unbuilt (needs
+mid-fight spawn plumbing).
+
 ## 7. Enemy variety — shipped
 
 Five new enemies, each with an enemy-only mechanic (`data/enemies.ts`):

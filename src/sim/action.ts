@@ -2,6 +2,7 @@ import type { Adventurer } from './adventurer';
 import type { BattleState } from './battle';
 import type { RngSource } from './rng';
 import type { StatusEffectId } from './statusEffects';
+import type { GridPosition } from './formation';
 
 export type ActionId =
   | 'attack-nearest'
@@ -42,6 +43,9 @@ export type ActionId =
   | 'battle-orders'
   | 'draining-kiss'
   | 'hellfire'
+  | 'hook-chain'
+  | 'hex'
+  | 'war-banner'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
@@ -212,6 +216,20 @@ export type ActionOutcome =
    * (enemy variety pass — Venom Spit's poison, Searing Touch's burn; see
    * actions/attack.ts's resolveAttackAndStatus).
    */
+  /**
+   * Chain Warden's Hook Chain: an attack that may first drag a hero forward
+   * — `pull` (null if nobody stood behind the target) records who moved
+   * where, so the replay can animate the swap. See actions/attack.ts.
+   */
+  | {
+      type: 'attack-and-pull';
+      damage: number;
+      hit: boolean;
+      targetId: string;
+      pull: { pulledId: string; to: GridPosition; swappedWithId: string; swappedTo: GridPosition } | null;
+    }
+  /** Infernal Bannerman's War Banner: a timed buff on every living ally at once. */
+  | { type: 'ally-rally'; stat: string; amount: number; durationTurns: number; buffedIds: string[] }
   | {
       type: 'attack-and-status';
       damage: number;

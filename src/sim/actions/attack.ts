@@ -11,6 +11,7 @@ import { POISON_DAMAGE_PER_TICK, POISON_TICKS } from '../enchantments';
 import { consumeShield } from '../shields';
 import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE } from '../traits';
 import type { Adventurer } from '../adventurer';
+import type { GridPosition } from '../formation';
 
 /** Random multiplier range applied to a landed hit's damage — e.g. 0.15 draws uniformly from [0.85, 1.15]. Placeholder pending the balance pass. */
 export const DAMAGE_VARIANCE_FRACTION = 0.15;
@@ -875,6 +876,47 @@ export const HellfireAction: Action = {
       return hit;
     });
     return { type: 'attack-multi', hits };
+  },
+};
+
+// --- Monster pass: infernal court / demon army ---
+
+/**
+ * The Chain Warden's Basic Action (displacement): picks its normal melee
+ * target (the front of a lane), then hooks the **rearmost** living hero in
+ * that same lane and drags them to the front — the two swap cells — and
+ * hits the one it pulled. Breaks the "fragile hero safely behind a tank"
+ * setup. If nobody stands behind the target, it's a plain hit. Positions
+ * change only for the rest of this fight; dungeonRun.ts's resolveNextRoom
+ * restores the party's formation afterward.
+ */
+export const HookChainAction: Action = {
+  id: 'hook-chain',
+  name: 'Hook Chain',
+  reach: 'melee',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, true);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const front = context.target;
+    const behind = getOpposingRoster(context.battle, context.actor)
+      .filter((unit) => unit.hp > 0 && unit !== front && unit.position.lane === front.position.lane && unit.position.rank > front.position.rank)
+      .sort((a, b) => b.position.rank - a.position.rank)[0];
+
+    let pulled: { pulledId: string; to: GridPosition; swappedWithId: string; swappedTo: GridPosition } | null = null;
+    let victim = front;
+    if (behind) {
+      const frontCell = { ...front.position };
+      const rearCell = { ...behind.position };
+      behind.position = frontCell;
+      front.position = rearCell;
+      pulled = { pulledId: behind.id, to: frontCell, swappedWithId: front.id, swappedTo: rearCell };
+      victim = behind;
+    }
+
+    const damage = effectiveAttackPower(context, 'hook-chain');
+    const attackHit = applyAttackToTarget(context, damage, victim);
+    return { type: 'attack-and-pull', ...attackHit, pull: pulled };
   },
 };
 
