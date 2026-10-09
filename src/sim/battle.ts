@@ -38,10 +38,12 @@ export interface BattleState {
   pendingTraitEffects: { kind: 'heal' | 'revive'; unitId: string; amount: number; traitName: string }[];
   /** Units whose Second Wind has already fired this fight (once per fight). */
   secondWindUsedIds: string[];
+  /** Turns each unit has started this fight — e.g. the Hellcaller summons on every 3rd (sim/summons.ts). */
+  turnsTakenByUnitId: Record<string, number>;
 }
 
 export function createBattleState(adventurers: Adventurer[], enemies: Adventurer[], partyGold = 0): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [] };
+  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
 }
 
 /** Current Mending Charge energy for `unitId` — 0 if it's never gained any this room. */

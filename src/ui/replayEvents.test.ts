@@ -80,3 +80,13 @@ describe('outcomeToReplayEvents: Hook Chain', () => {
     expect(events[1]).toEqual({ type: 'move', unitId: 'mira', to: { lane: 1, rank: 0 } });
   });
 });
+
+describe('outcomeToReplayEvents: summon', () => {
+  it('announces and spawns the summoned unit', () => {
+    const events = outcomeToReplayEvents({ type: 'summon', summonedId: 'imp-1', position: { lane: 0, rank: 0 } }, 'caller', 'Summon Imp', nameOf);
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'announce', text: 'Summon Imp!' }),
+      { type: 'spawn', unitId: 'imp-1' },
+    ]);
+  });
+});

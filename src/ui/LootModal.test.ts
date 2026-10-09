@@ -47,6 +47,7 @@ function setUpPlayback(hero: ReturnType<typeof createAdventurer>, item: Item) {
   const playback = {
     runState: { party: [hero] },
     inventory,
+    milestoneOffers: [],
   } as unknown as DungeonPlaybackState;
   dungeonPlayback.set(playback);
 }

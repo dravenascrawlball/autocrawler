@@ -9,8 +9,10 @@ import {
   SearingTouchAction,
   DrainingKissAction,
   HookChainAction,
+  RangedShotAction,
 } from '../sim/actions/attack';
 import { THORNS_TRAIT, ENRAGE_TRAIT } from '../sim/traits';
+import { registerImpSummonFactory } from './summons';
 import { HealAction } from '../sim/actions/heal';
 import { HexAction } from '../sim/actions/support';
 import { plainFaces } from '../sim/dieFace';
@@ -26,6 +28,7 @@ import {
   DEMON_KING_RAISE_DEAD_SPECIAL,
   BANNERMAN_WAR_BANNER_SPECIAL,
   GUARDIAN_WARD_SPECIAL,
+  HELLCALLER_SUMMON_SPECIAL,
 } from './specialActions';
 
 /**
@@ -300,6 +303,27 @@ export const DEMON_KING_TEMPLATE: AdventurerTemplate = {
   tags: ['demon'],
 };
 
+// --- Summoner ---
+
+/**
+ * Infernal caster (back rank, floors 2-3): a ranged attack, and every 3rd
+ * turn calls an Ember Imp (max 2 alive — data/summons.ts). Its Imps vanish
+ * the moment it falls and drop nothing, so the answer is to reach it fast.
+ */
+export const HELLCALLER_TEMPLATE: AdventurerTemplate = {
+  name: 'Hellcaller',
+  maxHp: 18,
+  attackPower: 4,
+  speed: 5,
+  actions: ['ranged-shot'],
+  dieFaces: plainFaces(RangedShotAction),
+  lootTable: [{ itemId: 'tome-of-power', dropChance: 0.12 }, ...LIGHT_LOOT],
+  goldDrop: { chance: 0.9, min: 15, max: 35 },
+  basicAction: RangedShotAction,
+  innateSpecialActions: [HELLCALLER_SUMMON_SPECIAL],
+  tags: ['demon'],
+};
+
 // --- Monster pass: infernal court (floor 2) / demon army (floor 3), not exclusively ---
 
 /** Infernal court (front): Hook Chain drags the rearmost hero in its target lane to the front, then hits them. */
@@ -364,6 +388,21 @@ export const HELLFORGED_GUARDIAN_TEMPLATE: AdventurerTemplate = {
 };
 
 export type EnemyFactory = (row: Row) => Adventurer;
+
+/**
+ * Scales an enemy's maxHp/attackPower/healPower by `statScale` (the room's
+ * per-slot difficulty — see data/rooms.ts's ROOM_SLOT_ENEMY_STAT_SCALE),
+ * resets it to full HP, and records the scale so a summoner can scale its
+ * summons to match.
+ */
+export function scaleEnemy(enemy: Adventurer, statScale: number): void {
+  enemy.statScale = statScale;
+  if (statScale === 1) return;
+  enemy.maxHp = Math.round(enemy.maxHp * statScale);
+  enemy.hp = enemy.maxHp;
+  enemy.attackPower = Math.round(enemy.attackPower * statScale);
+  enemy.healPower = Math.round(enemy.healPower * statScale);
+}
 
 let nextEnemyInstanceId = 1;
 
@@ -433,4 +472,16 @@ export function createInfernalBannerman(row: Row): Adventurer {
 export function createHellforgedGuardian(row: Row): Adventurer {
   return createEnemy(HELLFORGED_GUARDIAN_TEMPLATE, row);
 }
+
+export function createHellcaller(row: Row): Adventurer {
+  return createEnemy(HELLCALLER_TEMPLATE, row);
+}
+
+// The Hellcaller's Imps — registered here rather than imported by data/summons.ts, to avoid an
+// import cycle (see that file).
+registerImpSummonFactory((summoner) => {
+  const imp = createEmberImp('front');
+  scaleEnemy(imp, summoner.statScale ?? 1);
+  return imp;
+});
 

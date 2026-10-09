@@ -24,7 +24,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 }
 
 function battleOf(adventurers: Adventurer[], enemies: Adventurer[]): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [] };
+  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
 }
 
 /** rng() returns each value in order, repeating the last once exhausted (same convention as actions/attack.test.ts). */

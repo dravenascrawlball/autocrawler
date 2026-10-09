@@ -85,6 +85,9 @@
       maxHp: enemy.maxHp,
       side: 'enemy',
       position: enemy.position,
+      // Summons (sim/summons.ts) are in the room's list after the fight resolves, but only appear
+      // in the replay once they're actually called in.
+      hiddenUntilSpawn: enemy.summonedBy !== undefined,
     }));
 
     const events: ReplayEvent[] = [];
@@ -107,6 +110,8 @@
           } else if (event.type === 'special-action' && event.outcome) {
             const specialName = SPECIAL_ACTION_REGISTRY[event.specialActionId]?.name ?? 'Special';
             pushOutcome(event.outcome, event.actorId, specialName);
+          } else if (event.type === 'banish') {
+            events.push({ type: 'banish', unitIds: event.unitIds });
           } else if (event.type === 'trait-effect') {
             // Milestone Traits — a Vampiric heal or a Second Wind revive.
             events.push({

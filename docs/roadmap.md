@@ -463,6 +463,29 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Summoner monster: the Hellcaller — shipped
+
+The first enemy that changes a fight's makeup mid-battle. **Hellcaller**
+(back rank, floors 2-3, Demon): a ranged attack, and every 3rd turn it
+calls an **Ember Imp** — at most 2 alive, scaled to its room, no gold or
+loot. Its Imps are **banished** the moment it falls, so the play is to
+reach it fast.
+
+- `sim/summons.ts`: `createSummonAction` (rules: every Nth turn, max
+  alive, an injected `create` factory so sim/ never imports data/) and
+  `banishOrphanedSummons`. `Adventurer.summonedBy`/`statScale`,
+  `battle.turnsTakenByUnitId`; a `summon` outcome and a `banish` turn event
+  (checked at every turn exit, including a summoner dying to a status
+  tick).
+- `data/summons.ts` defines Summon Imp; `data/enemies.ts` registers the
+  Imp factory (`registerImpSummonFactory`) to avoid an
+  enemies ↔ specialActions ↔ summons import cycle. `scaleEnemy` is now
+  shared by rooms and summons.
+- Replay: summoned units start hidden (`hiddenUntilSpawn`), fade in on a
+  `spawn` event with a "Summon Imp!" announcement, and fade out on
+  `banish`.
+- Balance: unchanged (fresh 36.7%). Placeholder sprite `hellcaller.png`.
+
 ## Mid-run Trait growth (floor-boss rewards) — shipped
 
 After the floor 1 and floor 2 bosses, the pause screen offers **3 cards,

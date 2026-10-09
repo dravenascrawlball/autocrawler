@@ -46,6 +46,7 @@ export type ActionId =
   | 'hook-chain'
   | 'hex'
   | 'war-banner'
+  | 'summon-imp'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
@@ -228,6 +229,8 @@ export type ActionOutcome =
       targetId: string;
       pull: { pulledId: string; to: GridPosition; swappedWithId: string; swappedTo: GridPosition } | null;
     }
+  /** A summoner (sim/summons.ts) called a new unit onto its side at `position`. */
+  | { type: 'summon'; summonedId: string; position: GridPosition }
   /** Infernal Bannerman's War Banner: a timed buff on every living ally at once. */
   | { type: 'ally-rally'; stat: string; amount: number; durationTurns: number; buffedIds: string[] }
   | {

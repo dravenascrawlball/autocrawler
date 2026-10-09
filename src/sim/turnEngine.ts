@@ -8,6 +8,7 @@ import { tickBuffs } from './buffs';
 import { tickAuras } from './auras';
 import { tickShields } from './shields';
 import { isAdjacent } from './formation';
+import { banishOrphanedSummons } from './summons';
 import { resolveSpecialActionTriggers, type SpecialActionOutcome } from './specialActions';
 import { getEffectiveStat } from './stats';
 
@@ -31,7 +32,9 @@ export type TurnEvent =
   /** A Bodyguard (traits.ts's BODYGUARD_TRAIT) took `damage` of a hit meant for `protectedId` — see battle.ts's pendingIntercepts. */
   | { type: 'intercept'; attackerId: string; guardianId: string; protectedId: string; damage: number }
   /** A Milestone Trait fired mid-attack: a Vampiric heal or a Second Wind revive — see battle.ts's pendingTraitEffects. */
-  | { type: 'trait-effect'; kind: 'heal' | 'revive'; unitId: string; amount: number; traitName: string };
+  | { type: 'trait-effect'; kind: 'heal' | 'revive'; unitId: string; amount: number; traitName: string }
+  /** Summons whose summoner fell this turn, banished — see sim/summons.ts. */
+  | { type: 'banish'; unitIds: string[] };
 
 export interface TurnResult {
   events: TurnEvent[];
@@ -68,6 +71,12 @@ function landedHitTargetIds(outcome: ActionOutcome): string[] {
   }
 }
 
+/** Banishes any summons whose summoner has fallen (sim/summons.ts) and records it for the replay. */
+function pushBanishes(events: TurnEvent[], battle: BattleState): void {
+  const unitIds = banishOrphanedSummons(battle);
+  if (unitIds.length > 0) events.push({ type: 'banish', unitIds });
+}
+
 /** Moves any Bodyguard intercepts recorded during resolution (battle.pendingIntercepts) into `events`, in order. */
 function drainIntercepts(events: TurnEvent[], battle: BattleState): void {
   for (const intercept of battle.pendingIntercepts) events.push({ type: 'intercept', ...intercept });
@@ -99,6 +108,7 @@ function pushSpecialActionEvents(events: TurnEvent[], outcomes: SpecialActionOut
  * see specialActions.ts's own doc comment for why.
  */
 export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: RngSource): TurnResult {
+  battle.turnsTakenByUnitId[adventurer.id] = (battle.turnsTakenByUnitId[adventurer.id] ?? 0) + 1;
   const events: TurnEvent[] = tickStatusEffects(adventurer).map((tick) => ({
     type: 'status-tick',
     effectId: tick.effectId,
@@ -117,6 +127,7 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
 
   if (adventurer.hp <= 0) {
     // A lethal status tick just downed this unit before it could act.
+    pushBanishes(events, battle);
     return result;
   }
 
@@ -125,6 +136,7 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
     // 'on-turn-start' Special Action, no Basic Action — stronger than Silence, which only
     // suppresses the Special Action half (see specialActions.ts's isSilenced). The Stun buff itself
     // already ticked down above (tickBuffs), so it still counts toward expiring normally.
+    pushBanishes(events, battle);
     return result;
   }
 
@@ -136,6 +148,7 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
 
   const target = action.selectTarget({ actor: adventurer, battle });
   if (target === null) {
+    pushBanishes(events, battle);
     return result;
   }
 
@@ -207,5 +220,6 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
   }
 
   drainIntercepts(events, battle);
+  pushBanishes(events, battle);
   return result;
 }

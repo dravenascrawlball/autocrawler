@@ -17,6 +17,8 @@ export interface ReplayUnit {
   position: GridPosition;
   /** The unit's active Kit art key, if any (see sim/kits.ts's artKeyFor) — its costume sprite is used when that file exists, else the base archetype sprite. */
   kitArtKey?: string;
+  /** A summoned unit (sim/summons.ts): invisible until its 'spawn' event. */
+  hiddenUntilSpawn?: boolean;
   /** Whether this unit has RAGE_TRAIT (see sim/traits.ts) — shows a live "Raging +N%" readout on its status badge, recomputed as HP changes during the replay. */
   hasRageTrait?: boolean;
 }
@@ -38,7 +40,11 @@ export type ReplayEvent =
    */
   | { type: 'announce'; actorId: string; text: string; color: string }
   /** A unit sliding to a new grid cell mid-fight — e.g. the Chain Warden's Hook Chain dragging a hero forward. */
-  | { type: 'move'; unitId: string; to: GridPosition };
+  | { type: 'move'; unitId: string; to: GridPosition }
+  /** A summoned unit appearing (fades in) — see sim/summons.ts. */
+  | { type: 'spawn'; unitId: string }
+  /** Summoned units vanishing with their summoner (fade out). */
+  | { type: 'banish'; unitIds: string[] };
 
 export interface RoomReplaySceneData {
   units: ReplayUnit[];
@@ -535,6 +541,7 @@ export class RoomReplayScene extends Phaser.Scene {
       .setDisplaySize(BODY_SPRITE_RENDER_WIDTH, BODY_SPRITE_DISPLAY_HEIGHT)
       .setFlipX(unit.side === 'enemy');
     const container = this.add.container(feetX, feetY, [sprite]);
+    if (unit.hiddenUntilSpawn) container.setAlpha(0);
     this.gridContainers.set(unit.id, container);
     this.gridSprites.set(unit.id, sprite);
 
@@ -575,7 +582,9 @@ export class RoomReplayScene extends Phaser.Scene {
       children.push(rageText);
     }
 
-    this.badgeContainers.set(unit.id, this.add.container(feetX, badgeCenterY, children));
+    const badge = this.add.container(feetX, badgeCenterY, children);
+    if (unit.hiddenUntilSpawn) badge.setAlpha(0);
+    this.badgeContainers.set(unit.id, badge);
   }
 
   /** "Raging +N%" once the bonus is non-zero, blank at full HP — see traits.ts's RAGE_TRAIT. */
@@ -635,7 +644,27 @@ export class RoomReplayScene extends Phaser.Scene {
       this.playMove(event.unitId, event.to, next);
       return;
     }
+    if (event.type === 'spawn') {
+      this.playFade([event.unitId], 1, next);
+      return;
+    }
+    if (event.type === 'banish') {
+      this.playFade(event.unitIds, 0, next);
+      return;
+    }
     this.playHeal(event.actorId, event.targetId, event.amount, next);
+  }
+
+  /** Fades the sprites and status badges of `unitIds` to `alpha` — a summon appearing (1) or being banished (0). */
+  private playFade(unitIds: string[], alpha: number, onDone: () => void): void {
+    const targets = unitIds.flatMap((id) => [this.gridContainers.get(id), this.badgeContainers.get(id)]).filter(
+      (target): target is Phaser.GameObjects.Container => target !== undefined,
+    );
+    if (targets.length === 0) {
+      onDone();
+      return;
+    }
+    this.tweens.add({ targets, alpha, duration: this.scaled(320), ease: 'Quad.easeOut', onComplete: onDone });
   }
 
   /**

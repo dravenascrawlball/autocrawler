@@ -63,6 +63,8 @@ systems that don't exist yet.
 | Infernal Bannerman (demon army, mostly floor 3) | Attack Nearest | Always: **War Banner** (`on-turn-start`) — +20% attack for every allied monster |
 | Hellforged Guardian (demon army, mostly floor 3) | Attack Nearest | Always: **Hellforged Ward** (`on-turn-start`) — shields its most-hurt ally |
 
+| Hellcaller (summoner, floors 2-3) | Ranged Shot | Always: **Summon Imp** (`on-turn-start`) — every 3rd turn calls an Ember Imp (max 2 alive, no drops); its Imps vanish when it falls |
+
 Enemy-only mechanics (enemy variety pass): Flank Strike, Venom Spit,
 Searing Touch, Vengeance, Regenerate and Enrage. Enemy rank rules live in
 `data/rooms.ts`'s `ENEMY_RANK_OPTIONS`; all five new enemies use a

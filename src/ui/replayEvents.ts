@@ -82,6 +82,10 @@ export function outcomeToReplayEvents(
       events.push({ type: 'move', unitId: outcome.pull.swappedWithId, to: outcome.pull.swappedTo });
     }
     events.push({ type: 'attack', actorId, targetId: outcome.targetId, damage: outcome.damage, hit: outcome.hit });
+  } else if (outcome.type === 'summon') {
+    // A summoner called in a new unit (sim/summons.ts) — announce it, then fade the summon in.
+    events.push({ type: 'announce', actorId, text: `${actionName}!`, color: '#ff5533' });
+    events.push({ type: 'spawn', unitId: outcome.summonedId });
   } else if (outcome.type === 'ally-rally') {
     // Infernal Bannerman's War Banner (monster pass) — one announcement over the bannerman.
     events.push({

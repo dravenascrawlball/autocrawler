@@ -20,7 +20,9 @@ import {
   createHexWitch,
   createInfernalBannerman,
   createHellforgedGuardian,
+  createHellcaller,
   type EnemyFactory,
+  scaleEnemy,
 } from './enemies';
 
 /**
@@ -44,6 +46,7 @@ export const ENEMY_RANK_OPTIONS: Record<string, Rank[]> = {
   'Hex Witch': [2],
   'Infernal Bannerman': [1],
   'Hellforged Guardian': [0],
+  Hellcaller: [2],
 };
 
 const BACK_RANK: Rank = 2;
@@ -117,12 +120,7 @@ export function room(
   const rng = seededRng ?? (() => Math.random());
   const enemies = factories.map((factory) => {
     const enemy = factory('front');
-    if (statScale !== 1) {
-      enemy.maxHp = Math.round(enemy.maxHp * statScale);
-      enemy.hp = enemy.maxHp;
-      enemy.attackPower = Math.round(enemy.attackPower * statScale);
-      enemy.healPower = Math.round(enemy.healPower * statScale);
-    }
+    scaleEnemy(enemy, statScale);
     return enemy;
   });
   placeEnemies(enemies, rng);
@@ -154,6 +152,7 @@ const warden = createChainWarden;
 const witch = createHexWitch;
 const bannerman = createInfernalBannerman;
 const guardian = createHellforgedGuardian;
+const hellcaller = createHellcaller;
 
 /**
  * Fifteen difficulty slots — three floors of ROOMS_PER_FLOOR (5) rooms,
@@ -214,6 +213,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [warden, sentinel, witch],
     [brute, imp, imp],
     [witch, flanker, spitter],
+    [warden, grunt, hellcaller],
   ],
   [
     [brute, warden, witch],
@@ -231,6 +231,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [guardian, bannerman, spitter],
     [sentinel, grunt, bannerman],
     [imp, imp, flanker, bannerman],
+    [guardian, sentinel, hellcaller],
   ],
   [
     [guardian, brute, bannerman],
@@ -241,6 +242,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [guardian, guardian, bannerman],
     [warden, flanker, spitter, bannerman],
     [troll, imp],
+    [brute, bannerman, hellcaller],
   ],
   [
     [troll, bannerman],

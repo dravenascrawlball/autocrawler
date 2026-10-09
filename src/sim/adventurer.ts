@@ -124,6 +124,10 @@ export interface Adventurer {
    * fresh summary.
    */
   downedSummary?: DownedSummary;
+  /** Room stat multiplier this enemy was built with (data/rooms.ts) — lets a summoner scale its summons to match. Absent = 1. */
+  statScale?: number;
+  /** Set on a summoned unit (sim/summons.ts): the id of the unit that called it. It's banished when that unit falls. */
+  summonedBy?: string;
 }
 
 export interface DownedSummary {

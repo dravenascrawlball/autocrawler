@@ -39,6 +39,7 @@ import {
   WarBannerAction,
 } from '../sim/actions/support';
 import { EmberBurnAction } from '../sim/actions/itemEffects';
+import { SummonImpAction } from './summons';
 
 /**
  * Named player characters' Special Actions (see characterPool.ts) —
@@ -607,6 +608,14 @@ export const MIRKA_AVENGER_SPECIAL: SpecialAction = {
   action: VengeanceAction,
 };
 
+/** Hellcaller (summoner): every 3rd turn, calls an Ember Imp (max 2 alive) — see data/summons.ts. */
+export const HELLCALLER_SUMMON_SPECIAL: SpecialAction = {
+  id: 'hellcaller-summon',
+  name: 'Summon Imp',
+  trigger: 'on-turn-start',
+  action: SummonImpAction,
+};
+
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
   id: 'grunt-power-attack',
   name: 'Heavy Swing',
@@ -688,6 +697,7 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'bannerman-war-banner': BANNERMAN_WAR_BANNER_SPECIAL,
   'hellforged-ward': GUARDIAN_WARD_SPECIAL,
   'mirka-avenger': MIRKA_AVENGER_SPECIAL,
+  'hellcaller-summon': HELLCALLER_SUMMON_SPECIAL,
 };
 
 /**

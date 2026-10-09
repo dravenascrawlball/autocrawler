@@ -121,6 +121,8 @@ function applyTurnStats(unit: Adventurer, battle: BattleState, turn: TurnResult,
       if (event.outcome) {
         applyOutcomeStats(findUnitById(battle, event.actorId) ?? unit, event.outcome, battle, roomIndex);
       }
+    } else if (event.type === 'banish') {
+      // Summons vanishing with their summoner (sim/summons.ts) — no damage or healing to record.
     } else if (event.type === 'trait-effect') {
       // Vampiric heals count as healing done; a Second Wind revive is neither dealt nor healed.
       if (event.kind === 'heal') {

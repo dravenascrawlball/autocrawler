@@ -50,6 +50,7 @@ import {
   VanishAction,
 } from '../sim/actions/support';
 import { EmberBurnAction } from '../sim/actions/itemEffects';
+import { SummonImpAction } from './summons';
 
 export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'attack-nearest': AttackNearestAction,
@@ -93,6 +94,7 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   'hook-chain': HookChainAction,
   hex: HexAction,
   'war-banner': WarBannerAction,
+  'summon-imp': SummonImpAction,
   'lifesteal-strike': LifestealStrikeAction,
   taunt: TauntAction,
   cleanse: CleanseAction,
