@@ -58,6 +58,8 @@
     game?.destroy(true);
     game = undefined;
     replayScene = undefined;
+    // Drop any cut-in still showing — otherwise the overlay remounts with it when the next room starts.
+    cutInCurrent = null;
   }
 
   function buildRoomData(onComplete: () => void): RoomReplaySceneData | null {

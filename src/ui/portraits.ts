@@ -83,3 +83,19 @@ export function bodySpriteCandidates(subject: ArtSubject, side: 'party' | 'enemy
     defaultBodySpritePath(side),
   ]);
 }
+
+/** Cut-in art (public/cutins/): square, transparent-background art for the battle cut-ins (ui/CutInOverlay.svelte). */
+export function cutInAssetPath(archetype: string, state: string): string {
+  return `/cutins/${slugifyArchetype(archetype)}-${state}.png`;
+}
+
+/** Cut-in art paths to try in order: Kit cut-in for `state`, Kit cut-in idle, base cut-in for `state`, base cut-in idle, then the portrait chain. */
+export function cutInCandidates(subject: ArtSubject, state: string): string[] {
+  const kitKey = subject.activeKit?.artKey;
+  return unique([
+    ...(kitKey ? [cutInAssetPath(kitKey, state), cutInAssetPath(kitKey, 'idle')] : []),
+    cutInAssetPath(subject.archetype, state),
+    cutInAssetPath(subject.archetype, 'idle'),
+    ...portraitCandidates(subject, state),
+  ]);
+}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ReplayUnit } from '../game/RoomReplayScene';
   import type { CutInEvent } from './cutIns';
-  import { portraitCandidates } from './portraits';
+  import { cutInCandidates } from './portraits';
   import { fallbackSrc } from './imageFallback';
 
   /**
@@ -33,7 +33,7 @@
     {@const key = current.key}
     {#if current.event.kind === 'boss'}
       <div class="cut-in cut-in--boss" style="--cut-in-ms: {duration}ms" on:animationend={() => done(key)}>
-        <img class="cut-in__portrait" use:fallbackSrc={portraitCandidates(subject, 'idle')} alt="" />
+        <img class="cut-in__portrait" use:fallbackSrc={cutInCandidates(subject, 'idle')} alt="" />
         <div class="cut-in__text">
           <span class="cut-in__eyebrow">Boss</span>
           <span class="cut-in__name">{current.unit.name}</span>
@@ -45,7 +45,7 @@
         style="--cut-in-ms: {duration}ms"
         on:animationend={() => done(key)}
       >
-        <img class="cut-in__portrait" use:fallbackSrc={portraitCandidates(subject, current.event.art)} alt="" />
+        <img class="cut-in__portrait" use:fallbackSrc={cutInCandidates(subject, current.event.art)} alt="" />
         <span class="cut-in__line">{current.event.text}</span>
       </div>
     {/if}
@@ -96,8 +96,8 @@
   }
 
   .cut-in--banner .cut-in__portrait {
-    height: 120%;
-    aspect-ratio: 2 / 3;
+    height: 130%;
+    aspect-ratio: 1 / 1;
     object-fit: cover;
     object-position: top;
     align-self: flex-end;
@@ -120,12 +120,12 @@
   }
 
   .cut-in--boss .cut-in__portrait {
-    height: 55%;
-    aspect-ratio: 2 / 3;
+    height: 60%;
+    aspect-ratio: 1 / 1;
     object-fit: cover;
-    border: 2px solid #c0392b;
-    border-radius: 6px;
-    box-shadow: 0 0 24px rgba(192, 57, 43, 0.7);
+    object-position: top;
+    /* drop-shadow follows the art's alpha, so a transparent cut-in glows around the figure, not a box */
+    filter: drop-shadow(0 0 16px rgba(192, 57, 43, 0.85));
   }
 
   .cut-in--boss .cut-in__text {
