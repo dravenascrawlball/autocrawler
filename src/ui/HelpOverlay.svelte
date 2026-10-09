@@ -32,22 +32,81 @@
 
     <section>
       <h3>The Loop</h3>
-      <p>Recruit adventurers in <strong>Town</strong>, then embark a party into the <strong>Dungeon</strong>. Gold and gear found along the way are spent in the between-room shop — none of it carries back to Town.</p>
+      <p>
+        Build a party in <strong>Town</strong>, then take it into the <strong>Dungeon</strong>: 15 rooms across three
+        floors, each floor ending in a boss. Gold, gear and level-ups only last for the run. What you keep is
+        <strong>Renown</strong> (earned per room, per floor, and for finishing) plus the unlocks you earn.
+      </p>
+    </section>
+
+    <section>
+      <h3>Building Your Party</h3>
+      <p>
+        <strong>Embark</strong> opens a shop with 200 gold to recruit your starting party. Hover a recruit's name to see
+        their Special, Traits and Kit. Between rooms the shop restocks: recruit more (up to 9), buy relics and gear, or
+        buy a character you already have to <strong>level them up</strong> (2★ also grants a second Special).
+      </p>
     </section>
 
     <section>
       <h3>Combat</h3>
-      <p>Battles resolve automatically. Each adventurer always acts on their turn — usually an attack, though healers and support characters have their own reliable move instead — plus a chance to trigger their own signature special move or passive trait. The front row soaks up most enemy attacks; the back row is safer, but not untouchable.</p>
+      <p>
+        Fights play out on their own. Every turn a character uses their Basic Action, plus any Special Actions that
+        trigger. <strong>Melee</strong> attacks can only reach the frontmost unit in the attacker's lane, moving to the
+        nearest lane once that lane is empty. <strong>Ranged</strong> attacks reach anyone. A fragile hero is only truly
+        safe standing behind someone.
+      </p>
     </section>
 
     <section>
-      <h3>Between Rooms</h3>
-      <p>After each fight, re-equip gear, resolve any level-ups, and check loot before pushing on to the next room.</p>
+      <h3>Formation</h3>
+      <p>
+        Drag your party around the board before each fight; you can see the next room's enemies. Some characters have
+        <strong>adjacency</strong> abilities (Bodyguard, Shield Bearer, Sanctuary...). Select or drag them to light up the
+        cells they reach. A ◆ marks allies they're helping.
+      </p>
+    </section>
+
+    <section>
+      <h3>Synergies</h3>
+      <p>
+        Fielding several characters of the same role (Fighters, Rogues, Healers...) or tag (Spooky) unlocks party bonuses
+        that grow with the count. The synergy panel shows what's active and what the next tier needs.
+      </p>
+    </section>
+
+    <section>
+      <h3>Quirks</h3>
+      <p>
+        Now and then a recruit or monster has a <strong>Quirk</strong>: a small random boon (green) or flaw (red). Good
+        Quirks make a recruit pricier, bad ones cheaper. Monsters with a Quirk show a ✦ on the board; hover it to see
+        what you're facing.
+      </p>
+    </section>
+
+    <section>
+      <h3>Floors &amp; Bosses</h3>
+      <p>
+        Beating the floor 1 and floor 2 bosses earns a <strong>reward</strong>: pick one of three Traits for a party
+        member, kept for the rest of the run. Clearing a floor also banks bonus Renown.
+      </p>
+    </section>
+
+    <section>
+      <h3>Progress</h3>
+      <p>
+        Spend Renown in <strong>Progress</strong> on <strong>Training</strong> (small permanent stat boosts) and
+        <strong>Kits</strong> (costumes with a stat twist, swappable between rooms once owned). Characters also unlock
+        extra Specials by meeting goals like "reach room 4 with them". Progress shows every goal.
+      </p>
     </section>
 
     <section>
       <h3>Ending a Run</h3>
-      <p>A run ends when you clear every room, your party is wiped, or you retreat to Town with whatever you've gathered so far.</p>
+      <p>
+        A run ends when you clear all 15 rooms, your party is wiped, or you retreat. Any of these banks the Renown you've
+        earned so far.
+      </p>
     </section>
 
     <button type="button" class="modal__done" on:click={onClose}>Got it</button>
@@ -68,7 +127,7 @@
 
   .modal {
     position: relative;
-    width: min(520px, 92vw);
+    width: min(600px, 92vw);
     max-height: 85vh;
     overflow-y: auto;
     background: var(--bg-raised);
