@@ -1,7 +1,9 @@
 <script lang="ts">
   import { effectiveMaxHp } from '../sim/adventurer';
   import type { Adventurer } from '../sim/adventurer';
-  import { portraitAssetPath, downedArtPath, downedArtFallbackPath } from './portraits';
+  import { portraitCandidates, downedArtCandidates } from './portraits';
+  import { fallbackSrc } from './imageFallback';
+  import { displayTitle } from '../sim/kits';
 
   export let adventurer: Adventurer;
   /** Whether the whole card acts as one big button (e.g. open the character sheet, toggle party membership). Leave unset when the only action lives in the actions slot (e.g. a dedicated Recruit button). */
@@ -14,29 +16,15 @@
   export let showDetails: boolean = true;
 
   $: downed = adventurer.hp <= 0;
-  $: portraitSrc = downed
-    ? downedArtPath(adventurer.archetype, adventurer.downedSummary?.killerArchetype ?? null)
-    : portraitAssetPath(adventurer.archetype, 'town');
-
-  // Falls back from a missing killer-specific downed image, to the generic downed image, to idle
-  // — same graceful-degradation convention the rest of the portrait system uses.
-  let fallbackStep: 'killer' | 'general' | 'idle' = 'killer';
-  $: if (portraitSrc) fallbackStep = 'killer';
-
-  function fallbackToIdle(event: Event): void {
-    const img = event.currentTarget as HTMLImageElement;
-    if (downed && fallbackStep === 'killer') {
-      fallbackStep = 'general';
-      img.src = downedArtFallbackPath(adventurer.archetype);
-      return;
-    }
-    fallbackStep = 'idle';
-    img.src = portraitAssetPath(adventurer.archetype, 'idle');
-  }
+  // Kit costume art first (if any), then base art, with the usual graceful fallbacks — see
+  // portraits.ts's candidate helpers and imageFallback.ts.
+  $: portraitSources = downed
+    ? downedArtCandidates(adventurer, adventurer.downedSummary?.killerArchetype ?? null)
+    : portraitCandidates(adventurer, 'town');
 </script>
 
 <div class="char-card" class:char-card--selected={selected} class:char-card--disabled={onClick && disabled}>
-  <img class="char-card__portrait" src={portraitSrc} on:error={fallbackToIdle} alt="" />
+  <img class="char-card__portrait" use:fallbackSrc={portraitSources} alt="" />
   <span class="char-card__scrim" aria-hidden="true"></span>
 
   {#if onClick}
@@ -52,7 +40,7 @@
 
   <span class="char-card__info">
     <span class="char-card__name">{adventurer.name}</span>
-    <span class="char-card__role">{adventurer.role}{showDetails ? ` — Lv ${adventurer.level}` : ''}</span>
+    <span class="char-card__role">{displayTitle(adventurer)}{showDetails ? ` — Lv ${adventurer.level}` : ''}</span>
     {#if showDetails}
       <span class="char-card__hp-bar" role="presentation">
         <span

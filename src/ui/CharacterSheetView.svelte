@@ -7,7 +7,9 @@
   import { clearUnlocksFor, kitsFor } from '../state/progression';
   import { MAX_TRAINING_RANK, TRAINING_PERCENT_PER_RANK } from '../sim/training';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
-  import { portraitAssetPath } from './portraits';
+  import { portraitAssetPath, portraitCandidates } from './portraits';
+  import { fallbackSrc } from './imageFallback';
+  import { displayTitle } from '../sim/kits';
   import ImageReportButton from './ImageReportButton.svelte';
 
   export let adventurerId: string | null = null;
@@ -20,15 +22,6 @@
   $: kits = adventurer ? kitsFor(adventurer.name, $metaProgression.unlockedKitIds) : [];
   $: trainingRank = adventurer ? ($metaProgression.trainingRanks[adventurer.name] ?? 0) : 0;
 
-  function fallbackToIdle(event: Event, archetype: string): void {
-    const img = event.currentTarget as HTMLImageElement;
-    img.src = portraitAssetPath(archetype, 'idle');
-  }
-
-  // `adventurer` can go null (closed, or the roster entry disappears) in the same tick this
-  // view's own <img> emits a failed-load `error` event — the handler below reads the live
-  // reactive binding, not a snapshot, so it must guard against that instead of assuming the
-  // element it's still attached to implies a non-null adventurer.
 
   function handleBackdropKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
@@ -59,15 +52,14 @@
     >
       <img
         class="sheet__art"
-        src={portraitAssetPath(adventurer.archetype, 'town')}
-        on:error={(event) => adventurer && fallbackToIdle(event, adventurer.archetype)}
+        use:fallbackSrc={portraitCandidates(adventurer, 'town')}
         alt="{adventurer.archetype} in town"
       />
 
       <div class="sheet__name-badge">
         <span class="sheet__name">{adventurer.name}</span>
         <span class="sheet__subtitle">
-          {adventurer.role} — Lv {adventurer.level}
+          {displayTitle(adventurer)} — Lv {adventurer.level}
         </span>
       </div>
 

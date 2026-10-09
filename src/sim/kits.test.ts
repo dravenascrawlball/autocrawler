@@ -4,7 +4,7 @@ import { createAdventurer, resetToTemplateBaseline, type AdventurerTemplate } fr
 import { AttackNearestAction } from './actions/attack';
 import { getEffectiveStat } from './stats';
 import type { Kit } from './kits';
-import { pickKit, applyKit } from './kits';
+import { pickKit, applyKit, displayTitle, artKeyFor } from './kits';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -26,7 +26,7 @@ const WARREN_SCOUT: Kit = {
   modifiers: [{ stat: 'speed', type: 'flat', amount: 2, source: 'kit:warren-scout' }],
   tags: ['bunny'],
   artKey: 'unit-warren-scout',
-  role: 'Scout',
+  synergyRole: 'Scout',
 };
 
 describe('pickKit', () => {
@@ -115,9 +115,22 @@ describe('applyKit', () => {
     const tpl = template({ role: 'Fighter', kitPool: [WARREN_SCOUT] });
     const unit = createAdventurer('unit', tpl, 'front'); // starts on Scout
 
-    const noRoleKit: Kit = { ...PACK_BRAWLER, role: undefined };
+    const noRoleKit: Kit = { ...PACK_BRAWLER, synergyRole: undefined };
     applyKit(unit, tpl, noRoleKit);
 
     expect(unit.role).toBe('Fighter');
   });
 });
+
+describe('Kit title vs synergy role', () => {
+  it("a title-only Kit changes the displayed title but keeps the character's role for synergies", () => {
+    const tpl = template({ role: 'Fighter' });
+    const unit = createAdventurer('unit', tpl, 'front');
+    applyKit(unit, tpl, { id: 'fur', name: 'Fur & Fury', description: '', modifiers: [], artKey: 'unit-fur', title: 'Barbarian' });
+
+    expect(unit.role).toBe('Fighter');
+    expect(displayTitle(unit)).toBe('Barbarian');
+    expect(artKeyFor(unit)).toBe('unit-fur');
+  });
+});
+

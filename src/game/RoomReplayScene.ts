@@ -13,8 +13,10 @@ export interface ReplayUnit {
   hp: number;
   maxHp: number;
   side: 'party' | 'enemy';
-  /** Position on this unit's side's 3x3 grid — see sim/formation.ts. Fixed for the whole room replay; no in-combat repositioning exists (yet). */
+  /** Position on this unit's side's 3x3 grid — see sim/formation.ts. Starts at the formation the room began with; a 'move' event (displacement) updates it mid-replay. */
   position: GridPosition;
+  /** The unit's active Kit art key, if any (see sim/kits.ts's artKeyFor) — its costume sprite is used when that file exists, else the base archetype sprite. */
+  kitArtKey?: string;
   /** Whether this unit has RAGE_TRAIT (see sim/traits.ts) — shows a live "Raging +N%" readout on its status badge, recomputed as HP changes during the replay. */
   hasRageTrait?: boolean;
 }
@@ -348,11 +350,23 @@ export class RoomReplayScene extends Phaser.Scene {
 
     const bodySeen = new Set<string>();
     for (const unit of this.sceneData.units) {
-      const key = bodyTextureKey(unit.archetype);
-      if (bodySeen.has(key)) continue;
-      bodySeen.add(key);
-      this.load.image(key, bodyAssetPath(unit.side, unit.archetype));
+      // Base sprite always; Kit costume sprite too when the unit wears one. A missing Kit file just
+      // fails to load (Phaser logs it and moves on) and bodyTextureFor falls back to the base.
+      for (const artKey of [unit.archetype, ...(unit.kitArtKey ? [unit.kitArtKey] : [])]) {
+        const key = bodyTextureKey(artKey);
+        if (bodySeen.has(key)) continue;
+        bodySeen.add(key);
+        this.load.image(key, bodyAssetPath(unit.side, artKey));
+      }
     }
+  }
+
+  /** The texture to draw `unit` with: its Kit costume if that sprite actually loaded, else its base archetype sprite. */
+  private bodyTextureFor(unit: ReplayUnit): string {
+    if (unit.kitArtKey && this.textures.exists(bodyTextureKey(unit.kitArtKey))) {
+      return bodyTextureKey(unit.kitArtKey);
+    }
+    return bodyTextureKey(unit.archetype);
   }
 
   create(): void {
@@ -516,7 +530,7 @@ export class RoomReplayScene extends Phaser.Scene {
     this.feetPositions.set(unit.id, { x: feetX, y: feetY });
 
     const sprite = this.add
-      .image(0, 0, bodyTextureKey(unit.archetype))
+      .image(0, 0, this.bodyTextureFor(unit))
       .setOrigin(0.5, 1)
       .setDisplaySize(BODY_SPRITE_RENDER_WIDTH, BODY_SPRITE_DISPLAY_HEIGHT)
       .setFlipX(unit.side === 'enemy');

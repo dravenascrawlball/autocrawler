@@ -17,6 +17,7 @@ import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
 import { rerollPoolPicks, effectiveMaxHp, grantSecondPoolSpecial, type Adventurer } from './adventurer';
 import { SYNERGIES } from '../data/synergies';
+import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { evaluateSynergies } from './synergies';
 import { applyTraining } from './training';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
@@ -40,6 +41,8 @@ const ALL_UNLOCKS = Boolean(process.env.BALANCE_SIM_UNLOCKS);
 const TRAINING_RANK = Number(process.env.BALANCE_SIM_TRAINING ?? 0);
 /** BALANCE_SIM_SYNERGY_PLAYER=1 recruits toward role synergies (data/synergies.ts) instead of purely cheapest-first. */
 const SYNERGY_PLAYER = Boolean(process.env.BALANCE_SIM_SYNERGY_PLAYER);
+/** BALANCE_SIM_KITS=1 gives every character their Renown Kit (data/kitShop.ts), as if all were bought. */
+const ALL_KITS = Boolean(process.env.BALANCE_SIM_KITS);
 const ROOM_COUNT = TOTAL_ROOMS;
 /** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
 const ECON_ARCHETYPES = new Set(['Nerissa']);
@@ -170,6 +173,13 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
     for (let seed = 0; seed < RUNS; seed++) {
       const rng = createSeededRng(seed);
       const roster = createStarterRoster();
+      if (ALL_KITS) {
+        for (const adventurer of roster) {
+          const template = CHARACTER_TEMPLATES.find((t) => t.name === adventurer.name);
+          const kits = KIT_SHOP_CATALOG.filter((entry) => entry.characterName === adventurer.name).map((entry) => entry.kit);
+          if (template && kits.length > 0) rerollPoolPicks(adventurer, template, [], kits, rng);
+        }
+      }
       if (ALL_UNLOCKS) {
         for (const adventurer of roster) {
           const template = CHARACTER_TEMPLATES.find((t) => t.name === adventurer.name);

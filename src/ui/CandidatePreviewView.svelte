@@ -3,7 +3,9 @@
   import { metaProgression } from '../state/metaProgression';
   import { recruitAdventurer } from '../state/townActions';
   import { ENCHANTMENT_REGISTRY } from '../sim/enchantments';
-  import { portraitAssetPath } from './portraits';
+  import { portraitAssetPath, portraitCandidates } from './portraits';
+  import { fallbackSrc } from './imageFallback';
+  import { displayTitle } from '../sim/kits';
   import ImageReportButton from './ImageReportButton.svelte';
 
   export let candidateId: string | null = null;
@@ -11,15 +13,6 @@
 
   $: candidate = candidateId ? ($recruitmentPool.find((c) => c.id === candidateId) ?? null) : null;
 
-  function fallbackToIdle(event: Event, archetype: string): void {
-    const img = event.currentTarget as HTMLImageElement;
-    img.src = portraitAssetPath(archetype, 'idle');
-  }
-
-  // `candidate` can go null (recruited, or closed) in the same tick this view's own <img> emits a
-  // failed-load `error` event — the handler below reads the live reactive binding, not a snapshot,
-  // so it must guard against that instead of assuming the element it's still attached to implies a
-  // non-null candidate.
 
   function handleRecruit(): void {
     if (!candidate) return;
@@ -58,14 +51,13 @@
     >
       <img
         class="sheet__art"
-        src={portraitAssetPath(adventurer.archetype, 'town')}
-        on:error={(event) => candidate && fallbackToIdle(event, adventurer.archetype)}
+        use:fallbackSrc={portraitCandidates(adventurer, 'town')}
         alt="{adventurer.archetype} in town"
       />
 
       <div class="sheet__name-badge">
         <span class="sheet__name">{adventurer.name}</span>
-        <span class="sheet__subtitle">{adventurer.role} — Not Recruited</span>
+        <span class="sheet__subtitle">{displayTitle(adventurer)} — Not Recruited</span>
       </div>
 
       <button type="button" class="sheet__close" on:click={onClose} aria-label="Close candidate preview">✕</button>

@@ -207,7 +207,7 @@ export function createAdventurer(
     id,
     name: template.name,
     archetype: template.name,
-    role: activeKit?.role ?? template.role ?? '',
+    role: activeKit?.synergyRole ?? template.role ?? '',
     position: resolvePosition(position),
     basicAction,
     hp: template.maxHp,

@@ -22,8 +22,15 @@ export interface Kit {
   tags?: TagId[];
   /** Asset-lookup key for this Kit's alternate costume art — callers wanting Kit-aware art should use `activeKit?.artKey ?? archetype`, falling back to the base archetype when no Kit is active. */
   artKey: string;
-  /** Overrides the displayed role/title while this Kit is active (e.g. "Warren Scout" instead of "Fighter") — falls back to the template's own role if omitted. */
-  role?: string;
+  /** Display title while this Kit is active (e.g. "Barbarian" instead of "Fighter") — cosmetic only; see displayTitle. */
+  title?: string;
+  /**
+   * Replaces the character's actual role (what role synergies count — see
+   * synergies.ts) while this Kit is active, for the few Kits that are
+   * deliberately a build lever (e.g. Field Medic makes Tharavel count as a
+   * Healer). Omit to keep the template's role.
+   */
+  synergyRole?: string;
 }
 
 /** Grants one uniformly-random Kit from `pool` — null if the pool is empty (the common case today: no character has a kitPool yet). */
@@ -56,5 +63,16 @@ export function applyKit(adventurer: Adventurer, template: AdventurerTemplate, k
   adventurer.activeKit = kit;
   adventurer.modifiers = [...adventurer.modifiers, ...kit.modifiers];
   adventurer.tags = [...adventurer.tags, ...(kit.tags ?? [])];
-  adventurer.role = kit.role ?? template.role ?? '';
+  adventurer.role = kit.synergyRole ?? template.role ?? '';
 }
+
+/** What to show as `adventurer`'s class/title: their Kit's title if one is active, otherwise their role. */
+export function displayTitle(adventurer: Adventurer): string {
+  return adventurer.activeKit?.title ?? adventurer.role;
+}
+
+/** Asset key for `adventurer`'s art: their Kit's costume if one is active, otherwise their base archetype. Callers fall back to the archetype when no Kit art file exists yet. */
+export function artKeyFor(adventurer: Adventurer): string {
+  return adventurer.activeKit?.artKey ?? adventurer.archetype;
+}
+

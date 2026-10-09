@@ -5,6 +5,8 @@
     id: string;
     name: string;
     archetype: string;
+    /** The unit's active Kit, if any — its sprite is tried first (see portraits.ts's bodySpriteCandidates). */
+    activeKit?: { artKey: string };
     position: GridPosition;
     hp?: number;
     maxHp?: number;
@@ -27,7 +29,8 @@
    * Click-to-select then click-a-cell still works as a keyboard-friendly
    * fallback, and a plain click on a sprite also reports `onSelect`.
    */
-  import { bodySpritePath, defaultBodySpritePath } from './portraits';
+  import { bodySpriteCandidates } from './portraits';
+  import { fallbackSrc } from './imageFallback';
 
   export let partyUnits: BoardUnit[] = [];
   export let enemyUnits: BoardUnit[] = [];
@@ -56,11 +59,7 @@
     return units.find((unit) => unit.position.lane === lane && unit.position.rank === rank);
   }
 
-  function useFallbackSprite(event: Event, side: 'party' | 'enemy'): void {
-    const img = event.currentTarget as HTMLImageElement;
-    const fallback = defaultBodySpritePath(side);
-    if (!img.src.endsWith(fallback)) img.src = fallback;
-  }
+
 
   // --- Drag state ---
   let pressed: { unit: BoardUnit; startX: number; startY: number } | null = null;
@@ -166,10 +165,9 @@
               >
                 <img
                   class="token__sprite"
-                  src={bodySpritePath('party', unit.archetype)}
+                  use:fallbackSrc={bodySpriteCandidates(unit, 'party')}
                   alt=""
                   draggable="false"
-                  on:error={(event) => useFallbackSprite(event, 'party')}
                 />
                 <span class="token__name">{unit.name}</span>
                 {#if unit.maxHp !== undefined}
@@ -184,10 +182,9 @@
               <span class="token token--enemy">
                 <img
                   class="token__sprite"
-                  src={bodySpritePath('enemy', unit.archetype)}
+                  use:fallbackSrc={bodySpriteCandidates(unit, 'enemy')}
                   alt=""
                   draggable="false"
-                  on:error={(event) => useFallbackSprite(event, 'enemy')}
                 />
                 <span class="token__name">{unit.name}</span>
                 {#if unit.maxHp !== undefined}
@@ -220,10 +217,9 @@
         >
           <img
             class="token__sprite"
-            src={bodySpritePath('party', unit.archetype)}
+            use:fallbackSrc={bodySpriteCandidates(unit, 'party')}
             alt=""
             draggable="false"
-            on:error={(event) => useFallbackSprite(event, 'party')}
           />
           <span class="token__name">{unit.name}</span>
         </span>
@@ -235,11 +231,10 @@
 {#if dragging}
   <img
     class="ghost"
-    src={bodySpritePath('party', dragging.archetype)}
+    use:fallbackSrc={bodySpriteCandidates(dragging, 'party')}
     alt=""
     style:left={`${ghostX}px`}
     style:top={`${ghostY}px`}
-    on:error={(event) => useFallbackSprite(event, 'party')}
   />
 {/if}
 

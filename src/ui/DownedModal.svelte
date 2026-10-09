@@ -1,7 +1,8 @@
 <script lang="ts">
   import { roster } from '../state/roster';
   import { acknowledgeDowned } from '../state/dungeonOrchestrator';
-  import { downedArtPath, downedArtFallbackPath } from './portraits';
+  import { downedArtPath, downedArtCandidates } from './portraits';
+  import { fallbackSrc } from './imageFallback';
   import ImageReportButton from './ImageReportButton.svelte';
 
   export let adventurerId: string | null = null;
@@ -13,11 +14,6 @@
 
   $: adventurer = adventurerId ? ($roster.adventurers.find((a) => a.id === adventurerId) ?? null) : null;
   $: summary = adventurer?.downedSummary ?? null;
-
-  function fallbackToGeneral(event: Event, archetype: string): void {
-    const img = event.currentTarget as HTMLImageElement;
-    img.src = downedArtFallbackPath(archetype);
-  }
 </script>
 
 {#if adventurer && summary && !summary.acknowledged}
@@ -25,8 +21,7 @@
     <div class="modal">
       <img
         class="modal__art"
-        src={downedArtPath(adventurer.archetype, summary.killerArchetype)}
-        on:error={(event) => adventurer && fallbackToGeneral(event, adventurer.archetype)}
+        use:fallbackSrc={downedArtCandidates(adventurer, summary.killerArchetype)}
         alt=""
       />
       <span class="modal__scrim" class:modal__scrim--hidden={statsHidden} aria-hidden="true"></span>

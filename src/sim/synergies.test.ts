@@ -4,7 +4,18 @@ import { evaluateSynergies, applySynergies } from './synergies';
 import { applyRelicScaling, type Relic } from './relics';
 import { getEffectiveStat } from './stats';
 import { SYNERGIES } from '../data/synergies';
-import { GUDRUN_TEMPLATE, BODIL_TEMPLATE, GLINT_TEMPLATE, MIRKA_TEMPLATE, MIRA_TEMPLATE, DAWNETH_TEMPLATE } from '../data/characters';
+import {
+  GUDRUN_TEMPLATE,
+  BODIL_TEMPLATE,
+  GLINT_TEMPLATE,
+  MIRKA_TEMPLATE,
+  MIRA_TEMPLATE,
+  DAWNETH_TEMPLATE,
+  THARAVEL_TEMPLATE,
+  CHARACTER_TEMPLATES,
+} from '../data/characters';
+import { THARAVEL_FIELD_MEDIC_KIT, BODIL_FUR_AND_FURY_KIT } from '../data/kits';
+import { KIT_SHOP_CATALOG } from '../data/kitShop';
 
 const fighters = () => [
   createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front'),
@@ -62,5 +73,30 @@ describe('scaling relics', () => {
     expect(party[0].modifiers.filter((m) => m.source === 'relic-scaling:trophy')).toEqual([
       expect.objectContaining({ amount: 9 }),
     ]);
+  });
+});
+
+describe('Kits that swap synergy role', () => {
+  it('Field Medic makes Tharavel count as a Healer, completing Menders with one real healer', () => {
+    const tharavel = createAdventurer('tharavel', { ...THARAVEL_TEMPLATE, kitPool: [THARAVEL_FIELD_MEDIC_KIT] }, 'back');
+    const mira = createAdventurer('mira', MIRA_TEMPLATE, 'back');
+    expect(tharavel.role).toBe('Healer');
+    const menders = evaluateSynergies([tharavel, mira], SYNERGIES).find((s) => s.synergy.id === 'menders');
+    expect(menders?.tier).not.toBeNull();
+  });
+
+  it('a title-only Kit keeps the base role (Fur & Fury Bodil still counts for Vanguard)', () => {
+    const bodil = createAdventurer('bodil', { ...BODIL_TEMPLATE, kitPool: [BODIL_FUR_AND_FURY_KIT] }, 'front');
+    expect(bodil.role).toBe('Fighter');
+    expect(bodil.activeKit?.title).toBe('Barbarian');
+  });
+});
+
+describe('Kit catalog', () => {
+  it('sells exactly one Kit for every character except Dee', () => {
+    for (const template of CHARACTER_TEMPLATES) {
+      const count = KIT_SHOP_CATALOG.filter((entry) => entry.characterName === template.name).length;
+      expect(count).toBe(template.name === 'Dee' ? 0 : 1);
+    }
   });
 });

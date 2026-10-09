@@ -463,6 +463,34 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Kits for everyone — shipped
+
+Every character but Dee now has a Renown-bought Kit (`data/kits.ts`,
+`data/kitShop.ts`, 40 Renown each) — 11 new ones with flirty-fantasy
+pin-up flavor (Fur & Fury barbarian bikini, Gilded Bikini Mail, Sea-Spray
+Corsair, Temple Dancer, Masquerade...).
+
+- **Title vs synergy role**: `Kit.role` became `Kit.title` (display only —
+  `sim/kits.ts`'s `displayTitle`), plus an optional `Kit.synergyRole` that
+  really changes the character's role for synergies. Three Kits are
+  deliberate build levers: **Sea-Spray Corsair** (Drifta) and
+  **Masquerade** (Fallacy) count as Rogues, **Field Medic** (Tharavel)
+  counts as a Healer. This also fixed the old Kits silently dropping their
+  wearer out of Vanguard/Cutthroats.
+- **Kits are trade-offs**, not pure upgrades: a strength paid for (mostly
+  in Max HP). All Kits owned on a fully grown profile: **58.8%** full clear
+  vs 52.3% without (as pure upgrades they tested at +16). The two old
+  pure-upgrade Kits (Nerissa, Caladwen) got the same treatment.
+- Still a random draw from owned Kits each run (re-rolled on shop offers).
+- **Kit art is wired up with fallbacks** (`ui/portraits.ts`'s
+  `portraitCandidates`/`downedArtCandidates`/`bodySpriteCandidates`, the
+  `use:fallbackSrc` action in `ui/imageFallback.ts`, and the battle scene's
+  `bodyTextureFor`): every portrait, card, downed image, formation-board
+  sprite and battle sprite tries the Kit's art first and falls back to the
+  base art. Drop files in to see them — e.g.
+  `/portraits/bodil-fur-and-fury-town.png`,
+  `/sprites/adventurers/bodil-fur-and-fury.png`.
+
 ## Monster pass: infernal court and demon army — shipped
 
 Four new monsters giving floors 2 and 3 their own identity (not

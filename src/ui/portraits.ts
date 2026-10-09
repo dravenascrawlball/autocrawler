@@ -42,3 +42,44 @@ export function bodySpritePath(side: 'party' | 'enemy', archetype: string): stri
 export function defaultBodySpritePath(side: 'party' | 'enemy'): string {
   return side === 'party' ? '/sprites/adventurers/default_adventurer.png' : '/sprites/monsters/default_monster.png';
 }
+
+/** The bits of an Adventurer the art helpers need — its base archetype and its active Kit (for costume art). */
+interface ArtSubject {
+  archetype: string;
+  activeKit?: { artKey: string };
+}
+
+function unique(paths: string[]): string[] {
+  return [...new Set(paths)];
+}
+
+/** Portrait paths to try in order: Kit costume art for `state`, Kit idle, base art for `state`, base idle. */
+export function portraitCandidates(subject: ArtSubject, state: string): string[] {
+  const kitKey = subject.activeKit?.artKey;
+  return unique([
+    ...(kitKey ? [portraitAssetPath(kitKey, state), portraitAssetPath(kitKey, 'idle')] : []),
+    portraitAssetPath(subject.archetype, state),
+    portraitAssetPath(subject.archetype, 'idle'),
+  ]);
+}
+
+/** Downed-art paths to try in order: Kit killer-specific, Kit general, base killer-specific, base general, base idle portrait. */
+export function downedArtCandidates(subject: ArtSubject, killerArchetype: string | null): string[] {
+  const kitKey = subject.activeKit?.artKey;
+  return unique([
+    ...(kitKey ? [downedArtPath(kitKey, killerArchetype), downedArtFallbackPath(kitKey)] : []),
+    downedArtPath(subject.archetype, killerArchetype),
+    downedArtFallbackPath(subject.archetype),
+    portraitAssetPath(subject.archetype, 'idle'),
+  ]);
+}
+
+/** Body sprite paths to try in order: Kit costume sprite, base sprite, generic stand-in. */
+export function bodySpriteCandidates(subject: ArtSubject, side: 'party' | 'enemy'): string[] {
+  const kitKey = subject.activeKit?.artKey;
+  return unique([
+    ...(kitKey ? [bodySpritePath(side, kitKey)] : []),
+    bodySpritePath(side, subject.archetype),
+    defaultBodySpritePath(side),
+  ]);
+}

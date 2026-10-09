@@ -68,6 +68,7 @@
         id: snapshot.id,
         name: adventurer?.name ?? snapshot.id,
         archetype: adventurer?.archetype ?? '',
+        kitArtKey: adventurer?.activeKit?.artKey,
         hp: snapshot.hp,
         maxHp: adventurer ? effectiveMaxHp(adventurer) : snapshot.hp,
         side: 'party',

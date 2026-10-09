@@ -29,6 +29,7 @@
     id: unit.id,
     name: unit.name,
     archetype: unit.archetype,
+    activeKit: unit.activeKit,
     position: unit.position,
     hp: unit.hp,
     maxHp: effectiveMaxHp(unit),
