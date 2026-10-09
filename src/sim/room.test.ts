@@ -36,6 +36,9 @@ describe('resolveRoom', () => {
       pendingTraitEffects: [],
       secondWindUsedIds: [],
       turnsTakenByUnitId: {},
+      chargeByUnitId: {},
+      reactiveCooldowns: {},
+      specialPowerMultiplier: 1,
     };
 
     const result = resolveRoom(battle, () => 0.5);
@@ -85,6 +88,9 @@ describe('resolveRoom', () => {
       pendingTraitEffects: [],
       secondWindUsedIds: [],
       turnsTakenByUnitId: {},
+      chargeByUnitId: {},
+      reactiveCooldowns: {},
+      specialPowerMultiplier: 1,
     };
 
     const result = resolveRoom(battle, () => 0.5, 1);
@@ -113,6 +119,9 @@ describe('resolveRoom', () => {
       pendingTraitEffects: [],
       secondWindUsedIds: [],
       turnsTakenByUnitId: {},
+      chargeByUnitId: {},
+      reactiveCooldowns: {},
+      specialPowerMultiplier: 1,
     };
 
     const result = resolveRoom(battle, () => 0.5, 1);
@@ -124,7 +133,7 @@ describe('resolveRoom', () => {
     const adv = createAdventurer('adv', template({ speed: 10, attackPower: 3, maxHp: 5 }), 'front');
     const enemy = createAdventurer('enemy', template({ name: 'Ogre', speed: 1, attackPower: 10, maxHp: 100 }), 'front');
 
-    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
     resolveRoom(battle, () => 0.5);
 
     // adv hits first (higher speed) for 3, then the ogre's counterhit for 10 downs adv (loss ends
@@ -139,7 +148,7 @@ describe('resolveRoom', () => {
     const adv = createAdventurer('adv', template({ speed: 10, attackPower: 3, maxHp: 5 }), 'front');
     const enemy = createAdventurer('enemy', template({ name: 'Ogre', speed: 1, attackPower: 10, maxHp: 100 }), 'front');
 
-    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
     const result = resolveRoom(battle, () => 0.5, 100, 2);
 
     expect(result.outcome).toBe('loss');
@@ -160,7 +169,7 @@ describe('resolveRoom', () => {
     adv.statusEffects = [{ id: 'burn', damagePerTick: 5, remainingTicks: 1 }];
     const enemy = createAdventurer('enemy', template({ name: 'Ogre', speed: 1, maxHp: 100 }), 'front');
 
-    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+    const battle: BattleState = { adventurers: [adv], enemies: [enemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
     const result = resolveRoom(battle, () => 0.5);
 
     expect(result.outcome).toBe('loss');
@@ -179,7 +188,7 @@ describe('resolveRoom', () => {
     const advA = createAdventurer('adv-a', template({ name: 'Adv A', speed: 1, maxHp: 3 }), 'front');
     const advB = createAdventurer('adv-b', template({ name: 'Adv B', speed: 1, maxHp: 3 }), 'front');
 
-    const battle: BattleState = { adventurers: [advA, advB], enemies: [cleavingEnemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+    const battle: BattleState = { adventurers: [advA, advB], enemies: [cleavingEnemy], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
     const result = resolveRoom(battle, () => 0.5);
 
     expect(result.outcome).toBe('loss');
@@ -214,7 +223,7 @@ describe('resolveRoom', () => {
     const striker = createAdventurer('striker', template({ name: 'Striker', speed: 1, attackPower: 5 }), 'front');
     const adv = createAdventurer('adv', template({ name: 'Adv', speed: 0, maxHp: 3 }), 'front');
 
-    const battle: BattleState = { adventurers: [adv], enemies: [commander, striker], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+    const battle: BattleState = { adventurers: [adv], enemies: [commander, striker], retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
     const result = resolveRoom(battle, () => 0.5);
 
     expect(result.outcome).toBe('loss');

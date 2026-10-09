@@ -1,7 +1,9 @@
 # Character & enemy ability index
 
 Reference catalog of every character/enemy's current kit — Basic Action
-(fires every turn, deterministic), Special Action (trigger + action, at
+(fires every turn, deterministic), Special Action (trigger + action; an
+on-turn-start one fires from a full charge meter, a reactive one has a
+short cooldown, and `alwaysOn` ones fire every time — see `sim/charge.ts`; at
 most one active at a time, drawn from the pool at join/reset), Trait
 (always-on passive), and meta-progression unlock (a second pool
 candidate, inactive until the character has cleared at least one run —

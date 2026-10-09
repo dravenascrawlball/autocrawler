@@ -6,6 +6,7 @@ import { EmpowerAction } from './actions/support';
 import { SelfHealAction } from './actions/heal';
 import type { BattleState } from './battle';
 import { resolveSpecialActionTriggers, type SpecialAction } from './specialActions';
+import { CHARGE_MAX, REACTIVE_COOLDOWN_TURNS, tickReactiveCooldowns } from './charge';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -20,7 +21,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 }
 
 function battleOf(adventurers: ReturnType<typeof createAdventurer>[], enemies: ReturnType<typeof createAdventurer>[]): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
 }
 
 const sequence = (...values: number[]) => {
@@ -98,11 +99,66 @@ describe('resolveSpecialActionTriggers', () => {
     actor.hp = actor.maxHp; // full HP: SelfHealAction finds nobody to heal
     const enemy = createAdventurer('enemy', template(), 'front');
     const battle = battleOf([actor], [enemy]);
+    battle.chargeByUnitId.actor = CHARGE_MAX;
 
     const onTurnStart: SpecialAction = { id: 'mend', name: 'Mend', trigger: 'on-turn-start', action: SelfHealAction };
 
     const results = resolveSpecialActionTriggers(actor, [onTurnStart], { trigger: 'on-turn-start' }, battle, sequence(0.5));
 
     expect(results).toEqual([{ specialActionId: 'mend', outcome: null }]);
+    expect(battle.chargeByUnitId.actor).toBe(CHARGE_MAX); // no target: the charge is kept, not wasted
+  });
+
+  it('holds an on-turn-start Special until the charge meter is full, then fires it and empties the meter', () => {
+    const actor = createAdventurer('actor', template(), 'front');
+    const enemy = createAdventurer('enemy', template(), 'front');
+    const battle = battleOf([actor], [enemy]);
+    const strike: SpecialAction = { id: 'strike', name: 'Strike', trigger: 'on-turn-start', action: AttackNearestAction };
+
+    battle.chargeByUnitId.actor = CHARGE_MAX - 1;
+    expect(resolveSpecialActionTriggers(actor, [strike], { trigger: 'on-turn-start' }, battle, sequence(0.5))).toEqual([]);
+
+    battle.chargeByUnitId.actor = CHARGE_MAX;
+    const results = resolveSpecialActionTriggers(actor, [strike], { trigger: 'on-turn-start' }, battle, sequence(0.5));
+    expect(results).toHaveLength(1);
+    // the hit itself refills a little (CHARGE_PER_HIT) after the reset
+    expect(battle.chargeByUnitId.actor).toBeLessThan(CHARGE_MAX);
+  });
+
+  it('hits harder when fired from a full meter than the same Action as a Basic Action', () => {
+    const fire = (charged: boolean) => {
+      const actor = createAdventurer('actor', template(), 'front');
+      const enemy = createAdventurer('enemy', template({ maxHp: 1000 }), 'front');
+      const battle = battleOf([actor], [enemy]);
+      if (!charged) return AttackNearestAction.resolve({ actor, target: enemy, rng: sequence(0.5), battle });
+      battle.chargeByUnitId.actor = CHARGE_MAX;
+      const strike: SpecialAction = { id: 'strike', name: 'Strike', trigger: 'on-turn-start', action: AttackNearestAction };
+      return resolveSpecialActionTriggers(actor, [strike], { trigger: 'on-turn-start' }, battle, sequence(0.5))[0].outcome;
+    };
+    const plain = fire(false) as { damage: number };
+    const charged = fire(true) as { damage: number };
+    expect(charged.damage).toBeGreaterThan(plain.damage * 1.5);
+  });
+
+  it('puts a reactive Special on a short cooldown after it fires', () => {
+    const actor = createAdventurer('actor', template(), 'front');
+    const enemy = createAdventurer('enemy', template({ maxHp: 1000 }), 'front');
+    const battle = battleOf([actor], [enemy]);
+    const retaliate: SpecialAction = { id: 'retaliate', name: 'Retaliate', trigger: 'on-hit-taken', action: AttackNearestAction };
+
+    expect(resolveSpecialActionTriggers(actor, [retaliate], { trigger: 'on-hit-taken' }, battle, sequence(0.5))).toHaveLength(1);
+    expect(resolveSpecialActionTriggers(actor, [retaliate], { trigger: 'on-hit-taken' }, battle, sequence(0.5))).toEqual([]);
+    for (let turn = 0; turn < REACTIVE_COOLDOWN_TURNS; turn += 1) tickReactiveCooldowns(battle, actor.id);
+    expect(resolveSpecialActionTriggers(actor, [retaliate], { trigger: 'on-hit-taken' }, battle, sequence(0.5))).toHaveLength(1);
+  });
+
+  it('fires an alwaysOn Special every time, ignoring the meter and cooldowns', () => {
+    const actor = createAdventurer('actor', template(), 'front');
+    const enemy = createAdventurer('enemy', template({ maxHp: 1000 }), 'front');
+    const battle = battleOf([actor], [enemy]);
+    const aura: SpecialAction = { id: 'aura', name: 'Aura', trigger: 'on-turn-start', action: AttackNearestAction, alwaysOn: true };
+
+    expect(resolveSpecialActionTriggers(actor, [aura], { trigger: 'on-turn-start' }, battle, sequence(0.5))).toHaveLength(1);
+    expect(resolveSpecialActionTriggers(actor, [aura], { trigger: 'on-turn-start' }, battle, sequence(0.5))).toHaveLength(1);
   });
 });

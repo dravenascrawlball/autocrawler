@@ -37,7 +37,7 @@ export const HealAction: Action = {
 function resolveHeal(context: ActionContext, actionId: ActionId): ActionOutcome {
   const base = getEffectiveStat(context.actor.healPower, 'healPower', context.actor.modifiers);
   const levelBonusPercent = actionLevelPercentBonus(context.actor, actionId);
-  const amount = Math.round(base * (1 + levelBonusPercent / 100));
+  const amount = Math.round(base * (1 + levelBonusPercent / 100) * context.battle.specialPowerMultiplier);
   const effectiveMaxHp = getEffectiveStat(context.target.maxHp, 'maxHp', context.target.modifiers);
   context.target.hp = Math.min(effectiveMaxHp, context.target.hp + amount);
   return { type: 'heal', amount, targetId: context.target.id };

@@ -1,4 +1,5 @@
 import type { Adventurer } from './adventurer';
+import { addCharge, chargeOf, tickReactiveCooldowns, CHARGE_PER_TURN } from './charge';
 import type { Action, ActionOutcome } from './action';
 import type { BattleState } from './battle';
 import { triggerRetreat, getOpposingRoster, getOwnRoster } from './battle';
@@ -41,6 +42,8 @@ export interface TurnResult {
   /** Which of the 6 die faces (0-5) the Basic Action was derived from — for the future dice-face-art UI. */
   rolledFaceIndex: number;
   rolledActionId: Action['id'];
+  /** Every unit's Special Action charge (sim/charge.ts) once this turn ends — for the replay's charge bars. */
+  chargeAfter?: Record<string, number>;
 }
 
 /**
@@ -108,7 +111,17 @@ function pushSpecialActionEvents(events: TurnEvent[], outcomes: SpecialActionOut
  * see specialActions.ts's own doc comment for why.
  */
 export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: RngSource): TurnResult {
+  const result = resolveTurnEvents(adventurer, battle, rng);
+  result.chargeAfter = Object.fromEntries(
+    [...battle.adventurers, ...battle.enemies].map((unit) => [unit.id, chargeOf(battle, unit.id)]),
+  );
+  return result;
+}
+
+function resolveTurnEvents(adventurer: Adventurer, battle: BattleState, rng: RngSource): TurnResult {
   battle.turnsTakenByUnitId[adventurer.id] = (battle.turnsTakenByUnitId[adventurer.id] ?? 0) + 1;
+  addCharge(battle, adventurer.id, CHARGE_PER_TURN);
+  tickReactiveCooldowns(battle, adventurer.id);
   const events: TurnEvent[] = tickStatusEffects(adventurer).map((tick) => ({
     type: 'status-tick',
     effectId: tick.effectId,

@@ -51,8 +51,10 @@
     <section>
       <h3>Combat</h3>
       <p>
-        Fights play out on their own. Every turn a character uses their Basic Action, plus any Special Actions that
-        trigger. <strong>Melee</strong> attacks can only reach the frontmost unit in the attacker's lane, moving to the
+        Fights play out on their own. Every turn a character uses their Basic Action. Their
+        <strong>Special Action</strong> fires when the charge bar under their HP fills up (about every 3 turns) and
+        hits twice as hard. Specials that react to something (being hit, an ally falling) have a short cooldown
+        instead. <strong>Melee</strong> attacks can only reach the frontmost unit in the attacker's lane, moving to the
         nearest lane once that lane is empty. <strong>Ranged</strong> attacks reach anyone. A fragile hero is only truly
         safe standing behind someone.
       </p>

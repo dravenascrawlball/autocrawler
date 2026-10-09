@@ -1,4 +1,5 @@
 import type { Action, ActionContext, ActionId, ActionOutcome, TargetingContext } from '../action';
+import { addCharge, CHARGE_PER_HIT } from '../charge';
 import { selectFirstEnemy, selectLowestHpEnemy, selectWeakestLaneFront } from './targeting';
 import { getEffectiveStat } from '../stats';
 import { actionLevelPercentBonus } from '../leveling';
@@ -152,7 +153,8 @@ function applyAttackToTarget(
     milestoneDamageMultiplier(context.actor, target) *
     rollDamageVariance(context, varianceFraction) *
     critMultiplier *
-    (1 + vulnerabilityPercent / 100);
+    (1 + vulnerabilityPercent / 100) *
+    context.battle.specialPowerMultiplier;
   const armor = getEffectiveStat(0, 'armor', target.modifiers);
   const damageAfterArmor = Math.max(MIN_DAMAGE_AFTER_ARMOR, Math.round(variedDamage - armor));
 
@@ -191,6 +193,10 @@ function applyAttackToTarget(
   }
 
   target.hp = Math.max(0, target.hp - finalDamage);
+  if (finalDamage > 0) {
+    addCharge(context.battle, context.actor.id, CHARGE_PER_HIT);
+    addCharge(context.battle, target.id, CHARGE_PER_HIT);
+  }
 
   // Milestone Traits (mid-run Trait growth) — recorded on the battle so the replay shows them.
   if (finalDamage > 0 && hasTrait(context.actor, VAMPIRIC_TRAIT.id) && context.actor.hp > 0) {

@@ -79,6 +79,7 @@ export const DAWNETH_MENDING_CHARGE_SPECIAL: SpecialAction = {
   name: 'Mending Charge',
   trigger: 'on-turn-start',
   action: MendingChargeAction,
+  alwaysOn: true,
 };
 
 /** Dawneth's lane-guardian pool Special (the healer redesign, replacing Cleanse): shields the ally in front of her, scaled by her energy. */
@@ -95,6 +96,7 @@ export const MIRA_SPLASH_HEAL_SPECIAL: SpecialAction = {
   name: 'Splash Heal',
   trigger: 'on-turn-start',
   action: SplashHealAction,
+  alwaysOn: true,
 };
 
 /** Bodil's Self-Heal reframed as reactive — fires when she's hit, not on a fixed schedule, matching SelfHealAction's own "only when hurt" targeting. */
@@ -550,6 +552,7 @@ export const SENTINEL_VENGEANCE_SPECIAL: SpecialAction = {
   name: 'Vengeance',
   trigger: 'on-ally-downed',
   action: VengeanceAction,
+  alwaysOn: true,
 };
 
 /** Troll Warlord's always-on Special (enemy variety pass): heals itself a little at the start of each turn. */
@@ -558,6 +561,7 @@ export const TROLL_REGENERATE_SPECIAL: SpecialAction = {
   name: 'Regenerate',
   trigger: 'on-turn-start',
   action: RegenerateAction,
+  alwaysOn: true,
 };
 
 /** Succubus (floor 2 boss): when hit, Charms — stuns the nearest hero, who skips their next turn. */
@@ -566,6 +570,7 @@ export const SUCCUBUS_CHARM_SPECIAL: SpecialAction = {
   name: 'Charm',
   trigger: 'on-hit-taken',
   action: StunAction,
+  alwaysOn: true,
 };
 
 /** Demon King (floor 3 boss): Hellfire every turn — half-damage hits on several heroes that set them Burning. */
@@ -574,6 +579,7 @@ export const DEMON_KING_HELLFIRE_SPECIAL: SpecialAction = {
   name: 'Hellfire',
   trigger: 'on-turn-start',
   action: HellfireAction,
+  alwaysOn: true,
 };
 
 /** Demon King (floor 3 boss): Raise Dead every turn — revives one fallen demon if any are down. */
@@ -582,6 +588,7 @@ export const DEMON_KING_RAISE_DEAD_SPECIAL: SpecialAction = {
   name: 'Raise Dead',
   trigger: 'on-turn-start',
   action: ReviveAction,
+  alwaysOn: true,
 };
 
 /** Infernal Bannerman (monster pass): War Banner every turn — all its allies hit harder. */
@@ -590,6 +597,7 @@ export const BANNERMAN_WAR_BANNER_SPECIAL: SpecialAction = {
   name: 'War Banner',
   trigger: 'on-turn-start',
   action: WarBannerAction,
+  alwaysOn: true,
 };
 
 /** Hellforged Guardian (monster pass): shields its most-hurt ally every turn. */
@@ -598,6 +606,7 @@ export const GUARDIAN_WARD_SPECIAL: SpecialAction = {
   name: 'Hellforged Ward',
   trigger: 'on-turn-start',
   action: ShieldWallAction,
+  alwaysOn: true,
 };
 
 /** Mirka's adjacency ability: when an ally standing next to her falls, she gains a big attack buff for the rest of the fight. */
@@ -606,6 +615,7 @@ export const MIRKA_AVENGER_SPECIAL: SpecialAction = {
   name: 'Avenger',
   trigger: 'on-adjacent-ally-downed',
   action: VengeanceAction,
+  alwaysOn: true,
 };
 
 /** Hellcaller (summoner): every 3rd turn, calls an Ember Imp (max 2 alive) — see data/summons.ts. */
@@ -614,6 +624,7 @@ export const HELLCALLER_SUMMON_SPECIAL: SpecialAction = {
   name: 'Summon Imp',
   trigger: 'on-turn-start',
   action: SummonImpAction,
+  alwaysOn: true,
 };
 
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
@@ -636,6 +647,7 @@ export const RING_OF_EMBERS_BURN_SPECIAL: SpecialAction = {
   name: 'Ember Burn',
   trigger: 'on-hit-landed',
   action: EmberBurnAction,
+  alwaysOn: true,
 };
 
 /** Looked up by id on save load — see state/persistence.ts's deserializeAdventurer. */

@@ -22,6 +22,7 @@
   import { outcomeToReplayEvents } from './replayEvents';
   import type { ActionOutcome } from '../sim/action';
   import { RAGE_TRAIT } from '../sim/traits';
+  import { hasChargedSpecial } from '../sim/charge';
   import DungeonPauseView from './DungeonPauseView.svelte';
 
   const BATTLE_SPEED_OPTIONS: BattleSpeedMultiplier[] = [1, 2, 4];
@@ -74,6 +75,7 @@
         side: 'party',
         position: adventurer?.position ?? { lane: 1, rank: 0 },
         hasRageTrait: adventurer?.traits.some((trait) => trait.id === RAGE_TRAIT.id) ?? false,
+        hasChargedSpecial: adventurer ? hasChargedSpecial(adventurer) : false,
       };
     });
     // Rooms are freshly built per run (see /src/data/rooms.ts), so enemies always start this room at full HP.
@@ -88,6 +90,7 @@
       // Summons (sim/summons.ts) are in the room's list after the fight resolves, but only appear
       // in the replay once they're actually called in.
       hiddenUntilSpawn: enemy.summonedBy !== undefined,
+      hasChargedSpecial: hasChargedSpecial(enemy),
     }));
 
     const events: ReplayEvent[] = [];
@@ -134,6 +137,7 @@
             });
           }
         }
+        if (roundTurn.turn.chargeAfter) events.push({ type: 'charge', values: roundTurn.turn.chargeAfter });
       }
     }
 

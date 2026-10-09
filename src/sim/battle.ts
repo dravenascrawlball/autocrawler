@@ -40,10 +40,16 @@ export interface BattleState {
   secondWindUsedIds: string[];
   /** Turns each unit has started this fight — e.g. the Hellcaller summons on every 3rd (sim/summons.ts). */
   turnsTakenByUnitId: Record<string, number>;
+  /** Special Action charge meters, 0-100 (sim/charge.ts). */
+  chargeByUnitId: Record<string, number>;
+  /** Reactive Special cooldowns in own turns, keyed `unitId:specialId` (sim/charge.ts). */
+  reactiveCooldowns: Record<string, number>;
+  /** Damage/healing multiplier in effect — CHARGED_SPECIAL_POWER while a charged Special resolves, otherwise 1. */
+  specialPowerMultiplier: number;
 }
 
 export function createBattleState(adventurers: Adventurer[], enemies: Adventurer[], partyGold = 0): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
 }
 
 /** Current Mending Charge energy for `unitId` — 0 if it's never gained any this room. */

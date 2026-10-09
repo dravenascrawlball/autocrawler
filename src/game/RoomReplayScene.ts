@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { GridPosition } from '../sim/formation';
 import type { StatusEffectId } from '../sim/statusEffects';
 import { rageDamageBonusFraction } from '../sim/traits';
+import { CHARGE_MAX, CHARGE_START } from '../sim/charge';
 import { COLORS } from './constants';
 
 export interface ReplayUnit {
@@ -21,6 +22,8 @@ export interface ReplayUnit {
   hiddenUntilSpawn?: boolean;
   /** Whether this unit has RAGE_TRAIT (see sim/traits.ts) — shows a live "Raging +N%" readout on its status badge, recomputed as HP changes during the replay. */
   hasRageTrait?: boolean;
+  /** Has a charge-meter Special (sim/charge.ts) — gets a charge bar under the HP bar. */
+  hasChargedSpecial?: boolean;
 }
 
 export type ReplayEvent =
@@ -44,7 +47,9 @@ export type ReplayEvent =
   /** A summoned unit appearing (fades in) — see sim/summons.ts. */
   | { type: 'spawn'; unitId: string }
   /** Summoned units vanishing with their summoner (fade out). */
-  | { type: 'banish'; unitIds: string[] };
+  | { type: 'banish'; unitIds: string[] }
+  /** Every unit's Special Action charge at the end of a turn (sim/turnEngine.ts's chargeAfter) — updates the charge bars without pausing playback. */
+  | { type: 'charge'; values: Record<string, number> };
 
 export interface RoomReplaySceneData {
   units: ReplayUnit[];
@@ -100,11 +105,12 @@ const BADGE_WIDTH = CELL_SIZE - 10;
 const BADGE_HP_BAR_HEIGHT = 5;
 const BADGE_HP_BAR_WIDTH = BADGE_WIDTH - 8;
 const BADGE_HP_TEXT_HEIGHT = 12;
+const BADGE_CHARGE_BAR_HEIGHT = 2;
 const BADGE_RAGE_TEXT_HEIGHT = 11;
 const BADGE_ROW_GAP = 2;
 /** Gap between a unit's feet and the top of its badge. */
 const BADGE_TOP_GAP = 4;
-const BADGE_HEIGHT = BADGE_HP_BAR_HEIGHT + BADGE_ROW_GAP + BADGE_HP_TEXT_HEIGHT + BADGE_ROW_GAP + BADGE_RAGE_TEXT_HEIGHT;
+const BADGE_HEIGHT = BADGE_HP_BAR_HEIGHT + BADGE_CHARGE_BAR_HEIGHT + BADGE_ROW_GAP + BADGE_HP_TEXT_HEIGHT + BADGE_ROW_GAP + BADGE_RAGE_TEXT_HEIGHT;
 
 /**
  * Vertical spacing between lane slots. Deliberately NOT just CELL_SIZE (which only governs
@@ -277,6 +283,7 @@ export class RoomReplayScene extends Phaser.Scene {
   private gridSprites = new Map<string, Phaser.GameObjects.Image>();
   private badgeHealthBars = new Map<string, Phaser.GameObjects.Rectangle>();
   private badgeHpTexts = new Map<string, Phaser.GameObjects.Text>();
+  private badgeChargeBars = new Map<string, Phaser.GameObjects.Rectangle>();
   private badgeRageTexts = new Map<string, Phaser.GameObjects.Text>();
   /** A unit's feet position — the shared anchor every per-unit effect (badge, floating text, sparks) positions itself relative to. */
   private feetPositions = new Map<string, { x: number; y: number }>();
@@ -303,6 +310,7 @@ export class RoomReplayScene extends Phaser.Scene {
     this.gridSprites.clear();
     this.badgeHealthBars.clear();
     this.badgeHpTexts.clear();
+    this.badgeChargeBars.clear();
     this.badgeRageTexts.clear();
     this.feetPositions.clear();
     this.currentHp.clear();
@@ -561,7 +569,19 @@ export class RoomReplayScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
     healthBarFill.x = -BADGE_HP_BAR_WIDTH / 2;
     this.badgeHealthBars.set(unit.id, healthBarFill);
-    cursor += BADGE_HP_BAR_HEIGHT + BADGE_ROW_GAP;
+    cursor += BADGE_HP_BAR_HEIGHT;
+
+    const barChildren: Phaser.GameObjects.GameObject[] = [];
+    if (unit.hasChargedSpecial) {
+      const chargeY = cursor + BADGE_CHARGE_BAR_HEIGHT / 2;
+      const chargeBg = this.add.rectangle(0, chargeY, BADGE_HP_BAR_WIDTH, BADGE_CHARGE_BAR_HEIGHT, COLORS.healthBarBack);
+      const chargeFill = this.add
+        .rectangle(-BADGE_HP_BAR_WIDTH / 2, chargeY, BADGE_HP_BAR_WIDTH * (CHARGE_START / CHARGE_MAX), BADGE_CHARGE_BAR_HEIGHT, COLORS.chargeBarFill)
+        .setOrigin(0, 0.5);
+      this.badgeChargeBars.set(unit.id, chargeFill);
+      barChildren.push(chargeBg, chargeFill);
+    }
+    cursor += BADGE_CHARGE_BAR_HEIGHT + BADGE_ROW_GAP;
 
     const hpText = this.add
       .text(0, cursor + BADGE_HP_TEXT_HEIGHT / 2, `${unit.hp}/${unit.maxHp}`, { fontSize: '10px', color: '#cccccc' })
@@ -569,7 +589,7 @@ export class RoomReplayScene extends Phaser.Scene {
     this.badgeHpTexts.set(unit.id, hpText);
     cursor += BADGE_HP_TEXT_HEIGHT + BADGE_ROW_GAP;
 
-    const children: Phaser.GameObjects.GameObject[] = [bg, healthBarBg, healthBarFill, hpText];
+    const children: Phaser.GameObjects.GameObject[] = [bg, healthBarBg, healthBarFill, ...barChildren, hpText];
 
     if (unit.hasRageTrait) {
       const rageText = this.add
@@ -652,7 +672,23 @@ export class RoomReplayScene extends Phaser.Scene {
       this.playFade(event.unitIds, 0, next);
       return;
     }
+    if (event.type === 'charge') {
+      this.updateChargeBars(event.values);
+      next();
+      return;
+    }
     this.playHeal(event.actorId, event.targetId, event.amount, next);
+  }
+
+  /** Tweens each charge bar to its unit's new charge — gold once full (its Special fires next turn). */
+  private updateChargeBars(values: Record<string, number>): void {
+    for (const [unitId, charge] of Object.entries(values)) {
+      const bar = this.badgeChargeBars.get(unitId);
+      if (!bar) continue;
+      const ratio = Math.max(0, Math.min(1, charge / CHARGE_MAX));
+      bar.setFillStyle(ratio >= 1 ? COLORS.chargeBarFull : COLORS.chargeBarFill);
+      this.tweens.add({ targets: bar, width: BADGE_HP_BAR_WIDTH * ratio, duration: this.scaled(200) });
+    }
   }
 
   /** Fades the sprites and status badges of `unitIds` to `alpha` — a summon appearing (1) or being banished (0). */

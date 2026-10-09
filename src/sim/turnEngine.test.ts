@@ -10,6 +10,7 @@ import { resolveTurn } from './turnEngine';
 import type { BattleState } from './battle';
 import type { Adventurer } from './adventurer';
 import type { SpecialAction } from './specialActions';
+import { CHARGE_MAX } from './charge';
 
 function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTemplate {
   return {
@@ -24,7 +25,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 }
 
 function battleOf(adventurers: Adventurer[], enemies: Adventurer[]): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {} };
+  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [], turnsTakenByUnitId: {}, chargeByUnitId: {}, reactiveCooldowns: {}, specialPowerMultiplier: 1 };
 }
 
 /** rng() returns each value in order, repeating the last once exhausted (same convention as actions/attack.test.ts). */
@@ -91,6 +92,7 @@ describe('resolveTurn', () => {
     actor.activeSpecialActions = [adrenaline];
     const target = createAdventurer('target', template({ maxHp: 100 }), 'front');
     const battle = battleOf([actor], [target]);
+    battle.chargeByUnitId.actor = CHARGE_MAX;
 
     const turn = resolveTurn(actor, battle, sequence(0.5, 0.5));
 

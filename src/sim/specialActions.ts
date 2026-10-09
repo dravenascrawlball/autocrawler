@@ -1,6 +1,7 @@
 import type { Adventurer } from './adventurer';
 import type { Action, ActionOutcome } from './action';
 import type { BattleState } from './battle';
+import { isFullyCharged, reactiveCooldown, startReactiveCooldown, CHARGED_SPECIAL_POWER } from './charge';
 import type { RngSource } from './rng';
 import { getEffectiveStat } from './stats';
 
@@ -54,6 +55,12 @@ export interface SpecialAction {
   name: string;
   trigger: SpecialActionTriggerId;
   action: Action;
+  /**
+   * Fires whenever its trigger matches, ignoring the charge meter and
+   * reactive cooldowns (sim/charge.ts) — for core always-active abilities:
+   * healers' every-turn heals, auras, boss mechanics, summons.
+   */
+  alwaysOn?: boolean;
 }
 
 /**
@@ -105,13 +112,24 @@ export function resolveSpecialActionTriggers(
   const results: SpecialActionOutcome[] = [];
 
   for (const special of matching) {
+    // Charge meter (sim/charge.ts): an on-turn-start Special waits for a full meter; a reactive one
+    // for its cooldown. alwaysOn Specials skip both.
+    const charged = !special.alwaysOn && event.trigger === 'on-turn-start';
+    const reactive = !special.alwaysOn && event.trigger !== 'on-turn-start';
+    if (charged && !isFullyCharged(battle, actor.id)) continue;
+    if (reactive && reactiveCooldown(battle, actor.id, special.id) > 0) continue;
+
     const target = special.action.selectTarget({ actor, battle });
     if (target === null) {
       results.push({ specialActionId: special.id, outcome: null });
       continue;
     }
 
+    battle.specialPowerMultiplier = charged ? CHARGED_SPECIAL_POWER : 1;
     const outcome = special.action.resolve({ actor, target, rng, battle });
+    battle.specialPowerMultiplier = 1;
+    if (charged) battle.chargeByUnitId[actor.id] = 0;
+    if (reactive) startReactiveCooldown(battle, actor.id, special.id);
     results.push({ specialActionId: special.id, outcome });
   }
 

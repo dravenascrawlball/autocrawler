@@ -463,6 +463,35 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Special Action charge meter — shipped
+
+Specials used to fire every turn whenever their trigger matched (on-turn-start
+ones about half of all hero actions), so they didn't feel special. Now (`sim/charge.ts`):
+
+- Every unit has a **charge meter** (0–100) that starts each fight at 50, gains
+  +25 per own turn and +10 whenever they deal or take damage. An
+  on-turn-start Special waits for a full meter, fires, and empties it — so
+  the first one lands around turn 2 and then about every 3 turns. With no
+  valid target it holds its charge.
+- Charged Specials hit **2× harder** (damage and Heal/Potion healing, via
+  `BattleState.specialPowerMultiplier`).
+- **Reactive** Specials (on-hit, on-ally-downed, on-enemy-downed, ...) skip
+  the meter but get a 2-turn cooldown each.
+- `alwaysOn: true` Specials ignore both: Dawneth's Mending Charge, Mira's
+  Splash Heal, the Troll's Regenerate, War Banner, Hellforged Ward,
+  Hellcaller's Summon, the Demon King's Hellfire and Raise Dead, Succubus
+  Charm, Sentinel Vengeance, Mirka's Avenger and the Ring of Embers.
+- Replay: a thin charge bar sits under the HP bar of each unit with a
+  charged Special, turning gold when full (`TurnResult.chargeAfter` →
+  a `charge` replay event).
+- Balance: enemy stat scale retuned down (~9% floor 1, ~25% floor 2,
+  ~33% floor 3). Sim: fresh ~33–35% full clear (80% clear floor 1, ~52%
+  floor 2), grown ~59%, grown + all Kits ~74%. Growth now matters a
+  little more than before (trained damage is doubled on charged hits).
+
+This also sets up the cut-in work: with Specials rarer, every Special can
+get a portrait cut-in under the "All" setting.
+
 ## Run summary screen and run log — shipped
 
 When a run ends, a dedicated summary screen replaces the between-rooms
