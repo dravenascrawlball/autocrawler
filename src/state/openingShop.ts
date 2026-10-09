@@ -8,7 +8,7 @@ import { MAX_PARTY_SIZE } from '../sim/draft';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
 import { roster } from './roster';
-import { rerollOfferedCharacters } from './progression';
+import { rerollOfferedCharacters, wearKit } from './progression';
 import { recruitPriceFor } from './dungeonPlayback';
 import { startDungeon } from './dungeonOrchestrator';
 import type { RngSource } from '../sim/rng';
@@ -159,6 +159,19 @@ export function returnOpeningMemberToTray(adventurerId: string): void {
   }
 
   openingShop.set({ ...state, unplacedIds: [...state.unplacedIds, adventurerId] });
+}
+
+/** Outfit swap at the opening shop, before room 1 — same rules as the between-room swap (progression.ts's wearKit). */
+export function changeOpeningKit(adventurerId: string, kitId: string | null): void {
+  const state = get(openingShop);
+  const member = state?.party.find((candidate) => candidate.id === adventurerId);
+  if (!state || !member) {
+    return;
+  }
+
+  if (wearKit(member, kitId)) {
+    openingShop.set({ ...state });
+  }
 }
 
 /** Clears the in-progress opening shop (e.g. once Embark actually starts the run). */

@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import type { Adventurer } from '../sim/adventurer';
 import { rerollPoolPicks, effectiveMaxHp } from '../sim/adventurer';
+import { changeKit } from '../sim/kits';
 import { applyTraining } from '../sim/training';
 import type { ActionId } from '../sim/action';
 import type { CharacterPoolEntry } from '../sim/characterPool';
@@ -169,5 +170,34 @@ export const lastRunReward = writable<RunReward | null>(null);
 export function applyTrainingFromProgress(adventurer: Adventurer): void {
   applyTraining(adventurer, get(metaProgression).trainingRanks[adventurer.name] ?? 0);
   adventurer.hp = effectiveMaxHp(adventurer);
+}
+
+/**
+ * Every Kit `adventurer` can wear right now — their template's own kitPool
+ * plus Shop Kits bought for them. Pass `unlockedKitIds` from a component's
+ * `$metaProgression` so the result stays reactive; defaults to the store's
+ * current value.
+ */
+export function ownedKitsFor(
+  adventurer: Adventurer,
+  unlockedKitIds: Record<string, string[]> = get(metaProgression).unlockedKitIds,
+): Kit[] {
+  const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === adventurer.name);
+  return [...(template?.kitPool ?? []), ...unlockedKitsFor(adventurer.name, unlockedKitIds)];
+}
+
+/**
+ * Switches `adventurer` into owned Kit `kitId`, or back to their base
+ * outfit when null (sim/kits.ts's changeKit). Returns false (no change) if
+ * the Kit isn't one they own. Shared by the between-room and opening-shop
+ * outfit pickers — callers handle refreshing their own stores.
+ */
+export function wearKit(adventurer: Adventurer, kitId: string | null): boolean {
+  const template = CHARACTER_TEMPLATES.find((candidate) => candidate.name === adventurer.name);
+  if (!template) return false;
+  const kit = kitId === null ? null : (ownedKitsFor(adventurer).find((candidate) => candidate.id === kitId) ?? null);
+  if (kitId !== null && !kit) return false;
+  changeKit(adventurer, template, kit);
+  return true;
 }
 

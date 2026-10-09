@@ -12,7 +12,9 @@
     buyEquipmentOffer,
     placePartyMemberDuringRun,
     returnPartyMemberToTrayDuringRun,
+    changeKitDuringRun,
   } from '../state/dungeonOrchestrator';
+  import OutfitPicker from './OutfitPicker.svelte';
   import DownedModal from './DownedModal.svelte';
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
@@ -249,6 +251,9 @@
   {/if}
 
   {#if selected}
+    {#if runOutcome === null}
+      <OutfitPicker adventurer={selected} onChange={(kitId) => selected && changeKitDuringRun(selected.id, kitId)} />
+    {/if}
     <h3>{selected.name}'s Equipment</h3>
     <ul>
       {#each SLOTS as slot (slot)}

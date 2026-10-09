@@ -1,5 +1,6 @@
 import type { Adventurer, AdventurerTemplate } from './adventurer';
 import type { StatModifier } from './stats';
+import { getEffectiveStat } from './stats';
 import type { TagId } from './tags';
 import type { RngSource } from './rng';
 
@@ -53,12 +54,7 @@ export function pickKit(pool: Kit[], rng: RngSource): Kit | null {
  * kept for whenever kit choice gets a new home.
  */
 export function applyKit(adventurer: Adventurer, template: AdventurerTemplate, kit: Kit): void {
-  const previous = adventurer.activeKit;
-  if (previous) {
-    adventurer.modifiers = adventurer.modifiers.filter((modifier) => !previous.modifiers.includes(modifier));
-    const previousTags = previous.tags ?? [];
-    adventurer.tags = adventurer.tags.filter((tag) => !previousTags.includes(tag));
-  }
+  removeActiveKit(adventurer);
 
   adventurer.activeKit = kit;
   adventurer.modifiers = [...adventurer.modifiers, ...kit.modifiers];
@@ -74,5 +70,34 @@ export function displayTitle(adventurer: Adventurer): string {
 /** Asset key for `adventurer`'s art: their Kit's costume if one is active, otherwise their base archetype. Callers fall back to the archetype when no Kit art file exists yet. */
 export function artKeyFor(adventurer: Adventurer): string {
   return adventurer.activeKit?.artKey ?? adventurer.archetype;
+}
+
+/** Strips whatever the active Kit contributed to `modifiers`/`tags` — shared by applyKit and clearKit. Leaves `role`/`activeKit` to the caller. */
+function removeActiveKit(adventurer: Adventurer): void {
+  const previous = adventurer.activeKit;
+  if (!previous) return;
+  adventurer.modifiers = adventurer.modifiers.filter((modifier) => !previous.modifiers.includes(modifier));
+  const previousTags = previous.tags ?? [];
+  adventurer.tags = adventurer.tags.filter((tag) => !previousTags.includes(tag));
+}
+
+/** Takes `adventurer` back to their base outfit in place: no Kit modifiers/tags, the template's own role. */
+export function clearKit(adventurer: Adventurer, template: AdventurerTemplate): void {
+  removeActiveKit(adventurer);
+  adventurer.activeKit = undefined;
+  adventurer.role = template.role ?? '';
+}
+
+/**
+ * Switches `adventurer` to `kit` (or back to the base outfit when null) —
+ * the free between-room outfit swap for owned Kits (see
+ * state/dungeonOrchestrator.ts's changeKitDuringRun). HP is kept, but
+ * capped at the new effective max: a +HP Kit doesn't heal, and a -HP Kit
+ * can't kill.
+ */
+export function changeKit(adventurer: Adventurer, template: AdventurerTemplate, kit: Kit | null): void {
+  if (kit) applyKit(adventurer, template, kit);
+  else clearKit(adventurer, template);
+  adventurer.hp = Math.min(adventurer.hp, getEffectiveStat(adventurer.maxHp, 'maxHp', adventurer.modifiers));
 }
 

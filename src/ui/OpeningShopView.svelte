@@ -9,7 +9,11 @@
     embarkFromOpeningShop,
     placeOpeningMember,
     returnOpeningMemberToTray,
+    changeOpeningKit,
   } from '../state/openingShop';
+  import OutfitPicker from './OutfitPicker.svelte';
+  import { ownedKitsFor } from '../state/progression';
+  import { metaProgression } from '../state/metaProgression';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
   import Tooltip from './Tooltip.svelte';
   import SynergyPanel from './SynergyPanel.svelte';
@@ -54,6 +58,14 @@
     {/if}
   </p>
   <SynergyPanel {party} />
+  {#each party as member (member.id)}
+    {#if ownedKitsFor(member, $metaProgression.unlockedKitIds).length > 0}
+      <div class="opening-shop__outfit">
+        <span class="opening-shop__outfit-name">{member.name}</span>
+        <OutfitPicker adventurer={member} onChange={(kitId) => changeOpeningKit(member.id, kitId)} />
+      </div>
+    {/if}
+  {/each}
   <div class="opening-shop__board">
     <FormationBoard
       {partyUnits}
@@ -118,6 +130,19 @@
     color: var(--text-muted);
     font-size: 13px;
     margin-top: 0;
+  }
+
+  .opening-shop__outfit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .opening-shop__outfit-name {
+    font-size: 13px;
+    min-width: 90px;
+    color: var(--text-heading);
   }
 
   .opening-shop__board {

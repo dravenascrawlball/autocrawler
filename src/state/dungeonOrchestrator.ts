@@ -21,7 +21,14 @@ import { rollRoomGold, sumGeneratedGold } from '../sim/gold';
 import { levelUpAdventurer } from '../sim/leveling';
 import { applyRelicToAdventurer, applyActiveRelicsToAdventurer, type Relic } from '../sim/relics';
 import { calculateRunRenownBreakdown } from '../sim/renown';
-import { newUnlocksForRun, lastRunReward, unlockedPoolEntriesFor, unlockedKitsFor, applyTrainingFromProgress } from './progression';
+import {
+  newUnlocksForRun,
+  lastRunReward,
+  unlockedPoolEntriesFor,
+  unlockedKitsFor,
+  applyTrainingFromProgress,
+  wearKit,
+} from './progression';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
 import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
@@ -300,6 +307,21 @@ export function placePartyMemberDuringRun(adventurerId: string, cell: GridPositi
   touchRoster();
   dungeonPlayback.set({ ...playback, unplacedIds });
   touchActiveRun();
+}
+
+/** Free between-room outfit swap (owned Kits only, or the base outfit with `kitId` null) — see progression.ts's wearKit. No-ops outside a pause. */
+export function changeKitDuringRun(adventurerId: string, kitId: string | null): void {
+  const playback = get(dungeonPlayback);
+  const member = playback?.runState.party.find((candidate) => candidate.id === adventurerId);
+  if (!playback || playback.outcome !== null || !member) {
+    return;
+  }
+
+  if (wearKit(member, kitId)) {
+    touchRoster();
+    dungeonPlayback.set({ ...playback });
+    touchActiveRun();
+  }
 }
 
 /** Drags party member `adventurerId` off the grid and back into the placement tray. No-ops outside a pause. */

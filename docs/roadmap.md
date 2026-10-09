@@ -481,7 +481,15 @@ Corsair, Temple Dancer, Masquerade...).
   in Max HP). All Kits owned on a fully grown profile: **58.8%** full clear
   vs 52.3% without (as pure upgrades they tested at +16). The two old
   pure-upgrade Kits (Nerissa, Caladwen) got the same treatment.
-- Still a random draw from owned Kits each run (re-rolled on shop offers).
+- **Free outfit swap**: owning a Kit lets you change outfits whenever you
+  like — between rooms (`changeKitDuringRun`, outfit buttons under the
+  selected character) and in the opening shop before room 1
+  (`changeOpeningKit`) — base outfit or any owned Kit
+  (`state/progression.ts`'s `wearKit`, `sim/kits.ts`'s `changeKit`/
+  `clearKit`). HP is kept but capped at the new max (no free heal, no
+  death by costume change). A run still *starts* in a random owned Kit
+  (re-rolled on shop offers); role-swap synergy changes count from the
+  next room.
 - **Kit art is wired up with fallbacks** (`ui/portraits.ts`'s
   `portraitCandidates`/`downedArtCandidates`/`bodySpriteCandidates`, the
   `use:fallbackSrc` action in `ui/imageFallback.ts`, and the battle scene's

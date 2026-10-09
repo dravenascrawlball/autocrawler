@@ -7,7 +7,7 @@ import { createAdventurer, rerollPoolPicks, effectiveMaxHp } from '../sim/advent
 import { THARAVEL_TEMPLATE, GUDRUN_TEMPLATE, FALLACY_TEMPLATE, MIRA_TEMPLATE, CHARACTER_TEMPLATES } from '../data/characters';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
-import { clearUnlocksFor, newUnlocksForRun, kitsFor, isUnlockEarned, conditionLabel } from './progression';
+import { clearUnlocksFor, newUnlocksForRun, kitsFor, isUnlockEarned, conditionLabel, wearKit } from './progression';
 import { recordRun, createEmptyRunHistory } from './runHistory';
 
 describe('recordRun', () => {
@@ -103,5 +103,41 @@ describe('buyTrainingRank', () => {
     expect(get(metaProgression)).toMatchObject({ renown: 5, trainingRanks: { Gudrun: 2 } });
     expect(gudrun.modifiers.filter((m) => m.source === 'training')).toHaveLength(3);
     expect(gudrun.hp).toBe(effectiveMaxHp(gudrun));
+  });
+});
+
+describe('wearKit (free outfit swap)', () => {
+  it('swaps into an owned Kit and back to the base outfit, restoring role and stats', () => {
+    const tharavel = createAdventurer('tharavel', THARAVEL_TEMPLATE, 'back');
+    metaProgression.set({ renown: 0, unlockedKitIds: { Tharavel: ['tharavel-field-medic'] }, trainingRanks: {} });
+
+    expect(wearKit(tharavel, 'tharavel-field-medic')).toBe(true);
+    expect(tharavel.role).toBe('Healer');
+    expect(tharavel.activeKit?.id).toBe('tharavel-field-medic');
+
+    expect(wearKit(tharavel, null)).toBe(true);
+    expect(tharavel.role).toBe(THARAVEL_TEMPLATE.role);
+    expect(tharavel.activeKit).toBeUndefined();
+    expect(tharavel.modifiers.some((m) => m.source.startsWith('kit:'))).toBe(false);
+  });
+
+  it('refuses a Kit the character does not own', () => {
+    const gudrun = createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front');
+    metaProgression.set({ renown: 0, unlockedKitIds: {}, trainingRanks: {} });
+    expect(wearKit(gudrun, 'gudrun-berserker')).toBe(false);
+    expect(gudrun.activeKit).toBeUndefined();
+  });
+
+  it('caps HP at the new max rather than healing (a -HP Kit cannot kill, a +HP Kit does not heal)', () => {
+    const gudrun = createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front');
+    metaProgression.set({ renown: 0, unlockedKitIds: { Gudrun: ['gudrun-berserker'] }, trainingRanks: {} });
+    const fullHp = gudrun.hp;
+
+    wearKit(gudrun, 'gudrun-berserker'); // -15% max HP
+    expect(gudrun.hp).toBe(effectiveMaxHp(gudrun));
+    expect(gudrun.hp).toBeLessThan(fullHp);
+
+    wearKit(gudrun, null);
+    expect(gudrun.hp).toBeLessThan(effectiveMaxHp(gudrun)); // not healed back up
   });
 });
