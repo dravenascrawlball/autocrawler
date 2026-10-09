@@ -24,6 +24,8 @@ import {
   VenomSpitAction,
   SearingTouchAction,
   VolleyAction,
+  DrainingKissAction,
+  HellfireAction,
 } from '../sim/actions/attack';
 import { HealAction, SelfHealAction, MendingChargeAction, CleanseAction, ReviveAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import { RetreatAction } from '../sim/actions/retreat';
@@ -83,6 +85,8 @@ export const ACTION_REGISTRY: Record<ActionId, Action> = {
   vengeance: VengeanceAction,
   volley: VolleyAction,
   'battle-orders': BattleOrdersAction,
+  'draining-kiss': DrainingKissAction,
+  hellfire: HellfireAction,
   'lifesteal-strike': LifestealStrikeAction,
   taunt: TauntAction,
   cleanse: CleanseAction,

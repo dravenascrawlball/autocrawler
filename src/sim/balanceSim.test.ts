@@ -10,7 +10,7 @@ import { rollRecruitOffers, rollRelicOffers, rollEquipmentOffers, DEFAULT_RECRUI
 import { rollRoomGold, sumGeneratedGold } from './gold';
 import { rollRoomLoot } from './loot';
 import { createStarterRoster } from '../data/roster';
-import { createStarterDungeonRooms } from '../data/rooms';
+import { createStarterDungeonRooms, TOTAL_ROOMS } from '../data/rooms';
 import { CHARACTER_TEMPLATES } from '../data/characters';
 import { ITEM_REGISTRY } from '../data/items';
 import { RELIC_REGISTRY } from '../data/relics';
@@ -40,7 +40,7 @@ const ALL_UNLOCKS = Boolean(process.env.BALANCE_SIM_UNLOCKS);
 const TRAINING_RANK = Number(process.env.BALANCE_SIM_TRAINING ?? 0);
 /** BALANCE_SIM_SYNERGY_PLAYER=1 recruits toward role synergies (data/synergies.ts) instead of purely cheapest-first. */
 const SYNERGY_PLAYER = Boolean(process.env.BALANCE_SIM_SYNERGY_PLAYER);
-const ROOM_COUNT = 5;
+const ROOM_COUNT = TOTAL_ROOMS;
 /** Characters whose kit generates gold (Nerissa's Pickpocket Strike) — runs fielding one are left out of the per-pause economy stats, which measure a party with no econ build. */
 const ECON_ARCHETYPES = new Set(['Nerissa']);
 

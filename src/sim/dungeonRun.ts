@@ -17,6 +17,14 @@ export const DEFAULT_INTER_ROOM_HEAL_FLAT = 5;
 /** Fraction of effective maxHp a Downed party member is revived to between rooms — part of the Autobattle Revision Cleanup's "Heal Downed Characters Between Fights" pass (see docs/roadmap.md). */
 export const DOWNED_REVIVE_HP_FRACTION = 0.7;
 
+/** A dungeon is split into floors of this many rooms, each ending in a boss (the 15-room dungeon — see data/rooms.ts). */
+export const ROOMS_PER_FLOOR = 5;
+
+/** 1-based floor number for a 0-based room index. */
+export function floorOf(roomIndex: number): number {
+  return Math.floor(roomIndex / ROOMS_PER_FLOOR) + 1;
+}
+
 export interface RoomDefinition {
   enemies: Adventurer[];
   maxRounds?: number;

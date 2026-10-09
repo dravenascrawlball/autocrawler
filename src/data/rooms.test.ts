@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createAdventurer } from '../sim/adventurer';
-import { runDungeon } from '../sim/dungeonRun';
+import { runDungeon, ROOMS_PER_FLOOR } from '../sim/dungeonRun';
 import { createSeededRng } from '../sim/rng';
 import { createStarterDungeonRooms, room, placeEnemies, ROOM_DIFFICULTY_POOLS, ROOM_SLOT_ENEMY_STAT_SCALE, ENEMY_RANK_OPTIONS } from './rooms';
 import { ISILWEN_TEMPLATE } from './characters';
@@ -8,7 +8,7 @@ import { createBrute, createGrunt, createShaman, createKoboldSkirmisher, BRUTE_T
 
 describe('createStarterDungeonRooms', () => {
   it('always has exactly 5 rooms', () => {
-    expect(createStarterDungeonRooms(createSeededRng(1))).toHaveLength(5);
+    expect(createStarterDungeonRooms(createSeededRng(1))).toHaveLength(15);
   });
 
   it('is deterministic for a given rng', () => {
@@ -47,26 +47,15 @@ describe('createStarterDungeonRooms', () => {
     });
   });
 
-  it('every combination of pool choices eventually loses a lone under-powered adventurer before the run completes', () => {
-    const total = ROOM_DIFFICULTY_POOLS.reduce((acc, pool) => acc * pool.length, 1);
-
-    for (let combo = 0; combo < total; combo++) {
-      let n = combo;
-      const rooms = ROOM_DIFFICULTY_POOLS.map((pool) => {
-        const choice = pool[n % pool.length];
-        n = Math.floor(n / pool.length);
-        return room(choice);
-      });
-
+  it('a lone under-powered adventurer always loses well before the end, across many rolled dungeons', () => {
+    // Sampled rather than exhaustive: with 15 rooms the full combination space is in the billions.
+    for (let seed = 0; seed < 200; seed++) {
+      const rooms = createStarterDungeonRooms(createSeededRng(seed));
       const lone = createAdventurer('lone', ISILWEN_TEMPLATE, 'back');
       const result = runDungeon([lone], rooms, () => 0.5);
 
-      // A lone adventurer who goes Downed no longer gets revived between rooms (Downed now lasts
-      // for the rest of the run — see dungeonRun.ts's healBetweenRooms), so a loss can now land as
-      // early as room 1 rather than always partway through.
       expect(result.outcome).toBe('loss');
-      expect(result.rooms.length).toBeGreaterThanOrEqual(1);
-      expect(result.rooms.length).toBeLessThan(5);
+      expect(result.rooms.length).toBeLessThan(ROOMS_PER_FLOOR);
     }
   });
 });
@@ -126,11 +115,14 @@ describe('enemy grid placement', () => {
   });
 });
 
-describe('finale boss', () => {
-  it('always puts the Troll Warlord in room 5', () => {
+describe('floor bosses', () => {
+  it('ends each floor with its boss: Troll Warlord, Succubus, then the Demon King', () => {
     for (let seed = 0; seed < 100; seed++) {
-      const finale = createStarterDungeonRooms(createSeededRng(seed))[4];
-      expect(finale.enemies.map((e) => e.name)).toContain('Troll Warlord');
+      const rooms = createStarterDungeonRooms(createSeededRng(seed));
+      const names = (index: number) => rooms[index].enemies.map((e) => e.name);
+      expect(names(4)).toContain('Troll Warlord');
+      expect(names(9)).toContain('Succubus');
+      expect(names(14)).toContain('Demon King');
     }
   });
 });

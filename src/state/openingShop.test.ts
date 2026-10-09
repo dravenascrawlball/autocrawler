@@ -167,7 +167,7 @@ describe('opening shop (replaces the old single-character Embark draft — see d
 
     it("rolls the run's rooms up front so room 1 can be previewed", () => {
       shopWithTwoRecruits();
-      expect(get(openingShop)!.rooms).toHaveLength(5);
+      expect(get(openingShop)!.rooms).toHaveLength(15);
     });
 
     it('puts new recruits in the tray, and placing one takes it out of the tray', () => {

@@ -53,7 +53,10 @@ systems that don't exist yet.
 | Ember Imp | **Searing Touch** — melee hit that applies Burn | — |
 | Venom Spitter | **Venom Spit** — ranged hit on the weakest party member that applies Poison | — |
 | Bone Sentinel | Attack Nearest | Always: **Vengeance** (`on-ally-downed`) — +50% attack for the rest of the fight. Trait: **Thorns** |
-| Troll Warlord (boss, every room 5) | Cleave | Always: **Regenerate** (`on-turn-start`) — heals 5% max HP while hurt. Trait: **Enrage** — +50% damage below half HP |
+| Troll Warlord (floor 1 boss, room 5) | Cleave | Always: **Regenerate** (`on-turn-start`) — heals 5% max HP while hurt. Trait: **Enrage** — +50% damage below half HP |
+
+| Succubus (floor 2 boss, room 10) | **Draining Kiss** — ranged hit on the weakest hero that heals her | Always: **Charm** (`on-hit-taken`) — Stun on the nearest hero |
+| Demon King (floor 3 boss, room 15) | Cleave | Always: **Hellfire** (`on-turn-start`) — half-damage hits on 3 heroes that Burn, and **Raise Dead** (`on-turn-start`) — revives a fallen demon |
 
 Enemy-only mechanics (enemy variety pass): Flank Strike, Venom Spit,
 Searing Touch, Vengeance, Regenerate and Enrage. Enemy rank rules live in

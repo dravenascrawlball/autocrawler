@@ -7,6 +7,7 @@ import {
   FlankStrikeAction,
   VenomSpitAction,
   SearingTouchAction,
+  DrainingKissAction,
 } from '../sim/actions/attack';
 import { THORNS_TRAIT, ENRAGE_TRAIT } from '../sim/traits';
 import { HealAction } from '../sim/actions/heal';
@@ -18,6 +19,9 @@ import {
   SHAMAN_ATTACK_SPECIAL,
   SENTINEL_VENGEANCE_SPECIAL,
   TROLL_REGENERATE_SPECIAL,
+  SUCCUBUS_CHARM_SPECIAL,
+  DEMON_KING_HELLFIRE_SPECIAL,
+  DEMON_KING_RAISE_DEAD_SPECIAL,
 } from './specialActions';
 
 /**
@@ -239,6 +243,48 @@ export const TROLL_WARLORD_TEMPLATE: AdventurerTemplate = {
   innateSpecialActions: [TROLL_REGENERATE_SPECIAL],
 };
 
+// --- 15-room dungeon: floor bosses (floor 1 is the Troll Warlord above) ---
+
+/**
+ * Floor 2 boss (back rank): Draining Kiss is a ranged hit on the weakest
+ * hero that heals her, and Charm (on-hit-taken) stuns the nearest hero
+ * whenever she's struck — so chipping at her has a cost.
+ */
+export const SUCCUBUS_TEMPLATE: AdventurerTemplate = {
+  name: 'Succubus',
+  maxHp: 30,
+  attackPower: 7,
+  speed: 6,
+  actions: ['draining-kiss'],
+  dieFaces: plainFaces(DrainingKissAction),
+  lootTable: [
+    { itemId: 'lucky-ring', dropChance: 0.3 },
+    { itemId: 'tome-of-power', dropChance: 0.2 },
+  ],
+  goldDrop: { chance: 1, min: 40, max: 80 },
+  basicAction: DrainingKissAction,
+  innateSpecialActions: [SUCCUBUS_CHARM_SPECIAL],
+};
+
+/**
+ * Floor 3 boss, the dungeon's finale (front rank): Cleave, plus Hellfire
+ * every turn (half-damage hits that Burn several heroes) and Raise Dead
+ * (revives one fallen demon per turn) — kill him first or fight his army
+ * twice.
+ */
+export const DEMON_KING_TEMPLATE: AdventurerTemplate = {
+  name: 'Demon King',
+  maxHp: 55,
+  attackPower: 10,
+  speed: 4,
+  actions: ['cleave'],
+  dieFaces: plainFaces(CleaveAction),
+  lootTable: [{ itemId: 'warhammer', dropChance: 0.3 }],
+  goldDrop: { chance: 1, min: 60, max: 120 },
+  basicAction: CleaveAction,
+  innateSpecialActions: [DEMON_KING_HELLFIRE_SPECIAL, DEMON_KING_RAISE_DEAD_SPECIAL],
+};
+
 export type EnemyFactory = (row: Row) => Adventurer;
 
 let nextEnemyInstanceId = 1;
@@ -284,5 +330,13 @@ export function createBoneSentinel(row: Row): Adventurer {
 
 export function createTrollWarlord(row: Row): Adventurer {
   return createEnemy(TROLL_WARLORD_TEMPLATE, row);
+}
+
+export function createSuccubus(row: Row): Adventurer {
+  return createEnemy(SUCCUBUS_TEMPLATE, row);
+}
+
+export function createDemonKing(row: Row): Adventurer {
+  return createEnemy(DEMON_KING_TEMPLATE, row);
 }
 

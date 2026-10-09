@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TOTAL_ROOMS } from '../data/rooms';
   import { roster } from '../state/roster';
   import { runHistory } from '../state/runHistory';
   import { metaProgression } from '../state/metaProgression';
@@ -54,7 +55,7 @@
         <span class="progress-row__stats">
           {#if row.stats}
             {row.stats.runs} run{row.stats.runs === 1 ? '' : 's'} · {row.stats.clears} clear{row.stats.clears === 1 ? '' : 's'}
-            · best {row.stats.bestRoomsWon}/5
+            · best {row.stats.bestRoomsWon}/{TOTAL_ROOMS}
           {:else}
             No runs yet
           {/if}

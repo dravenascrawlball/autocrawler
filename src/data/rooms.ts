@@ -12,6 +12,8 @@ import {
   createVenomSpitter,
   createBoneSentinel,
   createTrollWarlord,
+  createSuccubus,
+  createDemonKing,
   type EnemyFactory,
 } from './enemies';
 
@@ -30,6 +32,8 @@ export const ENEMY_RANK_OPTIONS: Record<string, Rank[]> = {
   'Venom Spitter': [2],
   'Bone Sentinel': [0],
   'Troll Warlord': [0],
+  Succubus: [2],
+  'Demon King': [0],
 };
 
 const BACK_RANK: Rank = 2;
@@ -121,25 +125,22 @@ const imp = createEmberImp;
 const spitter = createVenomSpitter;
 const sentinel = createBoneSentinel;
 const troll = createTrollWarlord;
+const succubus = createSuccubus;
+const demonKing = createDemonKing;
 
 /**
- * Five difficulty slots (opener -> finale), each a pool of 2-3
- * comparable-difficulty compositions — createStarterDungeonRooms rolls one
- * per slot per run, so the escalating shape of a run stays intact (weak
- * opener, hard finale) while the actual enemies faced vary run to run.
- * Reuses the 4 existing archetypes (Kobold Skirmisher/Grunt/Brute/Shaman);
- * new enemy content is a separate pass. Grid placement isn't authored here
- * — see placeEnemies / ENEMY_RANK_OPTIONS.
- *
- * Compositions and ROOM_SLOT_ENEMY_STAT_SCALE were retuned together in the
- * second balance pass (docs/roadmap.md) against src/sim/balanceSim.test.ts:
- * slot 3 became a real trio instead of a breather, slots 4-5 field a Brute
- * with support, and Brute+Brute stays excluded (too swingy for any slot).
+ * Fifteen difficulty slots — three floors of ROOMS_PER_FLOOR (5) rooms,
+ * each floor ending in a boss: Troll Warlord (floor 1), Succubus (floor 2),
+ * Demon King (floor 3, the finale). createStarterDungeonRooms rolls one
+ * composition per slot per run, so the escalating shape stays intact while
+ * the actual enemies vary run to run. Grid placement isn't authored here —
+ * see placeEnemies / ENEMY_RANK_OPTIONS. Floors 2-3 reuse the regular
+ * enemies in bigger, nastier mixes; ROOM_SLOT_ENEMY_STAT_SCALE does the
+ * rest of the escalation.
  */
 export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
-  // Slot 1 (opener): a single weak enemy, or a pair of weaker ones. The
-  // enemy variety pass added mechanic enemies here so the opener can
-  // actually cost something (it previously almost never ended a run).
+  // --- Floor 1 ---
+  // Slot 1 (opener): a single weak enemy, or a pair of weaker ones.
   [[grunt], [shaman], [kobold, kobold], [flanker, kobold], [imp, imp]],
   // Slot 2: a light pair/trio.
   [
@@ -149,7 +150,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [flanker, imp],
     [grunt, spitter],
   ],
-  // Slot 3 (mid): still Brute-free (see above), but always a real fight.
+  // Slot 3: Brute-free, but always a real fight.
   [
     [grunt, shaman, shaman],
     [grunt, grunt, shaman],
@@ -157,7 +158,7 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [sentinel, spitter],
     [flanker, flanker, imp],
   ],
-  // Slot 4: first heavy enemy, now with support.
+  // Slot 4: first heavy enemy, with support.
   [
     [grunt, brute],
     [brute, kobold, kobold],
@@ -165,28 +166,86 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
     [sentinel, flanker, spitter],
     [brute, imp, imp],
   ],
-  // Slot 5 (finale): always the Troll Warlord boss, plus support.
+  // Slot 5: floor 1 boss — the Troll Warlord plus support.
   [
     [troll, shaman],
     [troll, spitter],
     [troll, flanker, kobold],
   ],
+  // --- Floor 2 ---
+  [
+    [grunt, grunt, shaman],
+    [flanker, imp, kobold],
+    [sentinel, spitter],
+  ],
+  [
+    [brute, kobold, kobold],
+    [grunt, grunt, spitter],
+    [flanker, flanker, shaman],
+  ],
+  [
+    [sentinel, grunt, shaman],
+    [brute, imp, imp],
+    [flanker, spitter, spitter],
+  ],
+  [
+    [brute, sentinel],
+    [brute, flanker, shaman],
+    [sentinel, flanker, imp, spitter],
+  ],
+  // Slot 10: floor 2 boss — the Succubus, guarded.
+  [
+    [succubus, grunt, grunt],
+    [succubus, sentinel],
+    [succubus, brute],
+  ],
+  // --- Floor 3 ---
+  [
+    [brute, flanker, spitter],
+    [sentinel, grunt, grunt, shaman],
+    [imp, imp, flanker, kobold],
+  ],
+  [
+    [brute, brute],
+    [sentinel, sentinel, spitter],
+    [brute, imp, shaman],
+  ],
+  [
+    [brute, sentinel, shaman],
+    [flanker, flanker, spitter, spitter],
+    [troll, imp],
+  ],
+  [
+    [troll, flanker],
+    [brute, brute, shaman],
+    [sentinel, sentinel, imp, imp],
+  ],
+  // Slot 15: the finale — the Demon King and his court.
+  [
+    [demonKing, imp, imp],
+    [demonKing, sentinel],
+    [demonKing, flanker, spitter],
+  ],
 ];
 
 /**
- * Per-slot enemy stat multiplier (opener -> finale), applied on top of the
- * enemy templates by createStarterDungeonRooms — the main difficulty knob
- * from the second balance pass (docs/roadmap.md), tuned with
- * src/sim/balanceSim.test.ts toward a ~50-60% full-clear rate for a party
- * that shops sensibly. Lets later rooms reuse the same few archetypes
- * while still escalating. Steep because ROOM_SLOT_CLEAR_GOLD lets the
- * party grow by ~1 member per room (3 at room 1 -> ~7 by the finale), so
- * enemies have to outscale a much bigger board — retune both together.
- * Rooms 1-2 start well above 1 since the enemy variety pass: at 1 they
- * almost never ended a run; now losses climb steadily room by room, with
- * the room-5 boss the biggest single wall.
+ * Per-slot enemy stat multiplier (room 1 -> 15), applied on top of the
+ * enemy templates by createStarterDungeonRooms — the main difficulty knob,
+ * tuned with src/sim/balanceSim.test.ts. Targets for a fresh profile on the
+ * 15-room dungeon: ~75% clear floor 1, ~50% clear floor 2, ~30-40% clear
+ * the whole run, each floor's boss room its biggest single wall. Floors 2-3
+ * jump steeply because by then the party is ~9 strong with synergies,
+ * duplicate stars and scaling relics (roadmap item 6) — retune this
+ * together with any change to gold income or party growth.
  */
-export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1.85, 1.95, 2.1, 2.2, 2.85];
+export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [
+  // Floor 1
+  1.7, 1.8, 1.9, 2, 2.55,
+  // Floor 2
+  4.8, 5.2, 5.6, 6, 6.6,
+  // Floor 3
+  5.8, 6.1, 6.4, 6.7, 7.4,
+];
 
 /**
  * Flat gold paid for winning each slot's room (opener -> finale), on top of
@@ -198,7 +257,7 @@ export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [1.85, 1.95, 2.1, 2.2, 2.85]
  * of pauses, >=2 rising from ~5% after room 1 to ~80% after room 4). Paid
  * on the final room too, though there's no shop after it.
  */
-export const ROOM_SLOT_CLEAR_GOLD: number[] = [60, 55, 55, 55, 55];
+export const ROOM_SLOT_CLEAR_GOLD: number[] = [60, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55];
 
 function pickComposition(pool: CompositionPool, rng: RngSource): EnemyFactory[] {
   return pool[Math.floor(rng() * pool.length)];
@@ -217,3 +276,7 @@ export function createStarterDungeonRooms(rng: RngSource = () => Math.random()):
     clearGold: ROOM_SLOT_CLEAR_GOLD[slotIndex],
   }));
 }
+
+/** Rooms in a full run — 15 (three floors of five). */
+export const TOTAL_ROOMS = ROOM_DIFFICULTY_POOLS.length;
+

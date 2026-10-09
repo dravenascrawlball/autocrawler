@@ -127,7 +127,8 @@
           <span class="run-recap__breakdown">
             ({renownPreview.roomsWon} room{renownPreview.roomsWon === 1 ? '' : 's'} × {renownPreview.roomsWon > 0
               ? renownPreview.roomRenown / renownPreview.roomsWon
-              : 0}{#if renownPreview.completionBonus > 0}
+              : 0}{#if renownPreview.floorBonus > 0}
+              + {renownPreview.floorBonus} for {renownPreview.floorsCleared} floor{renownPreview.floorsCleared === 1 ? '' : 's'}{/if}{#if renownPreview.completionBonus > 0}
               + {renownPreview.completionBonus} completion bonus{/if})
           </span>
         </p>

@@ -43,7 +43,7 @@ describe('TownPhase', () => {
   it("shows the last run's reward toast once, and dismisses it", async () => {
     lastRunReward.set({
       outcome: 'completed',
-      renown: { roomsWon: 5, roomRenown: 15, completionBonus: 15, total: 30 },
+      renown: { roomsWon: 5, roomRenown: 15, floorsCleared: 1, floorBonus: 0, completionBonus: 15, total: 30 },
       newUnlocks: [
         {
           characterName: 'Drifta',

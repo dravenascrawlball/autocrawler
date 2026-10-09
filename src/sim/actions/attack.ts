@@ -829,3 +829,52 @@ export const SearingTouchAction: Action = {
   },
 };
 
+// --- 15-room dungeon (floor bosses) ---
+
+/** Fraction of damage dealt the Succubus's Draining Kiss heals her for. */
+export const DRAINING_KISS_HEAL_FRACTION = 0.5;
+
+/** The Succubus's Basic Action (floor 2 boss): a ranged hit on the weakest hero that heals her for part of the damage dealt. */
+export const DrainingKissAction: Action = {
+  id: 'draining-kiss',
+  name: 'Draining Kiss',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectLowestHpEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'draining-kiss');
+    const attackHit = applyAttackToTarget(context, damage, context.target);
+    const effectiveMaxHp = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
+    const healedAmount = Math.min(effectiveMaxHp - context.actor.hp, Math.round(attackHit.damage * DRAINING_KISS_HEAL_FRACTION));
+    context.actor.hp += Math.max(0, healedAmount);
+    return { type: 'attack-and-heal-self', ...attackHit, healedAmount: Math.max(0, healedAmount) };
+  },
+};
+
+/** How many heroes Hellfire hits, at what fraction of normal damage, and the Burn it leaves. */
+export const HELLFIRE_TARGET_COUNT = 3;
+export const HELLFIRE_DAMAGE_FRACTION = 0.5;
+export const HELLFIRE_BURN_PER_TICK = 3;
+export const HELLFIRE_BURN_TICKS = 2;
+
+/** The Demon King's always-on Special (floor 3 boss): half-damage hits on several random heroes, any rank, that also set them Burning. */
+export const HellfireAction: Action = {
+  id: 'hellfire',
+  name: 'Hellfire',
+  reach: 'ranged',
+  selectTarget(context: TargetingContext) {
+    return selectFirstEnemy(context, false);
+  },
+  resolve(context: ActionContext): ActionOutcome {
+    const damage = effectiveAttackPower(context, 'hellfire') * HELLFIRE_DAMAGE_FRACTION;
+    const living = getOpposingRoster(context.battle, context.actor).filter((unit) => unit.hp > 0);
+    const hits = pickRandomDistinct(living, HELLFIRE_TARGET_COUNT, context.rng).map((target) => {
+      const hit = applyAttackToTarget(context, damage, target);
+      if (hit.damage > 0 && target.hp > 0) applyBurn(target, HELLFIRE_BURN_PER_TICK, HELLFIRE_BURN_TICKS);
+      return hit;
+    });
+    return { type: 'attack-multi', hits };
+  },
+};
+

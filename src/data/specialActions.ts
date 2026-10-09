@@ -18,6 +18,7 @@ import {
   PickpocketStrikeAction,
   SneakStrikeAction,
   VolleyAction,
+  HellfireAction,
 } from '../sim/actions/attack';
 import { SelfHealAction, HealAction, CleanseAction, ReviveAction, MendingChargeAction, SplashHealAction, RegenerateAction } from '../sim/actions/heal';
 import {
@@ -557,6 +558,30 @@ export const TROLL_REGENERATE_SPECIAL: SpecialAction = {
   action: RegenerateAction,
 };
 
+/** Succubus (floor 2 boss): when hit, Charms — stuns the nearest hero, who skips their next turn. */
+export const SUCCUBUS_CHARM_SPECIAL: SpecialAction = {
+  id: 'succubus-charm',
+  name: 'Charm',
+  trigger: 'on-hit-taken',
+  action: StunAction,
+};
+
+/** Demon King (floor 3 boss): Hellfire every turn — half-damage hits on several heroes that set them Burning. */
+export const DEMON_KING_HELLFIRE_SPECIAL: SpecialAction = {
+  id: 'demon-king-hellfire',
+  name: 'Hellfire',
+  trigger: 'on-turn-start',
+  action: HellfireAction,
+};
+
+/** Demon King (floor 3 boss): Raise Dead every turn — revives one fallen demon if any are down. */
+export const DEMON_KING_RAISE_DEAD_SPECIAL: SpecialAction = {
+  id: 'demon-king-raise-dead',
+  name: 'Raise Dead',
+  trigger: 'on-turn-start',
+  action: ReviveAction,
+};
+
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
   id: 'grunt-power-attack',
   name: 'Heavy Swing',
@@ -632,6 +657,9 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'caladwen-ambush': CALADWEN_AMBUSH_SPECIAL,
   'melpomene-volley': MELPOMENE_VOLLEY_SPECIAL,
   'mira-second-chance': MIRA_SECOND_CHANCE_SPECIAL,
+  'succubus-charm': SUCCUBUS_CHARM_SPECIAL,
+  'demon-king-hellfire': DEMON_KING_HELLFIRE_SPECIAL,
+  'demon-king-raise-dead': DEMON_KING_RAISE_DEAD_SPECIAL,
 };
 
 /**

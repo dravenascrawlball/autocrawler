@@ -436,6 +436,33 @@ runs that reach room 4, full-clear rate by best synergy tier at that point:
 steer much with 3 random offers per shop and buys everything anyway — the
 tier-bucketed number is the better measure of what a build is worth.
 
+## 15-room dungeon (3 floors) — shipped
+
+The run grew from 5 rooms to **15: three floors of five**
+(`sim/dungeonRun.ts`'s `ROOMS_PER_FLOOR`/`floorOf`, `data/rooms.ts`'s
+`TOTAL_ROOMS`), each floor ending in a boss. 5 rooms was only ever a
+quick-to-test length; the snowball mechanics (item 6) need room to peak.
+
+- **Bosses**: Troll Warlord (floor 1), **Succubus** (floor 2 — Draining
+  Kiss: ranged lifesteal on the weakest hero; Charm: stuns the nearest hero
+  when she's hit), **Demon King** (floor 3 finale — Cleave, Hellfire:
+  half-damage hits on 3 heroes that Burn, Raise Dead: revives a fallen
+  demon each turn). Both new bosses use placeholder sprites.
+- Floors 2-3 reuse the regular enemies in bigger mixes; per-room tables
+  (`ROOM_SLOT_ENEMY_STAT_SCALE`, `ROOM_SLOT_CLEAR_GOLD`) cover all 15.
+- **Renown**: +10 per full floor cleared (`FLOOR_CLEAR_RENOWN`) on top of
+  per-room and completion Renown, so a floor-2 or -3 loss still pays.
+- UI: the replay title reads "Floor 2 · Room 3 / 5" or "Floor 2 · Boss";
+  stats show best rooms out of 15; recap/toast show the floor bonus.
+- **Balance** (fresh profile): ~75% clear floor 1, ~48% clear floor 2,
+  **33% full clear**; fully grown (Training 5 + all unlocks) **49%**.
+  Character spread on a grown profile 41-58%.
+- No mid-run checkpoints — the existing resume-after-closing is enough;
+  floors are milestones for Renown and difficulty.
+
+**Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
+long run; more enemy types would reduce repetition across 15 rooms.
+
 ## 7. Enemy variety — shipped
 
 Five new enemies, each with an enemy-only mechanic (`data/enemies.ts`):

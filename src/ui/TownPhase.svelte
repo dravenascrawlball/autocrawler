@@ -58,7 +58,8 @@
       <div class="reward-toast__body">
         <strong>+{$lastRunReward.renown.total} Renown</strong>
         <span class="reward-toast__detail">
-          {$lastRunReward.renown.roomsWon} room{$lastRunReward.renown.roomsWon === 1 ? '' : 's'} cleared{#if $lastRunReward.renown.completionBonus > 0}
+          {$lastRunReward.renown.roomsWon} room{$lastRunReward.renown.roomsWon === 1 ? '' : 's'} cleared{#if $lastRunReward.renown.floorBonus > 0}
+            · +{$lastRunReward.renown.floorBonus} floor bonus{/if}{#if $lastRunReward.renown.completionBonus > 0}
             · +{$lastRunReward.renown.completionBonus} completion bonus{/if}
         </span>
         {#each $lastRunReward.newUnlocks as unlock (unlock.characterName + unlock.name)}

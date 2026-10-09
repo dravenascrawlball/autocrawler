@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TOTAL_ROOMS } from '../data/rooms';
   import { effectiveMaxHp } from '../sim/adventurer';
   import { roster } from '../state/roster';
   import { runHistory } from '../state/runHistory';
@@ -149,7 +150,7 @@
           <h3>Unlocks &amp; Progress</h3>
           <p class="progress-stats">
             {#if stats}
-              {stats.runs} run{stats.runs === 1 ? '' : 's'} · {stats.clears} clear{stats.clears === 1 ? '' : 's'} · best {stats.bestRoomsWon}/5 rooms
+              {stats.runs} run{stats.runs === 1 ? '' : 's'} · {stats.clears} clear{stats.clears === 1 ? '' : 's'} · best {stats.bestRoomsWon}/{TOTAL_ROOMS} rooms
             {:else}
               Not taken on a run yet.
             {/if}

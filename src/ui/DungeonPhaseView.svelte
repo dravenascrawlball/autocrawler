@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { floorOf, ROOMS_PER_FLOOR } from '../sim/dungeonRun';
   import { effectiveMaxHp } from '../sim/adventurer';
   import { onDestroy, tick } from 'svelte';
   import { get } from 'svelte/store';
@@ -117,7 +118,9 @@
       }
     }
 
-    const roomLabel = `Room ${record.roomIndex + 1} / ${playback.runState.rooms.length}`;
+    const roomInFloor = (record.roomIndex % ROOMS_PER_FLOOR) + 1;
+    const isBossRoom = roomInFloor === ROOMS_PER_FLOOR;
+    const roomLabel = `Floor ${floorOf(record.roomIndex)} · ${isBossRoom ? 'Boss' : `Room ${roomInFloor} / ${ROOMS_PER_FLOOR}`}`;
 
     return {
       units: [...partyUnits, ...enemyUnits],

@@ -40,6 +40,8 @@ export type ActionId =
   | 'vengeance'
   | 'volley'
   | 'battle-orders'
+  | 'draining-kiss'
+  | 'hellfire'
   | 'lifesteal-strike'
   | 'taunt'
   | 'cleanse'
