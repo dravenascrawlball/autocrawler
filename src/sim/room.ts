@@ -121,6 +121,12 @@ function applyTurnStats(unit: Adventurer, battle: BattleState, turn: TurnResult,
       if (event.outcome) {
         applyOutcomeStats(findUnitById(battle, event.actorId) ?? unit, event.outcome, battle, roomIndex);
       }
+    } else if (event.type === 'trait-effect') {
+      // Vampiric heals count as healing done; a Second Wind revive is neither dealt nor healed.
+      if (event.kind === 'heal') {
+        const healer = findUnitById(battle, event.unitId);
+        if (healer) healer.runHealingDone += event.amount;
+      }
     } else if (event.type === 'intercept') {
       // A Bodyguard took part of a hit: the attacker dealt it, the guardian took it.
       const attacker = findUnitById(battle, event.attackerId);

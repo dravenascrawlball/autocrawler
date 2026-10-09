@@ -29,6 +29,8 @@ export interface Trait {
    * still overrides it.
    */
   prey?: { tag?: TagId; role?: string };
+  /** Set on a Milestone Trait (floor-boss rewards only — see milestones.ts). */
+  milestone?: true;
 }
 
 /** Creation-time ceiling on how many universal Traits a character rolls at once (see docs/kit-trait-tag-framework.md) — a ceiling on the roll itself, not a lifetime cap; mid-run trait growth (not yet built) is explicitly meant to exceed this. */
@@ -191,4 +193,71 @@ export const SANCTUARY_TRAIT: Trait = {
     grants: { stat: 'armor', type: 'flat', amount: 2, source: 'aura:sanctuary' },
   },
 };
+
+// --- Milestone Traits (mid-run Trait growth): offered only as floor-boss rewards (sim/milestones.ts) ---
+
+const milestoneMod = (id: string, stat: string, type: 'flat' | 'percent', amount: number): StatModifier => ({
+  stat,
+  type,
+  amount,
+  source: `milestone:${id}`,
+});
+
+/** Heals for VAMPIRIC_HEAL_FRACTION of the damage dealt by each of their attacks (actions/attack.ts's applyAttackToTarget). */
+export const VAMPIRIC_TRAIT: Trait = { id: 'vampiric', name: 'Vampiric', description: 'Heals for 25% of the damage they deal.', milestone: true };
+export const VAMPIRIC_HEAL_FRACTION = 0.25;
+
+/** Once per fight, a blow that would down them leaves them at SECOND_WIND_HP_FRACTION of max HP instead. */
+export const SECOND_WIND_TRAIT: Trait = {
+  id: 'second-wind',
+  name: 'Second Wind',
+  description: 'Once per fight, when downed by an attack, gets back up at 30% HP.',
+  milestone: true,
+};
+export const SECOND_WIND_HP_FRACTION = 0.3;
+
+/** +GIANT_SLAYER_BONUS damage against a target whose max HP is at least GIANT_SLAYER_HP_RATIO × their own. */
+export const GIANT_SLAYER_TRAIT: Trait = {
+  id: 'giant-slayer',
+  name: 'Giant Slayer',
+  description: '+30% damage against targets with much more max HP than them.',
+  milestone: true,
+};
+export const GIANT_SLAYER_BONUS = 0.3;
+export const GIANT_SLAYER_HP_RATIO = 1.5;
+
+/** +EXECUTIONER_BONUS damage against a target below EXECUTIONER_HP_FRACTION of its max HP. */
+export const EXECUTIONER_TRAIT: Trait = {
+  id: 'executioner',
+  name: 'Executioner',
+  description: '+40% damage against targets below 30% HP.',
+  milestone: true,
+};
+export const EXECUTIONER_BONUS = 0.4;
+export const EXECUTIONER_HP_FRACTION = 0.3;
+
+export const JUGGERNAUT_TRAIT: Trait = {
+  id: 'juggernaut',
+  name: 'Juggernaut',
+  description: '+20% max HP and +2 armor.',
+  milestone: true,
+  modifiers: [milestoneMod('juggernaut', 'maxHp', 'percent', 20), milestoneMod('juggernaut', 'armor', 'flat', 2)],
+};
+
+export const BATTLE_TRANCE_TRAIT: Trait = {
+  id: 'battle-trance',
+  name: 'Battle Trance',
+  description: '+20% speed and +8 crit chance.',
+  milestone: true,
+  modifiers: [milestoneMod('battle-trance', 'speed', 'percent', 20), milestoneMod('battle-trance', 'critChance', 'flat', 8)],
+};
+
+export const MILESTONE_TRAITS: Trait[] = [
+  VAMPIRIC_TRAIT,
+  SECOND_WIND_TRAIT,
+  GIANT_SLAYER_TRAIT,
+  EXECUTIONER_TRAIT,
+  JUGGERNAUT_TRAIT,
+  BATTLE_TRANCE_TRAIT,
+];
 

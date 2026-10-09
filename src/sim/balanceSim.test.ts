@@ -17,6 +17,8 @@ import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
 import { rerollPoolPicks, effectiveMaxHp, grantSecondPoolSpecial, type Adventurer } from './adventurer';
 import { SYNERGIES } from '../data/synergies';
+import { MILESTONE_REWARD_POOL } from '../data/milestones';
+import { rollMilestoneOffers, isMilestonePause, grantTrait } from './milestones';
 import { rollQuirks, applyQuirks, quirkPriceMultiplier } from './quirks';
 import { HERO_QUIRK_POOL } from '../data/quirks';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
@@ -245,6 +247,12 @@ describe.skipIf(!process.env.BALANCE_SIM)('balance simulation', () => {
         goldEarned += roomGold;
 
         if (outcome === null) {
+          // Floor-boss reward: take one of the three Trait cards (mid-run Trait growth).
+          if (isMilestonePause(state.roomIndex, state.rooms.length)) {
+            const [pick] = rollMilestoneOffers(state.party, MILESTONE_REWARD_POOL, rng);
+            const member = pick && state.party.find((candidate) => candidate.id === pick.adventurerId);
+            if (pick && member) grantTrait(member, pick.trait);
+          }
           const goldBefore = inventory.gold;
           const buys = shopGreedily(rollOffers(roster, state.party, state.activeRelics, rng), state.party, state.activeRelics, inventory);
           if (!state.party.some((member) => ECON_ARCHETYPES.has(member.name))) {

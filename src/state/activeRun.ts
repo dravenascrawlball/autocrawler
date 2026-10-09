@@ -26,6 +26,8 @@ export interface ActiveDungeonRunState {
   outcome: DungeonOutcome | null;
   /** Relics bought from the between-room shop so far — see sim/dungeonRun.ts's DungeonRunState.activeRelics. */
   activeRelics: Relic[];
+  /** A floor-boss reward pick was waiting when the game was saved — resume re-rolls the cards (see dungeonPlayback.ts's resumeFromSave). */
+  milestonePending?: boolean;
 }
 
 /** Sourced from a save if one exists; null means no run is in progress. */

@@ -280,6 +280,8 @@ export function outcomeToReplayEvents(
       text: `Revive! +${outcome.amount} HP`,
       color: '#ffee88',
     });
+    // Restore the revived unit's HP on screen too (it sat at 0 after being downed).
+    events.push({ type: 'heal', actorId, targetId: outcome.targetId, amount: outcome.amount });
   } else if (outcome.type === 'heal') {
     events.push({
       type: 'heal',

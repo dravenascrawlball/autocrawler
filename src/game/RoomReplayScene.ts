@@ -816,7 +816,8 @@ export class RoomReplayScene extends Phaser.Scene {
       return;
     }
 
-    const newHp = Math.max(0, Math.min(unit.maxHp, (this.currentHp.get(unitId) ?? unit.hp) + delta));
+    const previousHp = this.currentHp.get(unitId) ?? unit.hp;
+    const newHp = Math.max(0, Math.min(unit.maxHp, previousHp + delta));
     this.currentHp.set(unitId, newHp);
     const ratio = unit.maxHp > 0 ? newHp / unit.maxHp : 0;
     const isLethal = delta < 0 && newHp <= 0;
@@ -853,6 +854,11 @@ export class RoomReplayScene extends Phaser.Scene {
       if (isLethal) {
         this.pulseLethalGlow();
       }
+    }
+
+    // Back on their feet (a Revive or Second Wind): undo the death-fall.
+    if (previousHp <= 0 && newHp > 0 && gridSprite) {
+      this.tweens.add({ targets: gridSprite, angle: 0, alpha: 1, duration: this.scaled(DEATH_FALL_DURATION_MS), ease: 'Cubic.easeOut' });
     }
 
     if (newHp <= 0 && gridSprite) {

@@ -11,6 +11,7 @@ import {
   retreatDungeonRun,
   type RoomDefinition,
   type DungeonRunState,
+  type DungeonOutcome,
   type DungeonRoomRecord,
 } from '../sim/dungeonRun';
 import { equipItem as simEquipItem, unequipItem as simUnequipItem } from '../sim/partyManagement';
@@ -35,6 +36,8 @@ import { MAX_PARTY_SIZE } from '../sim/draft';
 import { moveToCell, placeUnplaced, type GridPosition } from '../sim/formation';
 import { createStarterDungeonRooms } from '../data/rooms';
 import { SYNERGIES } from '../data/synergies';
+import { MILESTONE_REWARD_POOL } from '../data/milestones';
+import { rollMilestoneOffers, isMilestonePause, grantTrait, type MilestoneOffer } from '../sim/milestones';
 import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
 import { UNIVERSAL_TRAIT_POOL } from '../data/traits';
@@ -65,6 +68,7 @@ function touchActiveRun(): void {
           inventory: playback.inventory,
           outcome: playback.outcome,
           activeRelics: playback.runState.activeRelics,
+          milestonePending: playback.milestoneOffers.length > 0,
         }
       : null,
   );
@@ -141,7 +145,15 @@ export function startDungeon(
   rollLootForRoom(runState, record, inventory, rng, lookupItem);
   const shopOffers = outcome === null ? rollShopOffers(runState, rng) : { recruits: [], relics: [], equipment: [] };
 
-  dungeonPlayback.set({ runState, inventory, currentRecord: record, outcome, shopOffers, unplacedIds: [] });
+  dungeonPlayback.set({
+    runState,
+    inventory,
+    currentRecord: record,
+    outcome,
+    shopOffers,
+    unplacedIds: [],
+    milestoneOffers: rollMilestonesIfDue(runState, outcome, rng),
+  });
   touchActiveRun();
   currentView.set('dungeon');
 }
@@ -157,7 +169,8 @@ export function continueDungeonRun(
   lookupItem: ItemLookup = (id) => ITEM_REGISTRY[id],
 ): void {
   const playback = get(dungeonPlayback);
-  if (!playback || playback.outcome !== null) {
+  // A floor-boss reward must be picked before moving on (see chooseMilestoneOffer).
+  if (!playback || playback.outcome !== null || playback.milestoneOffers.length > 0) {
     return;
   }
 
@@ -170,7 +183,35 @@ export function continueDungeonRun(
     outcome === null ? rollShopOffers(playback.runState, rng) : { recruits: [], relics: [], equipment: [] };
 
   touchRoster();
-  dungeonPlayback.set({ ...playback, currentRecord: record, outcome, shopOffers, unplacedIds: [] });
+  dungeonPlayback.set({
+    ...playback,
+    currentRecord: record,
+    outcome,
+    shopOffers,
+    unplacedIds: [],
+    milestoneOffers: rollMilestonesIfDue(playback.runState, outcome, rng),
+  });
+  touchActiveRun();
+}
+
+/** Floor-boss reward cards if the run just paused after a floor boss (end of floor 1 or 2), else none. */
+function rollMilestonesIfDue(runState: DungeonRunState, outcome: DungeonOutcome | null, rng: RngSource): MilestoneOffer[] {
+  if (outcome !== null || !isMilestonePause(runState.roomIndex, runState.rooms.length)) return [];
+  return rollMilestoneOffers(runState.party, MILESTONE_REWARD_POOL, rng);
+}
+
+/** Takes floor-boss reward card `index`: grants its Trait to its hero for the rest of the run and clears the pick. */
+export function chooseMilestoneOffer(index: number): void {
+  const playback = get(dungeonPlayback);
+  const offer = playback?.milestoneOffers[index];
+  const member = offer ? playback?.runState.party.find((candidate) => candidate.id === offer.adventurerId) : undefined;
+  if (!playback || !offer || !member) {
+    return;
+  }
+
+  grantTrait(member, offer.trait);
+  touchRoster();
+  dungeonPlayback.set({ ...playback, milestoneOffers: [] });
   touchActiveRun();
 }
 

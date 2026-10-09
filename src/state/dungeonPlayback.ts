@@ -5,6 +5,8 @@ import { ITEM_REGISTRY } from '../data/items';
 import { CHARACTER_TEMPLATES } from '../data/characters';
 import { RELIC_REGISTRY } from '../data/relics';
 import { SYNERGIES } from '../data/synergies';
+import { MILESTONE_REWARD_POOL } from '../data/milestones';
+import { rollMilestoneOffers, type MilestoneOffer } from '../sim/milestones';
 import { rollRecruitOffers, rollRelicOffers, rollEquipmentOffers, type ShopOffers, DEFAULT_RECRUIT_PRICE } from '../sim/shopOffers';
 import { INITIAL_SAVE } from './persistence';
 import { roster } from './roster';
@@ -59,6 +61,13 @@ export interface DungeonPlaybackState {
    * resolveNextRoom's assignUniquePositions spreads out anyone stacked.
    */
   unplacedIds: string[];
+  /**
+   * Floor-boss reward cards waiting to be picked (mid-run Trait growth —
+   * sim/milestones.ts); empty when there's no pick pending. Continue is
+   * blocked until one is chosen (dungeonOrchestrator.ts's
+   * chooseMilestoneOffer).
+   */
+  milestoneOffers: MilestoneOffer[];
 }
 
 /**
@@ -112,7 +121,9 @@ function resumeFromSave(): DungeonPlaybackState | null {
       ? rollShopOffers(runState, () => Math.random())
       : { recruits: [], relics: [], equipment: [] };
 
-  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers, unplacedIds: [] };
+  const milestoneOffers =
+    saved.milestonePending && saved.outcome === null ? rollMilestoneOffers(party, MILESTONE_REWARD_POOL, () => Math.random()) : [];
+  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers, unplacedIds: [], milestoneOffers };
 }
 
 /** Set by startDungeon (or reconstructed from a save at boot — see resumeFromSave), read/advanced by the Phaser replay layer and the between-room pause UI, cleared by finishDungeonRun. */

@@ -29,7 +29,9 @@ export type TurnEvent =
    */
   | { type: 'special-action'; actorId: string; specialActionId: string; outcome: ActionOutcome | null }
   /** A Bodyguard (traits.ts's BODYGUARD_TRAIT) took `damage` of a hit meant for `protectedId` — see battle.ts's pendingIntercepts. */
-  | { type: 'intercept'; attackerId: string; guardianId: string; protectedId: string; damage: number };
+  | { type: 'intercept'; attackerId: string; guardianId: string; protectedId: string; damage: number }
+  /** A Milestone Trait fired mid-attack: a Vampiric heal or a Second Wind revive — see battle.ts's pendingTraitEffects. */
+  | { type: 'trait-effect'; kind: 'heal' | 'revive'; unitId: string; amount: number; traitName: string };
 
 export interface TurnResult {
   events: TurnEvent[];
@@ -70,6 +72,8 @@ function landedHitTargetIds(outcome: ActionOutcome): string[] {
 function drainIntercepts(events: TurnEvent[], battle: BattleState): void {
   for (const intercept of battle.pendingIntercepts) events.push({ type: 'intercept', ...intercept });
   battle.pendingIntercepts = [];
+  for (const effect of battle.pendingTraitEffects) events.push({ type: 'trait-effect', ...effect });
+  battle.pendingTraitEffects = [];
 }
 
 function pushSpecialActionEvents(events: TurnEvent[], outcomes: SpecialActionOutcome[], actorId: string): void {

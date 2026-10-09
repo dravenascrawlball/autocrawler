@@ -21,6 +21,7 @@ import {
   buyRecruitOffer,
   placePartyMemberDuringRun,
   returnPartyMemberToTrayDuringRun,
+  chooseMilestoneOffer,
 } from './dungeonOrchestrator';
 import { createAdventurer, type AdventurerTemplate } from '../sim/adventurer';
 import { AttackNearestAction } from '../sim/actions/attack';
@@ -627,5 +628,36 @@ describe('between-room formation placement (tray + drag-and-drop)', () => {
     continueDungeonRun(() => 0, lookupItem);
     expect(get(dungeonPlayback)!.unplacedIds).toEqual([]);
     expect(recruit.position).not.toEqual(drafted.position);
+  });
+});
+
+describe('floor-boss rewards (mid-run Trait growth)', () => {
+  beforeEach(() => {
+    roster.set({ adventurers: [], recruitedIds: [] });
+    dungeonPlayback.set(null);
+    activeRun.set(null);
+  });
+
+  it('offers cards after room 5, blocks Continue until one is picked, then grants it', () => {
+    const drafted = hero('hero', { maxHp: 500, attackPower: 100 });
+    roster.set({ adventurers: [drafted], recruitedIds: [] });
+    const rooms = Array.from({ length: 7 }, (_, i) => ({ enemies: [createAdventurer(`e${i}`, enemyTemplate({ maxHp: 3 }), 'front')] }));
+
+    startDungeon([drafted], rooms, () => 0, lookupItem);
+    for (let i = 0; i < 4; i++) continueDungeonRun(() => 0, lookupItem);
+    const playback = get(dungeonPlayback)!;
+    expect(playback.runState.roomIndex).toBe(5);
+    expect(playback.milestoneOffers.length).toBeGreaterThan(0);
+
+    continueDungeonRun(() => 0, lookupItem); // blocked
+    expect(get(dungeonPlayback)!.runState.roomIndex).toBe(5);
+
+    const traitId = playback.milestoneOffers[0].trait.id;
+    chooseMilestoneOffer(0);
+    expect(get(dungeonPlayback)!.milestoneOffers).toEqual([]);
+    expect(drafted.traits.some((t) => t.id === traitId)).toBe(true);
+
+    continueDungeonRun(() => 0, lookupItem);
+    expect(get(dungeonPlayback)!.runState.roomIndex).toBe(6);
   });
 });

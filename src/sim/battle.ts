@@ -34,10 +34,14 @@ export interface BattleState {
    * is how the replay learns the guardian took a hit.
    */
   pendingIntercepts: { attackerId: string; guardianId: string; protectedId: string; damage: number }[];
+  /** Milestone Trait effects recorded mid-attack (Vampiric heals, Second Wind revives), drained into turn events like pendingIntercepts. */
+  pendingTraitEffects: { kind: 'heal' | 'revive'; unitId: string; amount: number; traitName: string }[];
+  /** Units whose Second Wind has already fired this fight (once per fight). */
+  secondWindUsedIds: string[];
 }
 
 export function createBattleState(adventurers: Adventurer[], enemies: Adventurer[], partyGold = 0): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [] };
+  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [], pendingTraitEffects: [], secondWindUsedIds: [] };
 }
 
 /** Current Mending Charge energy for `unitId` — 0 if it's never gained any this room. */

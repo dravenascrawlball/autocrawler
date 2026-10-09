@@ -463,6 +463,31 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Mid-run Trait growth (floor-boss rewards) — shipped
+
+After the floor 1 and floor 2 bosses, the pause screen offers **3 cards,
+each a Trait for a specific party member** ("Vampiric → Mira"). One must
+be picked before continuing; the Trait lasts the rest of the run.
+
+- Pool (`data/milestones.ts`): the good hero Quirks plus six reward-only
+  **Milestone Traits** (`sim/traits.ts`): **Vampiric** (heal 25% of damage
+  dealt), **Second Wind** (once per fight, survive a lethal hit at 30%
+  HP), **Giant Slayer** (+30% damage vs targets with ≥1.5× their max HP),
+  **Executioner** (+40% vs targets under 30% HP), **Juggernaut** (+20% max
+  HP, +2 armor), **Battle Trance** (+20% speed, +8 crit).
+- `sim/milestones.ts`: `isMilestonePause`, `rollMilestoneOffers` (cards
+  spread across heroes, never a Trait already held), `grantTrait`.
+  `DungeonPlaybackState.milestoneOffers`; `continueDungeonRun` is blocked
+  while a pick is pending; `chooseMilestoneOffer`. A save taken mid-pick
+  records `milestonePending` and re-rolls the cards on resume.
+- Vampiric heals and Second Wind revives flow through
+  `battle.pendingTraitEffects` → `trait-effect` turn events → the replay.
+  **Fixed along the way**: a revived unit (Second Wind, or Mira's Revive)
+  now stands back up in the battle view and its HP bar refills — Revive
+  previously only showed an announcement.
+- Balance: fresh **37.3%** full clear (+3 from the picks, still in band),
+  fully grown 54.1%. No scaling change.
+
 ## Halloween event — shipped
 
 A seasonal costume for every character, behind one switch:

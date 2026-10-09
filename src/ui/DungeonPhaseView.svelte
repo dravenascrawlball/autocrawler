@@ -107,6 +107,15 @@
           } else if (event.type === 'special-action' && event.outcome) {
             const specialName = SPECIAL_ACTION_REGISTRY[event.specialActionId]?.name ?? 'Special';
             pushOutcome(event.outcome, event.actorId, specialName);
+          } else if (event.type === 'trait-effect') {
+            // Milestone Traits — a Vampiric heal or a Second Wind revive.
+            events.push({
+              type: 'announce',
+              actorId: event.unitId,
+              text: event.kind === 'revive' ? `${event.traitName}!` : `${event.traitName} +${event.amount}`,
+              color: '#ff88aa',
+            });
+            events.push({ type: 'heal', actorId: event.unitId, targetId: event.unitId, amount: event.amount });
           } else if (event.type === 'intercept') {
             // A Bodyguard stepped in (adjacency pass) — announce it, then show the share they took.
             events.push({ type: 'announce', actorId: event.guardianId, text: 'Bodyguard!', color: '#66ccff' });

@@ -9,7 +9,24 @@ import { rollGold } from '../gold';
 import { applyPoison, applyBurn, type StatusEffectId } from '../statusEffects';
 import { POISON_DAMAGE_PER_TICK, POISON_TICKS } from '../enchantments';
 import { consumeShield } from '../shields';
-import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE, BODYGUARD_TRAIT, BODYGUARD_SHARE } from '../traits';
+import {
+  THORNS_TRAIT,
+  THORNS_REFLECT_PERCENT,
+  DODGE_TRAIT,
+  DODGE_CHANCE,
+  BODYGUARD_TRAIT,
+  BODYGUARD_SHARE,
+  VAMPIRIC_TRAIT,
+  VAMPIRIC_HEAL_FRACTION,
+  SECOND_WIND_TRAIT,
+  SECOND_WIND_HP_FRACTION,
+  GIANT_SLAYER_TRAIT,
+  GIANT_SLAYER_BONUS,
+  GIANT_SLAYER_HP_RATIO,
+  EXECUTIONER_TRAIT,
+  EXECUTIONER_BONUS,
+  EXECUTIONER_HP_FRACTION,
+} from '../traits';
 import { isAdjacent } from '../formation';
 import type { Adventurer } from '../adventurer';
 import type { GridPosition } from '../formation';
@@ -99,6 +116,24 @@ function rollIsCrit(context: ActionContext): boolean {
  * `varianceFraction` likewise defaults to DAMAGE_VARIANCE_FRACTION but
  * can be widened per-action.
  */
+function hasTrait(unit: Adventurer, traitId: string): boolean {
+  return unit.traits.some((trait) => trait.id === traitId);
+}
+
+/** Giant Slayer / Executioner damage bonuses for `actor` hitting `target` (Milestone Traits — see traits.ts). */
+function milestoneDamageMultiplier(actor: Adventurer, target: Adventurer): number {
+  let multiplier = 1;
+  const targetMax = getEffectiveStat(target.maxHp, 'maxHp', target.modifiers);
+  if (hasTrait(actor, GIANT_SLAYER_TRAIT.id)) {
+    const actorMax = getEffectiveStat(actor.maxHp, 'maxHp', actor.modifiers);
+    if (targetMax >= actorMax * GIANT_SLAYER_HP_RATIO) multiplier *= 1 + GIANT_SLAYER_BONUS;
+  }
+  if (hasTrait(actor, EXECUTIONER_TRAIT.id) && target.hp < targetMax * EXECUTIONER_HP_FRACTION) {
+    multiplier *= 1 + EXECUTIONER_BONUS;
+  }
+  return multiplier;
+}
+
 function applyAttackToTarget(
   context: ActionContext,
   damage: number,
@@ -112,7 +147,12 @@ function applyAttackToTarget(
 
   const critMultiplier = rollIsCrit(context) ? CRIT_DAMAGE_MULTIPLIER : 1;
   const vulnerabilityPercent = getEffectiveStat(0, 'vulnerability', target.modifiers);
-  const variedDamage = damage * rollDamageVariance(context, varianceFraction) * critMultiplier * (1 + vulnerabilityPercent / 100);
+  const variedDamage =
+    damage *
+    milestoneDamageMultiplier(context.actor, target) *
+    rollDamageVariance(context, varianceFraction) *
+    critMultiplier *
+    (1 + vulnerabilityPercent / 100);
   const armor = getEffectiveStat(0, 'armor', target.modifiers);
   const damageAfterArmor = Math.max(MIN_DAMAGE_AFTER_ARMOR, Math.round(variedDamage - armor));
 
@@ -151,6 +191,22 @@ function applyAttackToTarget(
   }
 
   target.hp = Math.max(0, target.hp - finalDamage);
+
+  // Milestone Traits (mid-run Trait growth) — recorded on the battle so the replay shows them.
+  if (finalDamage > 0 && hasTrait(context.actor, VAMPIRIC_TRAIT.id) && context.actor.hp > 0) {
+    const actorMax = getEffectiveStat(context.actor.maxHp, 'maxHp', context.actor.modifiers);
+    const healed = Math.min(actorMax - context.actor.hp, Math.round(finalDamage * VAMPIRIC_HEAL_FRACTION));
+    if (healed > 0) {
+      context.actor.hp += healed;
+      context.battle.pendingTraitEffects.push({ kind: 'heal', unitId: context.actor.id, amount: healed, traitName: VAMPIRIC_TRAIT.name });
+    }
+  }
+  if (target.hp <= 0 && hasTrait(target, SECOND_WIND_TRAIT.id) && !context.battle.secondWindUsedIds.includes(target.id)) {
+    const targetMax = getEffectiveStat(target.maxHp, 'maxHp', target.modifiers);
+    target.hp = Math.max(1, Math.round(targetMax * SECOND_WIND_HP_FRACTION));
+    context.battle.secondWindUsedIds.push(target.id);
+    context.battle.pendingTraitEffects.push({ kind: 'revive', unitId: target.id, amount: target.hp, traitName: SECOND_WIND_TRAIT.name });
+  }
 
   const hasThorns = target.traits.some((trait) => trait.id === THORNS_TRAIT.id);
   if (hasThorns && finalDamage > 0) {

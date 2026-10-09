@@ -54,9 +54,10 @@ describe('outcomeToReplayEvents', () => {
     ]);
   });
 
-  it('announces a revive', () => {
+  it('announces a revive and restores the HP on screen', () => {
     expect(outcomeToReplayEvents({ type: 'revive', targetId: 'gudrun', amount: 6 }, 'mira', 'Revive', nameOf)).toEqual([
       expect.objectContaining({ type: 'announce', actorId: 'gudrun', text: 'Revive! +6 HP' }),
+      { type: 'heal', actorId: 'mira', targetId: 'gudrun', amount: 6 },
     ]);
   });
 });

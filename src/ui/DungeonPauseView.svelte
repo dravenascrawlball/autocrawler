@@ -13,7 +13,9 @@
     placePartyMemberDuringRun,
     returnPartyMemberToTrayDuringRun,
     changeKitDuringRun,
+    chooseMilestoneOffer,
   } from '../state/dungeonOrchestrator';
+  import { floorOf } from '../sim/dungeonRun';
   import OutfitPicker from './OutfitPicker.svelte';
   import QuirkBadges from './QuirkBadges.svelte';
   import { quirksOf } from '../sim/quirks';
@@ -76,6 +78,10 @@
     ? null
     : ($dungeonPlayback?.inventory.items.find((item) => !item.promptDismissed) ?? null);
   $: shopOffers = $dungeonPlayback?.shopOffers ?? { recruits: [], relics: [], equipment: [] };
+  // Floor-boss reward (mid-run Trait growth): must be picked before continuing.
+  $: milestoneOffers = $dungeonPlayback?.milestoneOffers ?? [];
+  $: clearedFloor = $dungeonPlayback ? floorOf($dungeonPlayback.runState.roomIndex - 1) : 0;
+  const memberName = (id: string) => partyMembers.find((member) => member.id === id)?.name ?? 'Ally';
   $: shopGold = $dungeonPlayback?.inventory.gold ?? 0;
   // Non-null once the run has actually ended (win/loss/forced-retreat) — see
   // DungeonPhaseView.svelte's onRoomReplayComplete, which now pauses here even on an ended run so
@@ -167,6 +173,22 @@
           </li>
         {/each}
       </ul>
+    </section>
+  {/if}
+
+  {#if runOutcome === null && milestoneOffers.length > 0}
+    <section class="milestone">
+      <h3>Floor {clearedFloor} cleared! Choose a reward</h3>
+      <p class="milestone__hint">The Trait lasts for the rest of this run.</p>
+      <div class="milestone__cards">
+        {#each milestoneOffers as offer, index (offer.adventurerId + offer.trait.id)}
+          <button type="button" class="milestone__card" on:click={() => chooseMilestoneOffer(index)}>
+            <span class="milestone__trait">{offer.trait.name}</span>
+            <span class="milestone__hero">→ {memberName(offer.adventurerId)}</span>
+            <span class="milestone__description">{offer.trait.description}</span>
+          </button>
+        {/each}
+      </div>
     </section>
   {/if}
 
@@ -301,7 +323,9 @@
     {#if runOutcome !== null}
       <button type="button" on:click={() => finishDungeonRun()}>Return to Town</button>
     {:else}
-      <button type="button" on:click={onContinue}>Continue to Next Room</button>
+      <button type="button" on:click={onContinue} disabled={milestoneOffers.length > 0}>
+        {milestoneOffers.length > 0 ? 'Choose a reward first' : 'Continue to Next Room'}
+      </button>
       <button type="button" on:click={() => retreatFromDungeon()}>Retreat</button>
     {/if}
   </div>
@@ -311,6 +335,57 @@
 <LootModal item={nextUnpromptedLootItem} />
 
 <style>
+  .milestone {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+  }
+
+  .milestone__hint {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .milestone__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+  }
+
+  .milestone__card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    text-align: left;
+    padding: 12px;
+    background: var(--bg-inset);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .milestone__card:hover {
+    border-color: var(--gold);
+  }
+
+  .milestone__trait {
+    font-family: var(--font-heading);
+    color: var(--gold-bright);
+  }
+
+  .milestone__hero {
+    font-size: 13px;
+    color: var(--text-heading);
+  }
+
+  .milestone__description {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
   .run-recap {
     margin-bottom: 16px;
     padding-bottom: 12px;
