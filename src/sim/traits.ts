@@ -1,5 +1,7 @@
 import type { RngSource } from './rng';
 import type { Aura } from './auras';
+import type { StatModifier } from './stats';
+import type { TagId } from './tags';
 
 /**
  * A permanent, narrative-flavored marker distinct from a passive (which is
@@ -15,6 +17,18 @@ export interface Trait {
   description: string;
   /** A passive Aura this Trait carries (e.g. Glint's Shield Bearer) — merged into Adventurer.auras at creation (see adventurer.ts). */
   aura?: Aura;
+  /** Set on a Quirk (see quirks.ts): a rare random boon or flaw rolled onto a recruit offer or a monster. */
+  quirk?: 'good' | 'bad';
+  /** Stat changes a Quirk applies while held (source `quirk:<id>`). */
+  modifiers?: StatModifier[];
+  /**
+   * A targeting Quirk's prey (e.g. Goblin Hater: tag 'goblin'; Mage
+   * Striker: role 'Mage'): its holder may strike a living opponent matching
+   * it anywhere, past the usual lane/front-rank limits, and prefers one
+   * when any is alive — see actions/targeting.ts's preyTargets. Taunt
+   * still overrides it.
+   */
+  prey?: { tag?: TagId; role?: string };
 }
 
 /** Creation-time ceiling on how many universal Traits a character rolls at once (see docs/kit-trait-tag-framework.md) — a ceiling on the roll itself, not a lifetime cap; mid-run trait growth (not yet built) is explicitly meant to exceed this. */

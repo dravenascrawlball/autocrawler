@@ -12,6 +12,8 @@
     changeOpeningKit,
   } from '../state/openingShop';
   import OutfitPicker from './OutfitPicker.svelte';
+  import QuirkBadges from './QuirkBadges.svelte';
+  import { quirksOf } from '../sim/quirks';
   import { adjacencyAbilities } from './adjacency';
   import { ownedKitsFor } from '../state/progression';
   import { metaProgression } from '../state/metaProgression';
@@ -36,6 +38,7 @@
     archetype: unit.archetype,
     activeKit: unit.activeKit,
     adjacency: adjacencyAbilities(unit),
+    quirks: quirksOf(unit).map((quirk) => `${quirk.name}: ${quirk.description}`),
     position: unit.position,
     hp: unit.hp,
     maxHp: effectiveMaxHp(unit),
@@ -85,6 +88,7 @@
         <Tooltip text={recruitTooltip(offer.adventurer, party)}>
           <span class="shop-offer__label shop-offer__label--hint">{offer.adventurer.name}</span>
         </Tooltip>
+        <QuirkBadges adventurer={offer.adventurer} />
         <button type="button" disabled={gold < offer.price} on:click={() => buyOpeningRecruit(offer.adventurer.id)}>
           Recruit — {offer.price}g
         </button>

@@ -15,6 +15,8 @@
     changeKitDuringRun,
   } from '../state/dungeonOrchestrator';
   import OutfitPicker from './OutfitPicker.svelte';
+  import QuirkBadges from './QuirkBadges.svelte';
+  import { quirksOf } from '../sim/quirks';
   import { adjacencyAbilities } from './adjacency';
   import DownedModal from './DownedModal.svelte';
   import LootModal from './LootModal.svelte';
@@ -55,6 +57,7 @@
     archetype: unit.archetype,
     activeKit: unit.activeKit,
     adjacency: adjacencyAbilities(unit),
+    quirks: quirksOf(unit).map((quirk) => `${quirk.name}: ${quirk.description}`),
     position: unit.position,
     hp: unit.hp,
     maxHp: effectiveMaxHp(unit),
@@ -215,6 +218,7 @@
                 {#if offer.alreadyInParty}<span class="shop-offer__hint">(level up!)</span>{/if}
               </span>
             </Tooltip>
+            {#if !offer.alreadyInParty}<QuirkBadges adventurer={offer.adventurer} />{/if}
             <button
               type="button"
               disabled={shopGold < offer.price}

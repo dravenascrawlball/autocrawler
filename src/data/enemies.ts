@@ -57,6 +57,7 @@ export const KOBOLD_SKIRMISHER_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 0.75, min: 3, max: 12 },
   basicAction: AttackNearestAction,
   specialActionPool: [{ kind: 'special-action', specialAction: KOBOLD_SKIRMISHER_EXECUTE_SPECIAL }],
+  tags: ['kobold'],
 };
 
 /** Weak baseline threat — a basic soldier: Attack Nearest as her Basic Action, plus Heavy Swing (Power Attack, fires on-turn-start) landing an extra harder hit alongside it every turn. */
@@ -80,6 +81,7 @@ export const GRUNT_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 0.75, min: 6, max: 18 },
   basicAction: AttackNearestAction,
   specialActionPool: [{ kind: 'special-action', specialAction: GRUNT_POWER_ATTACK_SPECIAL }],
+  tags: ['goblin'],
 };
 
 /** Tougher, harder-hitting enemy — a heavy smasher: Cleave is her Basic Action, hitting every living enemy at her target's rank every turn. No Special Action — same as several of the 15 player characters whose whole identity is their Basic Action alone. */
@@ -102,6 +104,7 @@ export const BRUTE_TEMPLATE: AdventurerTemplate = {
   // ×3 — see Kobold Skirmisher's goldDrop comment above.
   goldDrop: { chance: 0.9, min: 24, max: 54 },
   basicAction: CleaveAction,
+  tags: ['brute'],
 };
 
 /**
@@ -140,6 +143,7 @@ export const SHAMAN_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 0.8, min: 15, max: 36 },
   basicAction: HealAction,
   specialActionPool: [{ kind: 'special-action', specialAction: SHAMAN_ATTACK_SPECIAL }],
+  tags: ['goblin'],
 };
 
 // --- Enemy variety pass (docs/roadmap.md item 7): each has an enemy-only mechanic ---
@@ -168,6 +172,7 @@ export const GOBLIN_FLANKER_TEMPLATE: AdventurerTemplate = {
   lootTable: LIGHT_LOOT,
   goldDrop: { chance: 0.75, min: 5, max: 15 },
   basicAction: FlankStrikeAction,
+  tags: ['goblin'],
 };
 
 /** Fragile early fire-starter (rooms 1-3): Searing Touch is a melee hit that also sets the target Burning. */
@@ -181,6 +186,7 @@ export const EMBER_IMP_TEMPLATE: AdventurerTemplate = {
   lootTable: [{ itemId: 'ring-of-embers', dropChance: 0.08 }, ...LIGHT_LOOT],
   goldDrop: { chance: 0.75, min: 4, max: 12 },
   basicAction: SearingTouchAction,
+  tags: ['demon'],
 };
 
 /**
@@ -198,6 +204,7 @@ export const VENOM_SPITTER_TEMPLATE: AdventurerTemplate = {
   lootTable: LIGHT_LOOT,
   goldDrop: { chance: 0.8, min: 8, max: 20 },
   basicAction: VenomSpitAction,
+  tags: ['beast'],
 };
 
 /**
@@ -221,6 +228,7 @@ export const BONE_SENTINEL_TEMPLATE: AdventurerTemplate = {
   traits: [THORNS_TRAIT],
   basicAction: AttackNearestAction,
   innateSpecialActions: [SENTINEL_VENGEANCE_SPECIAL],
+  tags: ['undead'],
 };
 
 /**
@@ -245,6 +253,7 @@ export const TROLL_WARLORD_TEMPLATE: AdventurerTemplate = {
   traits: [ENRAGE_TRAIT],
   basicAction: CleaveAction,
   innateSpecialActions: [TROLL_REGENERATE_SPECIAL],
+  tags: ['brute'],
 };
 
 // --- 15-room dungeon: floor bosses (floor 1 is the Troll Warlord above) ---
@@ -268,6 +277,7 @@ export const SUCCUBUS_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 1, min: 40, max: 80 },
   basicAction: DrainingKissAction,
   innateSpecialActions: [SUCCUBUS_CHARM_SPECIAL],
+  tags: ['demon'],
 };
 
 /**
@@ -287,6 +297,7 @@ export const DEMON_KING_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 1, min: 60, max: 120 },
   basicAction: CleaveAction,
   innateSpecialActions: [DEMON_KING_HELLFIRE_SPECIAL, DEMON_KING_RAISE_DEAD_SPECIAL],
+  tags: ['demon'],
 };
 
 // --- Monster pass: infernal court (floor 2) / demon army (floor 3), not exclusively ---
@@ -302,6 +313,7 @@ export const CHAIN_WARDEN_TEMPLATE: AdventurerTemplate = {
   lootTable: LIGHT_LOOT,
   goldDrop: { chance: 0.85, min: 12, max: 30 },
   basicAction: HookChainAction,
+  tags: ['demon'],
 };
 
 /** Infernal court (back): Hex cuts your strongest hero's attack and Silences their Specials. Deals no damage itself. */
@@ -315,6 +327,7 @@ export const HEX_WITCH_TEMPLATE: AdventurerTemplate = {
   lootTable: [{ itemId: 'tome-of-power', dropChance: 0.1 }, ...LIGHT_LOOT],
   goldDrop: { chance: 0.85, min: 12, max: 30 },
   basicAction: HexAction,
+  tags: ['demon'],
 };
 
 /** Demon army (middle): attacks normally, and War Banner buffs every allied monster's attack each turn. */
@@ -329,6 +342,7 @@ export const INFERNAL_BANNERMAN_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 0.9, min: 15, max: 35 },
   basicAction: AttackNearestAction,
   innateSpecialActions: [BANNERMAN_WAR_BANNER_SPECIAL],
+  tags: ['demon'],
 };
 
 /** Demon army (front): a tough anchor that shields its most-hurt ally every turn. */
@@ -346,6 +360,7 @@ export const HELLFORGED_GUARDIAN_TEMPLATE: AdventurerTemplate = {
   goldDrop: { chance: 0.9, min: 18, max: 40 },
   basicAction: AttackNearestAction,
   innateSpecialActions: [GUARDIAN_WARD_SPECIAL],
+  tags: ['demon'],
 };
 
 export type EnemyFactory = (row: Row) => Adventurer;

@@ -14,7 +14,14 @@ export type TagId =
   | 'fire'
   | 'redhead'
   | 'long-legs'
-  | 'goblin-hater';
+  | 'goblin-hater'
+  // Creature tags (Quirks pass) — what targeting Quirks like Goblin Hater/Demonbane hunt.
+  | 'goblin'
+  | 'kobold'
+  | 'demon'
+  | 'undead'
+  | 'brute'
+  | 'beast';
 
 export type TagCategory = 'species' | 'archetype' | 'element' | 'physical' | 'personality' | 'other';
 
@@ -39,6 +46,12 @@ export const TAG_REGISTRY: Record<TagId, Tag> = {
   redhead: { id: 'redhead', name: 'Redhead', category: 'physical' },
   'long-legs': { id: 'long-legs', name: 'Long Legs', category: 'physical' },
   'goblin-hater': { id: 'goblin-hater', name: 'Goblin Hater', category: 'personality' },
+  goblin: { id: 'goblin', name: 'Goblin', category: 'species' },
+  kobold: { id: 'kobold', name: 'Kobold', category: 'species' },
+  demon: { id: 'demon', name: 'Demon', category: 'species' },
+  undead: { id: 'undead', name: 'Undead', category: 'species' },
+  brute: { id: 'brute', name: 'Brute', category: 'species' },
+  beast: { id: 'beast', name: 'Beast', category: 'species' },
 };
 
 /** Whether `unit.tags` includes `tagId` — the standard check an ability/Aura uses instead of reading `.tags` directly. */

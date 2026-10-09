@@ -2,6 +2,7 @@ import type { Adventurer } from '../adventurer';
 import type { TargetingContext } from '../action';
 import { getOpposingRoster, getOwnRoster } from '../battle';
 import { getEffectiveStat } from '../stats';
+import { hasTag } from '../tags';
 
 /** Whether `unit` currently has an active Vanish/Stealth (see actions/support.ts's VanishAction) — same "encode a flag as a buff on a synthetic stat" convention as Taunt. */
 function isStealthed(unit: Adventurer): boolean {
@@ -35,6 +36,21 @@ function isTaunting(unit: Adventurer): boolean {
  */
 function livingTaunters(context: TargetingContext): Adventurer[] {
   return livingOpponents(context).filter(isTaunting);
+}
+
+/**
+ * Living opponents matching any of the actor's targeting Quirks (a Trait's
+ * `prey` — e.g. Goblin Hater: tag 'goblin'; Mage Striker: role 'Mage'),
+ * regardless of lane or rank: a hunter can reach its prey anywhere, and
+ * goes for it first. Empty when the actor hunts nothing or no prey lives.
+ * Taunt still wins over this — callers check taunters first.
+ */
+function preyTargets(context: TargetingContext): Adventurer[] {
+  const preys = context.actor.traits.flatMap((trait) => (trait.prey ? [trait.prey] : []));
+  if (preys.length === 0) return [];
+  return livingOpponents(context).filter((unit) =>
+    preys.some((prey) => (!prey.tag || hasTag(unit, prey.tag)) && (!prey.role || unit.role === prey.role)),
+  );
 }
 
 /**
@@ -82,6 +98,9 @@ export function selectFirstEnemy(context: TargetingContext, restrictToMelee: boo
   const taunters = livingTaunters(context);
   if (taunters.length > 0) return taunters[0];
 
+  const prey = preyTargets(context);
+  if (prey.length > 0) return prey[0];
+
   const candidates = restrictToMelee ? meleeEligibleOpponents(context) : livingOpponents(context);
   return candidates[0] ?? null;
 }
@@ -89,7 +108,15 @@ export function selectFirstEnemy(context: TargetingContext, restrictToMelee: boo
 /** Picks the lowest-HP eligible opposing unit, ties broken by roster order — see selectFirstEnemy's restrictToMelee and Taunt notes. */
 export function selectLowestHpEnemy(context: TargetingContext, restrictToMelee: boolean): Adventurer | null {
   const taunters = livingTaunters(context);
-  const candidates = taunters.length > 0 ? taunters : restrictToMelee ? meleeEligibleOpponents(context) : livingOpponents(context);
+  const prey = taunters.length > 0 ? [] : preyTargets(context);
+  const candidates =
+    taunters.length > 0
+      ? taunters
+      : prey.length > 0
+        ? prey
+        : restrictToMelee
+          ? meleeEligibleOpponents(context)
+          : livingOpponents(context);
   if (candidates.length === 0) return null;
 
   return candidates.reduce((lowest, candidate) => (candidate.hp < lowest.hp ? candidate : lowest));

@@ -9,6 +9,8 @@
     activeKit?: { artKey: string };
     /** Names of the unit's adjacency abilities (ui/adjacency.ts) — drives the cell highlight and ◆ markers. */
     adjacency?: string[];
+    /** "Name: effect" for each of the unit's Quirks (sim/quirks.ts) — shown as a ✦ marker with a tooltip. */
+    quirks?: string[];
     position: GridPosition;
     hp?: number;
     maxHp?: number;
@@ -216,6 +218,9 @@
                 {#if unit.maxHp !== undefined}
                   <span class="token__hp">{Math.max(0, Math.round(unit.hp ?? 0))}/{Math.round(unit.maxHp)}</span>
                 {/if}
+                {#if (unit.quirks?.length ?? 0) > 0}
+                  <span class="token__quirk" title={unit.quirks?.join(', ')}>✦</span>
+                {/if}
                 {#if adjacencyFrom(unit, placed).length > 0}
                   <span class="token__linked" title={adjacencyFrom(unit, placed).join(', ')}>◆</span>
                 {/if}
@@ -235,6 +240,9 @@
                 <span class="token__name">{unit.name}</span>
                 {#if unit.maxHp !== undefined}
                   <span class="token__hp">{Math.max(0, Math.round(unit.hp ?? 0))}/{Math.round(unit.maxHp)}</span>
+                {/if}
+                {#if (unit.quirks?.length ?? 0) > 0}
+                  <span class="token__quirk" title={unit.quirks?.join(', ')}>✦</span>
                 {/if}
               </span>
             {/if}
@@ -341,6 +349,15 @@
 
   .cell--linked {
     box-shadow: inset 0 0 0 2px var(--gold-bright);
+  }
+
+  .token__quirk {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 11px;
+    color: #e0b0ff;
+    cursor: help;
   }
 
   .token__linked {

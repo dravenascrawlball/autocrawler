@@ -3,6 +3,8 @@ import type { Adventurer } from '../sim/adventurer';
 import { rerollPoolPicks, effectiveMaxHp } from '../sim/adventurer';
 import { changeKit } from '../sim/kits';
 import { applyTraining } from '../sim/training';
+import { rollQuirks, applyQuirks, quirkPriceMultiplier } from '../sim/quirks';
+import { HERO_QUIRK_POOL } from '../data/quirks';
 import type { ActionId } from '../sim/action';
 import type { CharacterPoolEntry } from '../sim/characterPool';
 import type { DungeonOutcome } from '../sim/dungeonRun';
@@ -123,8 +125,8 @@ export function kitsFor(characterName: string, unlockedKitIds: Record<string, st
 }
 
 /**
- * Re-draws the pool Special and Kit of every offered recruit who isn't
- * already in the party (see sim/adventurer.ts's rerollPoolPicks) — called
+ * Re-draws the pool Special, Kit and Quirks of every offered recruit who
+ * isn't already in the party (and re-prices the offer for its Quirks) (see sim/adventurer.ts's rerollPoolPicks) — called
  * whenever a shop rolls its recruit offers (state/openingShop.ts,
  * state/dungeonPlayback.ts's rollShopOffers). Passing on a character and
  * seeing them offered again later gives a fresh roll; the offer's tooltip
@@ -146,6 +148,9 @@ export function rerollOfferedCharacters(offers: RecruitShopOffer[], rng: RngSour
       unlockedKitsFor(template.name, unlockedKitIds),
       rng,
     );
+    // Quirks pass: a fresh roll of rare boons/flaws, priced in — good Quirks cost more, bad ones less.
+    applyQuirks(adventurer, rollQuirks(HERO_QUIRK_POOL, rng));
+    offer.price = Math.round(offer.price * quirkPriceMultiplier(adventurer));
     changed = true;
   }
   if (changed) roster.update((state) => ({ ...state }));

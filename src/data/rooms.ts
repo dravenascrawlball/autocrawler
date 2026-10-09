@@ -1,6 +1,8 @@
 import type { RoomDefinition } from '../sim/dungeonRun';
 import type { RngSource } from '../sim/rng';
 import type { Adventurer } from '../sim/adventurer';
+import { rollQuirks, applyQuirks } from '../sim/quirks';
+import { MONSTER_QUIRK_POOL } from './quirks';
 import { findFreeCell, samePosition, type GridPosition, type Lane, type Rank } from '../sim/formation';
 import {
   createGrunt,
@@ -110,8 +112,9 @@ export function placeEnemies(enemies: Adventurer[], rng: RngSource): void {
  */
 export function room(
   factories: EnemyFactory[],
-  { rng = () => Math.random(), statScale = 1 }: { rng?: RngSource; statScale?: number } = {},
+  { rng: seededRng, statScale = 1 }: { rng?: RngSource; statScale?: number } = {},
 ): RoomDefinition {
+  const rng = seededRng ?? (() => Math.random());
   const enemies = factories.map((factory) => {
     const enemy = factory('front');
     if (statScale !== 1) {
@@ -123,6 +126,13 @@ export function room(
     return enemy;
   });
   placeEnemies(enemies, rng);
+  // Quirks pass: some monsters roll a random boon or flaw (data/quirks.ts) — visible on the
+  // formation board's enemy preview before the fight. Only for a real, seeded dungeon roll
+  // (createStarterDungeonRooms passes its rng); a hand-built room() stays exactly as authored.
+  for (const enemy of seededRng ? enemies : []) {
+    const quirks = rollQuirks(MONSTER_QUIRK_POOL, rng);
+    if (quirks.length > 0) applyQuirks(enemy, quirks);
+  }
   return { enemies };
 }
 
@@ -259,9 +269,9 @@ export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [
   // Floor 1
   1.73, 1.84, 1.94, 2.04, 2.6,
   // Floor 2
-  4.92, 5.33, 5.74, 6.15, 6.36,
+  4.85, 5.25, 5.65, 6.05, 6.25,
   // Floor 3
-  6.97, 7.38, 7.79, 8.2, 7.79,
+  6.85, 7.25, 7.65, 8.05, 7.65,
 ];
 
 /**

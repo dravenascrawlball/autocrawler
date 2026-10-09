@@ -463,6 +463,32 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Quirks — shipped
+
+Rare random boons and flaws on recruit offers and monsters
+(`sim/quirks.ts`, pools in `data/quirks.ts`). Quirks are Traits flagged
+`quirk: 'good' | 'bad'`, optionally carrying stat `modifiers` and a
+targeting `prey`.
+
+- **Rarity**: ~20% get one, ~4% two (`QUIRK_CHANCE`/`SECOND_QUIRK_CHANCE`;
+  rolls trigger on *high* rng values so deterministic test rngs returning 0
+  never roll one).
+- **Heroes** (Strong, Tough, Swift, Lucky, Goblin Hater, Demonbane / Frail,
+  Weak, Sluggish, Glass Jaw): rolled per recruit offer alongside the
+  Special/Kit re-roll (`rerollOfferedCharacters`), priced ±15% per good/bad
+  Quirk, kept for the run if recruited, wiped at run end.
+- **Monsters** (Speedy, Brutal, Armored, Mage Striker, Healer Hunter /
+  Wounded, Feeble): rolled when a seeded dungeon is built (`room()` only
+  rolls with an explicit rng, so hand-built test rooms stay as authored).
+- **Prey targeting** (`targeting.ts`'s `preyTargets`): a hunter may strike
+  its prey (by creature tag or by role) anywhere, past lane/rank limits,
+  and goes for it first; Taunt still overrides. Monsters now carry creature
+  tags: goblin, kobold, demon, undead, brute, beast.
+- UI: green/red Quirk badges on recruit offers (tooltip = effect); a ✦
+  marker with a tooltip on board tokens, including the enemy preview.
+- Balance: monster Quirks lean harsher, so floors 2-3 eased ~1.5%. Fresh
+  **35.7%** full clear, fully grown 52.0%.
+
 ## Adjacency pass — shipped
 
 Formation now matters at the "who stands next to whom" level

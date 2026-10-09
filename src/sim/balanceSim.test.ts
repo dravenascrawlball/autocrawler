@@ -17,6 +17,8 @@ import { RELIC_REGISTRY } from '../data/relics';
 import { STARTING_SHOP_GOLD } from '../state/openingShop';
 import { rerollPoolPicks, effectiveMaxHp, grantSecondPoolSpecial, type Adventurer } from './adventurer';
 import { SYNERGIES } from '../data/synergies';
+import { rollQuirks, applyQuirks, quirkPriceMultiplier } from './quirks';
+import { HERO_QUIRK_POOL } from '../data/quirks';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { evaluateSynergies } from './synergies';
 import { applyTraining } from './training';
@@ -65,7 +67,13 @@ function lookupItem(itemId: string): Item {
 
 function rollOffers(roster: Adventurer[], party: Adventurer[], activeRelics: DungeonRunState['activeRelics'], rng: RngSource): ShopOffers {
   return {
-    recruits: rollRecruitOffers(roster, party, recruitCostFor, rng),
+    recruits: rollRecruitOffers(roster, party, recruitCostFor, rng).map((offer) => {
+      // Mirror the real shops (state/progression.ts's rerollOfferedCharacters): offered non-party
+      // characters roll Quirks, priced in.
+      if (offer.alreadyInParty) return offer;
+      applyQuirks(offer.adventurer, rollQuirks(HERO_QUIRK_POOL, rng));
+      return { ...offer, price: Math.round(offer.price * quirkPriceMultiplier(offer.adventurer)) };
+    }),
     relics: rollRelicOffers(RELIC_REGISTRY, activeRelics, rng),
     equipment: rollEquipmentOffers(Object.values(ITEM_REGISTRY), rng),
   };

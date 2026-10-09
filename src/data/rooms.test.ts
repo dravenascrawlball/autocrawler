@@ -126,3 +126,21 @@ describe('floor bosses', () => {
     }
   });
 });
+
+describe('monster Quirks', () => {
+  it('some monsters in a seeded dungeon roll Quirks, and hand-built rooms never do', () => {
+    let quirked = 0;
+    let total = 0;
+    for (let seed = 0; seed < 100; seed++) {
+      for (const r of createStarterDungeonRooms(createSeededRng(seed))) {
+        for (const enemy of r.enemies) {
+          total += 1;
+          if (enemy.traits.some((t) => t.quirk)) quirked += 1;
+        }
+      }
+    }
+    expect(quirked / total).toBeGreaterThan(0.1);
+    expect(quirked / total).toBeLessThan(0.35);
+    expect(room([createBrute]).enemies[0].traits.some((t) => t.quirk)).toBe(false);
+  });
+});
