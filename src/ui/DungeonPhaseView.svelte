@@ -23,6 +23,9 @@
   import type { ActionOutcome } from '../sim/action';
   import { RAGE_TRAIT } from '../sim/traits';
   import { hasChargedSpecial } from '../sim/charge';
+  import { cutInSetting } from '../state/cutInSetting';
+  import { cutIn, cutInEnabled, withKeyMomentCutIns, type CutInEvent } from './cutIns';
+  import CutInOverlay from './CutInOverlay.svelte';
   import DungeonPauseView from './DungeonPauseView.svelte';
 
   const BATTLE_SPEED_OPTIONS: BattleSpeedMultiplier[] = [1, 2, 4];
@@ -34,6 +37,9 @@
   let paused = false;
   /** Live playback pause, distinct from `paused` (the between-rooms equip/level-up screen) — resets each room, not persisted. */
   let battlePaused = false;
+  /** The portrait cut-in showing over the replay (ui/CutInOverlay.svelte), if any. */
+  let cutInCurrent: { key: number; event: CutInEvent; unit: ReplayUnit } | null = null;
+  let cutInKey = 0;
 
   const unsubscribeSpeed = battleSpeed.subscribe((speed) => {
     replayScene?.setSpeedMultiplier(speed);
@@ -93,6 +99,7 @@
       hasChargedSpecial: hasChargedSpecial(enemy),
     }));
 
+    const cutIns = get(cutInSetting);
     const events: ReplayEvent[] = [];
     const unitNames = new Map<string, string>([...partyUnits, ...enemyUnits].map((unit) => [unit.id, unit.name]));
     const nameOf = (unitId: string, fallback: string) => unitNames.get(unitId) ?? fallback;
@@ -111,7 +118,11 @@
           if (event.type === 'action') {
             pushOutcome(event.outcome, roundTurn.unitId, ACTION_REGISTRY[roundTurn.turn.rolledActionId].name);
           } else if (event.type === 'special-action' && event.outcome) {
-            const specialName = SPECIAL_ACTION_REGISTRY[event.specialActionId]?.name ?? 'Special';
+            const special = SPECIAL_ACTION_REGISTRY[event.specialActionId];
+            const specialName = special?.name ?? 'Special';
+            if (special && !special.alwaysOn && cutInEnabled(cutIns, 'special')) {
+              events.push(cutIn(event.actorId, 'special', 'attack', `${nameOf(event.actorId, '')}: ${specialName}!`));
+            }
             pushOutcome(event.outcome, event.actorId, specialName);
           } else if (event.type === 'banish') {
             events.push({ type: 'banish', unitIds: event.unitIds });
@@ -126,6 +137,9 @@
             events.push({ type: 'heal', actorId: event.unitId, targetId: event.unitId, amount: event.amount });
           } else if (event.type === 'intercept') {
             // A Bodyguard stepped in (adjacency pass) — announce it, then show the share they took.
+            if (partyUnits.some((unit) => unit.id === event.guardianId) && cutInEnabled(cutIns, 'save')) {
+              events.push(cutIn(event.guardianId, 'save', 'hit', `${nameOf(event.guardianId, '')} takes the hit!`));
+            }
             events.push({ type: 'announce', actorId: event.guardianId, text: 'Bodyguard!', color: '#66ccff' });
             events.push({ type: 'attack', actorId: event.attackerId, targetId: event.guardianId, damage: event.damage, hit: true });
           } else if (event.type === 'status-tick') {
@@ -145,10 +159,20 @@
     const isBossRoom = roomInFloor === ROOMS_PER_FLOOR;
     const roomLabel = `Floor ${floorOf(record.roomIndex)} · ${isBossRoom ? 'Boss' : `Room ${roomInFloor} / ${ROOMS_PER_FLOOR}`}`;
 
+    const units = [...partyUnits, ...enemyUnits];
+    const boss = isBossRoom
+      ? enemyUnits.filter((unit) => !unit.hiddenUntilSpawn).reduce<ReplayUnit | null>((top, unit) => (!top || unit.maxHp > top.maxHp ? unit : top), null)
+      : null;
+
     return {
-      units: [...partyUnits, ...enemyUnits],
-      events,
+      units,
+      events: withKeyMomentCutIns(events, units, cutIns),
       roomLabel,
+      bossCard: boss && cutInEnabled(cutIns, 'boss') ? cutIn(boss.id, 'boss', 'idle', boss.name) : undefined,
+      onCutIn: (event: CutInEvent) => {
+        const unit = units.find((candidate) => candidate.id === event.unitId);
+        if (unit) cutInCurrent = { key: ++cutInKey, event, unit };
+      },
       onComplete,
       speedMultiplier: get(battleSpeed),
       onSceneReady: (scene) => {
@@ -262,7 +286,10 @@
           {battlePaused ? 'Resume' : 'Pause'}
         </button>
       </div>
-      <div class="dungeon-canvas" bind:this={container}></div>
+      <div class="dungeon-stage">
+        <div class="dungeon-canvas" bind:this={container}></div>
+        <CutInOverlay bind:current={cutInCurrent} speed={$battleSpeed} />
+      </div>
     {/if}
   </section>
 {/if}
@@ -276,10 +303,16 @@
      page's full ~1220px width (see app.css) blew it up to an enormous, "zoomed in" size once the
      old fixed-size HUD card strip (which used to share this space) was removed — see
      docs/roadmap.md's Autobattle Revision Cleanup. */
-  .dungeon-canvas {
+  .dungeon-stage {
+    position: relative;
     width: 100%;
     max-width: 640px;
     margin: 0 auto;
+    overflow: hidden;
+  }
+
+  .dungeon-canvas {
+    width: 100%;
   }
 
   .dungeon-canvas :global(canvas) {

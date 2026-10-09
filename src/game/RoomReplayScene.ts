@@ -49,7 +49,15 @@ export type ReplayEvent =
   /** Summoned units vanishing with their summoner (fade out). */
   | { type: 'banish'; unitIds: string[] }
   /** Every unit's Special Action charge at the end of a turn (sim/turnEngine.ts's chargeAfter) — updates the charge bars without pausing playback. */
-  | { type: 'charge'; values: Record<string, number> };
+  | { type: 'charge'; values: Record<string, number> }
+  /** A portrait cut-in (ui/cutIns.ts) — handed to onCutIn for the DOM overlay to draw; playback doesn't wait for it. */
+  | {
+      type: 'cut-in';
+      unitId: string;
+      kind: 'kill' | 'save' | 'fall' | 'special' | 'boss';
+      art: 'attack' | 'hit' | 'healed' | 'downed' | 'idle';
+      text: string;
+    };
 
 export interface RoomReplaySceneData {
   units: ReplayUnit[];
@@ -68,6 +76,10 @@ export interface RoomReplaySceneData {
    * point instead.
    */
   onSceneReady?: (scene: RoomReplayScene) => void;
+  /** Shows a portrait cut-in over the canvas (ui/CutInOverlay.svelte). Called for each 'cut-in' event, and for `bossCard` during the intro. */
+  onCutIn?: (cutIn: Extract<ReplayEvent, { type: 'cut-in' }>) => void;
+  /** A boss entrance card shown during this room's intro — the intro holds longer for it. */
+  bossCard?: Extract<ReplayEvent, { type: 'cut-in' }>;
 }
 
 // Lane layout: a static 3x3-grid-per-side formation view fills the whole canvas now — there's no
@@ -170,6 +182,8 @@ function laneAreaHeight(units: ReplayUnit[]): number {
 }
 
 const INTRO_HOLD_MS = 700;
+/** A boss room's intro holds longer, under its entrance card. */
+const BOSS_INTRO_HOLD_MS = 1800;
 const INTRO_FADE_MS = 400;
 
 // Impact juice: a brief pause at the peak of a landed attack's lunge (via the tween's own `hold`,
@@ -621,7 +635,9 @@ export class RoomReplayScene extends Phaser.Scene {
       .text(width / 2, height / 2, this.sceneData.roomLabel, { fontSize: '20px', color: '#ffffff' })
       .setOrigin(0.5, 0.5);
 
-    this.time.delayedCall(this.scaled(INTRO_HOLD_MS), () => {
+    const bossCard = this.sceneData.bossCard;
+    if (bossCard) this.sceneData.onCutIn?.(bossCard);
+    this.time.delayedCall(this.scaled(bossCard ? BOSS_INTRO_HOLD_MS : INTRO_HOLD_MS), () => {
       this.tweens.add({
         targets: [overlay, label],
         alpha: 0,
@@ -670,6 +686,11 @@ export class RoomReplayScene extends Phaser.Scene {
     }
     if (event.type === 'banish') {
       this.playFade(event.unitIds, 0, next);
+      return;
+    }
+    if (event.type === 'cut-in') {
+      this.sceneData.onCutIn?.(event);
+      next();
       return;
     }
     if (event.type === 'charge') {

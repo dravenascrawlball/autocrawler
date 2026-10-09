@@ -272,15 +272,9 @@ cause it).
 
 Possible Future:
 
-**Still open — the Fire Emblem-style cutaway idea, deliberately
-deferred:** larger per-character/per-action artwork shown at the moment
-a character acts, closer to a Fire Emblem combat cutaway, rather than
-(or layered over) the grid view. Unresolved questions going in: whether
-it replaces or overlays the grid view (explicitly undecided, not just
-unasked), and it needs real artwork (placeholder-first is the agreed
-starting point, same graceful-degradation convention the rest of the
-game already uses for missing art). Needs its own open-questions pass
-before any code gets written.
+**The Fire Emblem-style cutaway idea** shipped as portrait cut-ins
+(overlaying the grid, not replacing it); see "Portrait cut-ins and boss
+entrance cards" below.
 
 
 ## 3. Meta-progression UI — shipped
@@ -462,6 +456,37 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
+
+## Portrait cut-ins and boss entrance cards — shipped
+
+A portrait banner slides over the replay at dramatic moments without
+pausing the fight (heroes from the left, monsters from the right; a new one
+replaces the one showing, so they never pile up). It scales with battle
+speed and uses each unit's portrait art, with Kit costume art first and
+idle as the fallback.
+
+- **Key moments** (`ui/cutIns.ts`'s `withKeyMomentCutIns`, derived from the
+  replay's own HP changes):
+  - a hero's killing blow (attack art);
+  - a hero falling (downed art);
+  - a save: a hero revived from 0 HP (Second Wind, Revive), or healed by
+    20%+ of max HP while under 25% (healed art). A Bodyguard taking the
+    hit is added by the replay builder (hit art).
+- **All** adds every Special that isn't `alwaysOn`. This is workable now
+  that Specials fire about every 3 turns (see the charge meter below).
+- **Boss entrance cards**: in a floor-boss room the intro holds longer under
+  a centered card with the boss's portrait.
+- **Settings → Battle Cut-ins**: Off / Key moments (default) / All. A
+  display preference in localStorage (`state/cutInSetting.ts`), like battle
+  speed. Off also hides boss cards.
+- Plumbing: a `cut-in` ReplayEvent that RoomReplayScene hands to
+  `onCutIn`, and `bossCard` played during the intro. The overlay is a DOM
+  component (`ui/CutInOverlay.svelte`) over the canvas, so it gets the
+  same `fallbackSrc` art fallbacks as the rest of the UI.
+
+**Still open:** monsters only have idle portraits, so enemy cut-ins (Specials
+under "All", boss cards) all use the same pose. Per-state monster art would
+help.
 
 ## Special Action charge meter — shipped
 
