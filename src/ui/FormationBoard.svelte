@@ -7,6 +7,8 @@
     archetype: string;
     /** The unit's active Kit, if any — its sprite is tried first (see portraits.ts's bodySpriteCandidates). */
     activeKit?: { artKey: string };
+    /** Names of the unit's adjacency abilities (ui/adjacency.ts) — drives the cell highlight and ◆ markers. */
+    adjacency?: string[];
     position: GridPosition;
     hp?: number;
     maxHp?: number;
@@ -50,6 +52,46 @@
   $: tray = trayIds
     .map((id) => partyUnits.find((unit) => unit.id === id))
     .filter((unit): unit is BoardUnit => unit !== undefined);
+
+  // Adjacency (the adjacency pass): when the selected or dragged unit has an adjacency ability, the
+  // party cells it reaches light up — from the cell under the pointer while dragging, so you can see
+  // the effect of a placement before dropping.
+  $: focusUnit = dragging ?? (selectedId ? (placed.find((unit) => unit.id === selectedId) ?? null) : null);
+  $: focusCell =
+    focusUnit && (focusUnit.adjacency?.length ?? 0) > 0
+      ? dragging && hoverTarget && hoverTarget !== 'tray'
+        ? (() => {
+            const [lane, rank] = hoverTarget.split(',').map(Number);
+            return { lane, rank };
+          })()
+        : placed.some((unit) => unit.id === focusUnit?.id)
+          ? focusUnit.position
+          : null
+      : null;
+  $: linkedCells = new Set(
+    focusCell
+      ? [
+          [focusCell.lane - 1, focusCell.rank],
+          [focusCell.lane + 1, focusCell.rank],
+          [focusCell.lane, focusCell.rank - 1],
+          [focusCell.lane, focusCell.rank + 1],
+        ]
+          .filter(([lane, rank]) => lane >= 0 && lane <= 2 && rank >= 0 && rank <= 2)
+          .map(([lane, rank]) => `${lane},${rank}`)
+      : [],
+  );
+
+  /** Adjacency abilities currently reaching `unit` from placed allies next to it, e.g. ["Glint: Shield Bearer"]. */
+  function adjacencyFrom(unit: BoardUnit, all: BoardUnit[]): string[] {
+    return all
+      .filter(
+        (other) =>
+          other.id !== unit.id &&
+          (other.adjacency?.length ?? 0) > 0 &&
+          Math.abs(other.position.lane - unit.position.lane) + Math.abs(other.position.rank - unit.position.rank) === 1,
+      )
+      .flatMap((other) => (other.adjacency ?? []).map((name) => `${other.name}: ${name}`));
+  }
 
   function rankForColumn(column: number): 0 | 1 | 2 {
     return (column < 3 ? 2 - column : column - 3) as 0 | 1 | 2;
@@ -151,6 +193,7 @@
             class="cell cell--party"
             class:cell--midline={column === 2}
             class:cell--hover={hoverTarget === key}
+            class:cell--linked={linkedCells.has(key)}
             data-drop={key}
             aria-label={`Lane ${lane + 1}, rank ${rank + 1}${unit ? `: ${unit.name}` : ' (empty)'}`}
             on:click={() => handleCellClick(lane, rank)}
@@ -172,6 +215,9 @@
                 <span class="token__name">{unit.name}</span>
                 {#if unit.maxHp !== undefined}
                   <span class="token__hp">{Math.max(0, Math.round(unit.hp ?? 0))}/{Math.round(unit.maxHp)}</span>
+                {/if}
+                {#if adjacencyFrom(unit, placed).length > 0}
+                  <span class="token__linked" title={adjacencyFrom(unit, placed).join(', ')}>◆</span>
                 {/if}
               </span>
             {/if}
@@ -293,6 +339,19 @@
     box-shadow: inset 0 0 0 1px var(--gold);
   }
 
+  .cell--linked {
+    box-shadow: inset 0 0 0 2px var(--gold-bright);
+  }
+
+  .token__linked {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    font-size: 11px;
+    color: var(--gold-bright);
+    cursor: help;
+  }
+
   .cell--midline {
     border-color: var(--gold);
   }
@@ -302,6 +361,7 @@
   }
 
   .token {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;

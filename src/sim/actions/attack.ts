@@ -9,7 +9,8 @@ import { rollGold } from '../gold';
 import { applyPoison, applyBurn, type StatusEffectId } from '../statusEffects';
 import { POISON_DAMAGE_PER_TICK, POISON_TICKS } from '../enchantments';
 import { consumeShield } from '../shields';
-import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE } from '../traits';
+import { THORNS_TRAIT, THORNS_REFLECT_PERCENT, DODGE_TRAIT, DODGE_CHANCE, BODYGUARD_TRAIT, BODYGUARD_SHARE } from '../traits';
+import { isAdjacent } from '../formation';
 import type { Adventurer } from '../adventurer';
 import type { GridPosition } from '../formation';
 
@@ -121,7 +122,33 @@ function applyAttackToTarget(
   }
 
   const absorbedByShield = consumeShield(target, damageAfterArmor);
-  const finalDamage = damageAfterArmor - absorbedByShield;
+  let finalDamage = damageAfterArmor - absorbedByShield;
+
+  // Bodyguard (adjacency pass): a living ally adjacent to the target with BODYGUARD_TRAIT takes a
+  // share of what got through. Recorded on the battle so the replay can show the guardian's hit.
+  const guardian =
+    finalDamage > 0
+      ? getOwnRoster(context.battle, target).find(
+          (ally) =>
+            ally !== target &&
+            ally.hp > 0 &&
+            ally.traits.some((trait) => trait.id === BODYGUARD_TRAIT.id) &&
+            isAdjacent(ally.position, target.position),
+        )
+      : undefined;
+  if (guardian) {
+    const redirected = Math.round(finalDamage * BODYGUARD_SHARE);
+    if (redirected > 0) {
+      guardian.hp = Math.max(0, guardian.hp - redirected);
+      finalDamage -= redirected;
+      context.battle.pendingIntercepts.push({
+        attackerId: context.actor.id,
+        guardianId: guardian.id,
+        protectedId: target.id,
+        damage: redirected,
+      });
+    }
+  }
 
   target.hp = Math.max(0, target.hp - finalDamage);
 

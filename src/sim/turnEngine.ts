@@ -7,6 +7,7 @@ import { tickStatusEffects, type StatusEffectId } from './statusEffects';
 import { tickBuffs } from './buffs';
 import { tickAuras } from './auras';
 import { tickShields } from './shields';
+import { isAdjacent } from './formation';
 import { resolveSpecialActionTriggers, type SpecialActionOutcome } from './specialActions';
 import { getEffectiveStat } from './stats';
 
@@ -26,7 +27,9 @@ export type TurnEvent =
    * special fires on the unit that got hit, during the attacker's turn).
    * `outcome` is null when the Special Action found no valid target.
    */
-  | { type: 'special-action'; actorId: string; specialActionId: string; outcome: ActionOutcome | null };
+  | { type: 'special-action'; actorId: string; specialActionId: string; outcome: ActionOutcome | null }
+  /** A Bodyguard (traits.ts's BODYGUARD_TRAIT) took `damage` of a hit meant for `protectedId` — see battle.ts's pendingIntercepts. */
+  | { type: 'intercept'; attackerId: string; guardianId: string; protectedId: string; damage: number };
 
 export interface TurnResult {
   events: TurnEvent[];
@@ -61,6 +64,12 @@ function landedHitTargetIds(outcome: ActionOutcome): string[] {
     default:
       return [];
   }
+}
+
+/** Moves any Bodyguard intercepts recorded during resolution (battle.pendingIntercepts) into `events`, in order. */
+function drainIntercepts(events: TurnEvent[], battle: BattleState): void {
+  for (const intercept of battle.pendingIntercepts) events.push({ type: 'intercept', ...intercept });
+  battle.pendingIntercepts = [];
 }
 
 function pushSpecialActionEvents(events: TurnEvent[], outcomes: SpecialActionOutcome[], actorId: string): void {
@@ -133,6 +142,7 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
 
   const outcome = action.resolve({ actor: adventurer, target, rng, battle });
   events.push({ type: 'action', actionId: action.id, outcome });
+  drainIntercepts(events, battle);
 
   if (outcome.type === 'retreat') {
     triggerRetreat(battle);
@@ -159,6 +169,8 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
     }
   }
 
+  drainIntercepts(events, battle);
+
   for (const unit of [...battle.adventurers, ...battle.enemies]) {
     const wasAlive = (hpBefore.get(unit.id) ?? 0) > 0;
     if (!wasAlive || unit.hp > 0) {
@@ -171,6 +183,15 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
         resolveSpecialActionTriggers(ally, ally.activeSpecialActions, { trigger: 'on-ally-downed', source: unit }, battle, rng),
         ally.id,
       );
+      // Adjacency pass: allies standing next to the fallen unit also get an adjacent-only trigger
+      // (e.g. Mirka's Avenger).
+      if (isAdjacent(ally.position, unit.position)) {
+        pushSpecialActionEvents(
+          events,
+          resolveSpecialActionTriggers(ally, ally.activeSpecialActions, { trigger: 'on-adjacent-ally-downed', source: unit }, battle, rng),
+          ally.id,
+        );
+      }
     }
     for (const enemy of getOpposingRoster(battle, unit).filter((other) => other.hp > 0)) {
       pushSpecialActionEvents(
@@ -181,5 +202,6 @@ export function resolveTurn(adventurer: Adventurer, battle: BattleState, rng: Rn
     }
   }
 
+  drainIntercepts(events, battle);
   return result;
 }

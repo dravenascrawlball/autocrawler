@@ -1,4 +1,5 @@
 import type { RngSource } from './rng';
+import type { Aura } from './auras';
 
 /**
  * A permanent, narrative-flavored marker distinct from a passive (which is
@@ -12,6 +13,8 @@ export interface Trait {
   id: string;
   name: string;
   description: string;
+  /** A passive Aura this Trait carries (e.g. Glint's Shield Bearer) — merged into Adventurer.auras at creation (see adventurer.ts). */
+  aura?: Aura;
 }
 
 /** Creation-time ceiling on how many universal Traits a character rolls at once (see docs/kit-trait-tag-framework.md) — a ceiling on the roll itself, not a lifetime cap; mid-run trait growth (not yet built) is explicitly meant to exceed this. */
@@ -116,3 +119,62 @@ export const ENRAGE_TRAIT: Trait = {
 
 export const ENRAGE_HP_FRACTION = 0.5;
 export const ENRAGE_BONUS_FRACTION = 0.5;
+
+// --- Adjacency Traits (roadmap: adjacency pass) ---
+// "Adjacent" = orthogonally adjacent on the same side's grid (formation.ts's isAdjacent).
+
+/**
+ * Bodil: when an adjacent ally is hit, she takes BODYGUARD_SHARE of the
+ * damage that got through instead of them. Checked by actions/attack.ts's
+ * applyAttackToTarget. Doesn't cover hits on herself, and only one
+ * bodyguard steps in per hit.
+ */
+export const BODYGUARD_TRAIT: Trait = {
+  id: 'bodyguard',
+  name: 'Bodyguard',
+  description: 'When an adjacent ally is hit, she takes 40% of the damage instead.',
+};
+export const BODYGUARD_SHARE = 0.4;
+
+/** Glint: adjacent allies take 15% less damage (a negative 'vulnerability' modifier). */
+export const SHIELD_BEARER_TRAIT: Trait = {
+  id: 'shield-bearer',
+  name: 'Shield Bearer',
+  description: 'Adjacent allies take 15% less damage.',
+  aura: {
+    id: 'shield-bearer',
+    name: 'Shield Bearer',
+    description: 'Adjacent allies take 15% less damage.',
+    range: 'adjacent',
+    grants: { stat: 'vulnerability', type: 'flat', amount: -15, source: 'aura:shield-bearer' },
+  },
+};
+
+/** Tharavel: adjacent allies deal 10% more damage. */
+export const COMMANDING_PRESENCE_TRAIT: Trait = {
+  id: 'commanding-presence',
+  name: 'Commanding Presence',
+  description: 'Adjacent allies deal 10% more damage.',
+  aura: {
+    id: 'commanding-presence',
+    name: 'Commanding Presence',
+    description: 'Adjacent allies deal 10% more damage.',
+    range: 'adjacent',
+    grants: { stat: 'attackPower', type: 'percent', amount: 10, source: 'aura:commanding-presence' },
+  },
+};
+
+/** Dawneth: adjacent allies gain +2 armor. */
+export const SANCTUARY_TRAIT: Trait = {
+  id: 'sanctuary',
+  name: 'Sanctuary',
+  description: 'Adjacent allies gain +2 armor.',
+  aura: {
+    id: 'sanctuary',
+    name: 'Sanctuary',
+    description: 'Adjacent allies gain +2 armor.',
+    range: 'adjacent',
+    grants: { stat: 'armor', type: 'flat', amount: 2, source: 'aura:sanctuary' },
+  },
+};
+

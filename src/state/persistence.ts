@@ -203,10 +203,17 @@ function repairKitDrift(adventurer: Adventurer): Adventurer {
   const innate = (template.innateSpecialActions ?? []).filter(
     (special) => !adventurer.activeSpecialActions.some((active) => active.id === special.id),
   );
+  // Seeded template Traits the save predates (e.g. the adjacency Traits), and the auras they carry.
+  const missingTraits = (template.traits ?? []).filter(
+    (trait) => !adventurer.traits.some((existing) => existing.id === trait.id),
+  );
+  const traits = [...missingTraits, ...adventurer.traits];
   return {
     ...adventurer,
     basicAction: template.basicAction ?? adventurer.basicAction,
     activeSpecialActions: [...innate, ...adventurer.activeSpecialActions],
+    traits,
+    auras: [...(template.auras ?? []), ...traits.flatMap((trait) => (trait.aura ? [trait.aura] : []))],
   };
 }
 

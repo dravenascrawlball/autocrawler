@@ -153,16 +153,19 @@ describe('character templates retheme (Basic Action + Special Action/Trait pool)
     expect(withShieldWall.activeSpecialActions).toEqual([expect.objectContaining({ id: 'glint-shield-wall', trigger: 'on-turn-start' })]);
   });
 
-  it("Mirka's Basic Action is Attack Nearest (moved off Fear in the \"every Basic Action must deal damage\" cleanup pass); her pool draws Last Stand (on-ally-downed), Stun, or Fear (both on-turn-start)", () => {
+  it("Mirka's Basic Action is Attack Nearest (moved off Fear in the \"every Basic Action must deal damage\" cleanup pass); always has Avenger, and her pool draws Last Stand (on-ally-downed), Stun, or Fear (both on-turn-start)", () => {
     const withLastStand = createAdventurer('mirka', MIRKA_TEMPLATE, 'front', [], [], [], () => 0);
     expect(withLastStand.basicAction.id).toBe('attack-nearest');
-    expect(withLastStand.activeSpecialActions).toEqual([expect.objectContaining({ id: 'mirka-last-stand', trigger: 'on-ally-downed' })]);
+    expect(withLastStand.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'mirka-avenger', trigger: 'on-adjacent-ally-downed' }), expect.objectContaining({ id: 'mirka-last-stand', trigger: 'on-ally-downed' })]);
 
     const withStun = createAdventurer('mirka', MIRKA_TEMPLATE, 'front', [], [], [], () => 0.4);
-    expect(withStun.activeSpecialActions).toEqual([expect.objectContaining({ id: 'mirka-stun', trigger: 'on-turn-start' })]);
+    expect(withStun.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'mirka-avenger', trigger: 'on-adjacent-ally-downed' }), expect.objectContaining({ id: 'mirka-stun', trigger: 'on-turn-start' })]);
 
     const withFear = createAdventurer('mirka', MIRKA_TEMPLATE, 'front', [], [], [], () => 0.99);
-    expect(withFear.activeSpecialActions).toEqual([expect.objectContaining({ id: 'mirka-fear', trigger: 'on-turn-start' })]);
+    expect(withFear.activeSpecialActions).toEqual([
+      expect.objectContaining({ id: 'mirka-avenger', trigger: 'on-adjacent-ally-downed' }), expect.objectContaining({ id: 'mirka-fear', trigger: 'on-turn-start' })]);
   });
 
   it("Dravena's Basic Action is Blinding Bolt; her pool draws either Arcane Barrage (on-hit-landed) or Vanish (on-turn-start)", () => {

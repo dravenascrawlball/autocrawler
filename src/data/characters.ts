@@ -18,7 +18,15 @@ import {
 import { HealAction, SelfHealAction, MendingChargeAction } from '../sim/actions/heal';
 import { PotionTossAllyAction, PotionTossEnemyAction } from '../sim/actions/support';
 import { plainFaces } from '../sim/dieFace';
-import { RAGE_TRAIT, THORNS_TRAIT, DODGE_TRAIT } from '../sim/traits';
+import {
+  RAGE_TRAIT,
+  THORNS_TRAIT,
+  DODGE_TRAIT,
+  BODYGUARD_TRAIT,
+  SHIELD_BEARER_TRAIT,
+  COMMANDING_PRESENCE_TRAIT,
+  SANCTUARY_TRAIT,
+} from '../sim/traits';
 import {
   DAWNETH_MOURNING_STRIKE_SPECIAL,
   DAWNETH_GUARDIANS_VOW_SPECIAL,
@@ -33,6 +41,7 @@ import {
   MIRA_POTION_TOSS_ALLY_SPECIAL,
   MIRA_REVIVE_SPECIAL,
   MIRA_SPLASH_HEAL_SPECIAL,
+  MIRKA_AVENGER_SPECIAL,
   CALADWEN_VENOM_STING_SPECIAL,
   CALADWEN_LIFESTEAL_SPECIAL,
   ISILWEN_LUCKY_DRAW_SPECIAL,
@@ -134,6 +143,7 @@ export const DAWNETH_TEMPLATE: AdventurerTemplate = {
     { kind: 'special-action', specialAction: DAWNETH_MOURNING_STRIKE_SPECIAL },
     { kind: 'special-action', specialAction: DAWNETH_GUARDIANS_VOW_SPECIAL },
   ],
+  traits: [SANCTUARY_TRAIT],
 };
 
 /**
@@ -201,6 +211,7 @@ export const THARAVEL_TEMPLATE: AdventurerTemplate = {
     { kind: 'special-action', specialAction: THARAVEL_COORDINATED_STRIKE_SPECIAL },
     { kind: 'special-action', specialAction: THARAVEL_GUARDIANS_WARD_SPECIAL },
   ],
+  traits: [COMMANDING_PRESENCE_TRAIT],
 };
 
 /**
@@ -216,7 +227,7 @@ export const THARAVEL_TEMPLATE: AdventurerTemplate = {
 export const BODIL_TEMPLATE: AdventurerTemplate = {
   name: 'Bodil',
   role: 'Fighter',
-  maxHp: 30,
+  maxHp: 34,
   attackPower: 4,
   speed: 4,
   healPower: 3,
@@ -233,6 +244,7 @@ export const BODIL_TEMPLATE: AdventurerTemplate = {
     { kind: 'special-action', specialAction: BODIL_SECOND_WIND_SPECIAL },
     { kind: 'special-action', specialAction: BODIL_TAUNT_SPECIAL },
   ],
+  traits: [BODYGUARD_TRAIT],
 };
 
 /**
@@ -264,6 +276,7 @@ export const GLINT_TEMPLATE: AdventurerTemplate = {
     { kind: 'special-action', specialAction: GLINT_GUARD_UP_SPECIAL },
     { kind: 'special-action', specialAction: GLINT_SHIELD_WALL_SPECIAL },
   ],
+  traits: [SHIELD_BEARER_TRAIT],
 };
 
 /**
@@ -362,6 +375,7 @@ export const MIRKA_TEMPLATE: AdventurerTemplate = {
     { kind: 'special-action', specialAction: MIRKA_STUN_SPECIAL },
     { kind: 'special-action', specialAction: MIRKA_FEAR_SPECIAL },
   ],
+  innateSpecialActions: [MIRKA_AVENGER_SPECIAL],
 };
 
 /**

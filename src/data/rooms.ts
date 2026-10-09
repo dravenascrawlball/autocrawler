@@ -257,11 +257,11 @@ export const ROOM_DIFFICULTY_POOLS: CompositionPool[] = [
  */
 export const ROOM_SLOT_ENEMY_STAT_SCALE: number[] = [
   // Floor 1
-  1.7, 1.8, 1.9, 2, 2.55,
+  1.73, 1.84, 1.94, 2.04, 2.6,
   // Floor 2
-  4.8, 5.2, 5.6, 6, 6.2,
+  4.92, 5.33, 5.74, 6.15, 6.36,
   // Floor 3
-  6.8, 7.2, 7.6, 8, 7.6,
+  6.97, 7.38, 7.79, 8.2, 7.79,
 ];
 
 /**

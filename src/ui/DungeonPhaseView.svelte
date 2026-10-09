@@ -107,6 +107,10 @@
           } else if (event.type === 'special-action' && event.outcome) {
             const specialName = SPECIAL_ACTION_REGISTRY[event.specialActionId]?.name ?? 'Special';
             pushOutcome(event.outcome, event.actorId, specialName);
+          } else if (event.type === 'intercept') {
+            // A Bodyguard stepped in (adjacency pass) — announce it, then show the share they took.
+            events.push({ type: 'announce', actorId: event.guardianId, text: 'Bodyguard!', color: '#66ccff' });
+            events.push({ type: 'attack', actorId: event.attackerId, targetId: event.guardianId, damage: event.damage, hit: true });
           } else if (event.type === 'status-tick') {
             events.push({
               type: 'status-tick',

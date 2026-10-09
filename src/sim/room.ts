@@ -5,6 +5,7 @@ import { checkRoomOutcome } from './battle';
 import { resolveTurn, type TurnResult } from './turnEngine';
 import { getEffectiveStat } from './stats';
 import type { RngSource } from './rng';
+import { tickAuras } from './auras';
 
 function findUnitById(battle: BattleState, id: string): Adventurer | undefined {
   return battle.adventurers.find((unit) => unit.id === id) ?? battle.enemies.find((unit) => unit.id === id);
@@ -120,6 +121,15 @@ function applyTurnStats(unit: Adventurer, battle: BattleState, turn: TurnResult,
       if (event.outcome) {
         applyOutcomeStats(findUnitById(battle, event.actorId) ?? unit, event.outcome, battle, roomIndex);
       }
+    } else if (event.type === 'intercept') {
+      // A Bodyguard took part of a hit: the attacker dealt it, the guardian took it.
+      const attacker = findUnitById(battle, event.attackerId);
+      const guardian = findUnitById(battle, event.guardianId);
+      if (attacker) attacker.runDamageDealt += event.damage;
+      if (guardian) {
+        guardian.runDamageTaken += event.damage;
+        recordDownIfNeeded(battle, guardian, attacker?.archetype ?? null, roomIndex);
+      }
     } else {
       applyOutcomeStats(unit, event.outcome, battle, roomIndex);
     }
@@ -173,6 +183,10 @@ export function resolveRoom(battle: BattleState, rng: RngSource, maxRounds = 100
   const rounds: RoundResult[] = [];
   let outcome = checkRoomOutcome(battle);
   let round = 0;
+
+  // Auras normally refresh at the start of each unit's own turn (turnEngine.ts); apply them once up
+  // front too, so a Shield Bearer's protection covers the very first hits of the fight.
+  for (const unit of [...battle.adventurers, ...battle.enemies]) tickAuras(unit, battle);
 
   while (outcome === null && round < maxRounds) {
     round += 1;

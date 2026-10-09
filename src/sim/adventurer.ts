@@ -202,6 +202,11 @@ export function createAdventurer(
   const poolEntry = pickPoolEntry([...(template.specialActionPool ?? []), ...unlockedPoolEntries], rng);
   const activeKit = pickKit([...(template.kitPool ?? []), ...unlockedKits], rng);
   const rolledTraits = rollTraits(universalTraitPool, UNIVERSAL_TRAIT_ROLL_CAP, rng);
+  const traits = [
+    ...(template.traits ?? []),
+    ...(poolEntry?.kind === 'trait' ? [poolEntry.trait] : []),
+    ...rolledTraits,
+  ];
 
   return {
     id,
@@ -223,17 +228,14 @@ export function createAdventurer(
     dieFaces: template.dieFaces.map((face) => ({ ...face })),
     level,
     actionLevels: {},
-    traits: [
-      ...(template.traits ?? []),
-      ...(poolEntry?.kind === 'trait' ? [poolEntry.trait] : []),
-      ...rolledTraits,
-    ],
+    traits,
     activeSpecialActions: [
       ...(template.innateSpecialActions ?? []),
       ...(poolEntry?.kind === 'special-action' ? [poolEntry.specialAction] : []),
     ],
     tags: [...(template.tags ?? []), ...(activeKit?.tags ?? [])],
-    auras: [...(template.auras ?? [])],
+    // Template auras plus any carried by a Trait (e.g. adjacency Traits like Shield Bearer).
+    auras: [...(template.auras ?? []), ...traits.flatMap((trait) => (trait.aura ? [trait.aura] : []))],
     appliedAuras: [],
     activeKit: activeKit ?? undefined,
     xpReward: template.xpReward,

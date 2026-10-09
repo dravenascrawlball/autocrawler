@@ -599,6 +599,14 @@ export const GUARDIAN_WARD_SPECIAL: SpecialAction = {
   action: ShieldWallAction,
 };
 
+/** Mirka's adjacency ability: when an ally standing next to her falls, she gains a big attack buff for the rest of the fight. */
+export const MIRKA_AVENGER_SPECIAL: SpecialAction = {
+  id: 'mirka-avenger',
+  name: 'Avenger',
+  trigger: 'on-adjacent-ally-downed',
+  action: VengeanceAction,
+};
+
 export const GRUNT_POWER_ATTACK_SPECIAL: SpecialAction = {
   id: 'grunt-power-attack',
   name: 'Heavy Swing',
@@ -679,6 +687,7 @@ export const SPECIAL_ACTION_REGISTRY: Record<string, SpecialAction> = {
   'demon-king-raise-dead': DEMON_KING_RAISE_DEAD_SPECIAL,
   'bannerman-war-banner': BANNERMAN_WAR_BANNER_SPECIAL,
   'hellforged-ward': GUARDIAN_WARD_SPECIAL,
+  'mirka-avenger': MIRKA_AVENGER_SPECIAL,
 };
 
 /**

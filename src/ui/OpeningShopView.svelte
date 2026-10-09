@@ -12,6 +12,7 @@
     changeOpeningKit,
   } from '../state/openingShop';
   import OutfitPicker from './OutfitPicker.svelte';
+  import { adjacencyAbilities } from './adjacency';
   import { ownedKitsFor } from '../state/progression';
   import { metaProgression } from '../state/metaProgression';
   import FormationBoard, { type BoardUnit } from './FormationBoard.svelte';
@@ -34,6 +35,7 @@
     name: unit.name,
     archetype: unit.archetype,
     activeKit: unit.activeKit,
+    adjacency: adjacencyAbilities(unit),
     position: unit.position,
     hp: unit.hp,
     maxHp: effectiveMaxHp(unit),

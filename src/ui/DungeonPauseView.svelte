@@ -15,6 +15,7 @@
     changeKitDuringRun,
   } from '../state/dungeonOrchestrator';
   import OutfitPicker from './OutfitPicker.svelte';
+  import { adjacencyAbilities } from './adjacency';
   import DownedModal from './DownedModal.svelte';
   import LootModal from './LootModal.svelte';
   import CharacterCard from './CharacterCard.svelte';
@@ -53,6 +54,7 @@
     name: unit.name,
     archetype: unit.archetype,
     activeKit: unit.activeKit,
+    adjacency: adjacencyAbilities(unit),
     position: unit.position,
     hp: unit.hp,
     maxHp: effectiveMaxHp(unit),

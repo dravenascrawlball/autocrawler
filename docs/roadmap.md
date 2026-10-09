@@ -463,6 +463,38 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Adjacency pass — shipped
+
+Formation now matters at the "who stands next to whom" level
+(orthogonal neighbors on your grid), with three kinds of mechanics, all
+delivered as always-on abilities on characters whose themes fit:
+
+| Character | Ability | Kind | Effect |
+|---|---|---|---|
+| Bodil | **Bodyguard** (Trait) | Reaction | When an adjacent ally is hit, she takes 40% of the damage instead |
+| Glint | **Shield Bearer** (Trait) | Aura | Adjacent allies take 15% less damage |
+| Tharavel | **Commanding Presence** (Trait) | Aura | Adjacent allies deal +10% damage |
+| Dawneth | **Sanctuary** (Trait) | Aura | Adjacent allies gain +2 armor |
+| Mirka | **Avenger** (always-on Special) | Adjacent trigger | When an adjacent ally falls, +50% attack for the rest of the fight |
+
+- Engine: `Aura.range: 'adjacent'` (and `requiresTag` now optional);
+  Traits can carry an `aura` (merged into `Adventurer.auras`); auras are
+  applied once at fight start as well as each turn. Bodyguard redirects in
+  `applyAttackToTarget` and records `battle.pendingIntercepts`, which the
+  turn engine emits as `intercept` events (shown in the replay as
+  "Bodyguard!" plus the guardian's hit, and counted in run stats). New
+  trigger `on-adjacent-ally-downed`.
+- Save repair adds missing seeded Traits (and their auras) on load.
+- **Formation board**: selecting or dragging a character with an adjacency
+  ability highlights the cells it reaches (from the hovered cell while
+  dragging); allies currently next to one show a ◆ whose tooltip names the
+  effect.
+- Balance: the healers recovered (Dawneth 29→~35%, Mira 30→~34%) without
+  stat bumps. Enemy scaling nudged up ~2%; Bodil HP 30→34 (Bodyguard soaks
+  hits). Fresh **35.4%** full clear, fully grown 54.3%. The sim auto-places
+  back-liners two ranks behind, so it under-uses adjacency — deliberate
+  formations will do better.
+
 ## Kits for everyone — shipped
 
 Every character but Dee now has a Renown-bought Kit (`data/kits.ts`,

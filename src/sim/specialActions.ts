@@ -22,6 +22,8 @@ export type SpecialActionTriggerId =
   | 'on-hit-landed'
   | 'on-hit-taken'
   | 'on-ally-downed'
+  /** Like 'on-ally-downed', but only for an ally orthogonally adjacent to the fallen unit (adjacency pass — e.g. Mirka's Avenger). */
+  | 'on-adjacent-ally-downed'
   | 'on-enemy-downed';
 
 /**

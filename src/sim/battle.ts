@@ -27,10 +27,17 @@ export interface BattleState {
    * not an error — see getHealEnergy.
    */
   healEnergyByUnitId: Record<string, number>;
+  /**
+   * Bodyguard intercepts recorded mid-attack (actions/attack.ts's
+   * applyAttackToTarget) and drained into the turn's events by turnEngine.ts
+   * — the attack outcome types don't carry the redirected damage, so this
+   * is how the replay learns the guardian took a hit.
+   */
+  pendingIntercepts: { attackerId: string; guardianId: string; protectedId: string; damage: number }[];
 }
 
 export function createBattleState(adventurers: Adventurer[], enemies: Adventurer[], partyGold = 0): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {} };
+  return { adventurers, enemies, retreatRequested: false, partyGold, healEnergyByUnitId: {}, pendingIntercepts: [] };
 }
 
 /** Current Mending Charge energy for `unitId` — 0 if it's never gained any this room. */

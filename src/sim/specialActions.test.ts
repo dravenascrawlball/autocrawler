@@ -20,7 +20,7 @@ function template(overrides: Partial<AdventurerTemplate> = {}): AdventurerTempla
 }
 
 function battleOf(adventurers: ReturnType<typeof createAdventurer>[], enemies: ReturnType<typeof createAdventurer>[]): BattleState {
-  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {} };
+  return { adventurers, enemies, retreatRequested: false, partyGold: 0, healEnergyByUnitId: {}, pendingIntercepts: [] };
 }
 
 const sequence = (...values: number[]) => {

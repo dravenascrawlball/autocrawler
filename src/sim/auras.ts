@@ -4,6 +4,7 @@ import { getOwnRoster } from './battle';
 import type { StatModifier } from './stats';
 import type { TagId } from './tags';
 import { hasTag } from './tags';
+import { isAdjacent } from './formation';
 
 /**
  * A continuous, party-wide effect granted by whichever ally currently
@@ -21,7 +22,16 @@ export interface Aura {
   id: string;
   name: string;
   description: string;
-  requiresTag: TagId;
+  /** Only allies carrying this tag are affected. Omit to affect any ally (subject to `range`). */
+  requiresTag?: TagId;
+  /**
+   * 'party' (default): every living ally on the carrier's side, the carrier
+   * included. 'adjacent': only allies orthogonally adjacent to the carrier
+   * on the grid (formation.ts's isAdjacent), never the carrier itself — the
+   * adjacency Traits (Glint's Shield Bearer, Tharavel's Commanding
+   * Presence, Dawneth's Sanctuary).
+   */
+  range?: 'party' | 'adjacent';
   grants: StatModifier;
 }
 
@@ -51,7 +61,9 @@ export function tickAuras(unit: Adventurer, battle: BattleState): void {
   const applied: AppliedAura[] = [];
   for (const ally of getOwnRoster(battle, unit).filter((other) => other.hp > 0)) {
     for (const aura of ally.auras) {
-      if (hasTag(unit, aura.requiresTag)) {
+      const inRange =
+        aura.range === 'adjacent' ? ally !== unit && isAdjacent(ally.position, unit.position) : true;
+      if (inRange && (!aura.requiresTag || hasTag(unit, aura.requiresTag))) {
         applied.push({ auraId: aura.id, modifier: aura.grants });
       }
     }
