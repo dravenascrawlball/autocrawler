@@ -32,6 +32,13 @@ function recordDownIfNeeded(
   };
 }
 
+/** Credits `killer` (a party member) with felling `target` (an enemy), once per enemy — see Adventurer.runKills. */
+function creditKillIfNeeded(battle: BattleState, killer: Adventurer, target: Adventurer): void {
+  if (target.hp > 0 || target.killedBy || !battle.enemies.includes(target) || !battle.adventurers.includes(killer)) return;
+  target.killedBy = killer.id;
+  killer.runKills = (killer.runKills ?? 0) + 1;
+}
+
 /**
  * A commanded bonus attack (Command, Battle Orders) — credited to the
  * commanded ally, not whoever issued the order: she didn't land the hit,
@@ -53,6 +60,7 @@ function applyCommandStats(
     target.runDamageTaken += attackOutcome.damage;
     if (attackOutcome.hit && commandedAlly) {
       recordDownIfNeeded(battle, target, commandedAlly.archetype, roomIndex);
+      creditKillIfNeeded(battle, commandedAlly, target);
     }
   }
 }
@@ -73,6 +81,7 @@ function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: Bat
       target.runDamageTaken += outcome.damage;
       if (outcome.hit) {
         recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
+        creditKillIfNeeded(battle, unit, target);
       }
     }
   } else if (outcome.type === 'attack-multi') {
@@ -83,6 +92,7 @@ function applyOutcomeStats(unit: Adventurer, outcome: ActionOutcome, battle: Bat
         target.runDamageTaken += hit.damage;
         if (hit.hit) {
           recordDownIfNeeded(battle, target, unit.archetype, roomIndex);
+          creditKillIfNeeded(battle, unit, target);
         }
       }
     }

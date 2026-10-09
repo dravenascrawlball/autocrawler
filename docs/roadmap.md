@@ -463,6 +463,28 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Run summary screen and run log — shipped
+
+When a run ends, a dedicated summary screen replaces the between-rooms
+layout (`ui/RunSummaryView.svelte`): outcome ("Defeated on Floor 2"), a
+15-room path across the three floors (cleared ✓, bosses ♛, the fatal room
+✕), what beat you, **MVP awards** (Top Damage, Top Healer, Iron Wall,
+Slayer), a card per hero (portrait incl. Kit art, ★ level, title, Traits
+earned — boons/flaws/Milestone — and dmg/healed/taken/kills), and totals
+(Renown breakdown, gold earned/spent, relics, active synergies). Unlocks
+and loot still show below it, with Return to Town.
+
+- `state/runSummary.ts`: `buildRunSummary` makes a plain-data snapshot
+  before the party resets; `finishDungeonRun` records it to `runLog`
+  (last 10, newest first, persisted as an optional `runLog` save field —
+  older saves load fine). Retreats are logged too.
+- New tracking: `Adventurer.runKills` (enemy kills credited once per enemy
+  via `killedBy`, in `room.ts`'s `creditKillIfNeeded`, including Command/
+  Battle Orders) and `DungeonPlaybackState.runTotals` (gold earned/spent,
+  relics bought; saved with the active run).
+- **Progress** gains a **Recent Runs** list; each row opens its full
+  summary in a popup.
+
 ## Summoner monster: the Hellcaller — shipped
 
 The first enemy that changes a fight's makeup mid-battle. **Hellcaller**

@@ -68,6 +68,18 @@ export interface DungeonPlaybackState {
    * chooseMilestoneOffer).
    */
   milestoneOffers: MilestoneOffer[];
+  /** Gold earned and spent, and relics bought, over the run so far — for the run summary (state/runSummary.ts). */
+  runTotals: RunTotals;
+}
+
+export interface RunTotals {
+  goldEarned: number;
+  goldSpent: number;
+  relicsBought: string[];
+}
+
+export function createRunTotals(): RunTotals {
+  return { goldEarned: 0, goldSpent: 0, relicsBought: [] };
 }
 
 /**
@@ -123,7 +135,15 @@ function resumeFromSave(): DungeonPlaybackState | null {
 
   const milestoneOffers =
     saved.milestonePending && saved.outcome === null ? rollMilestoneOffers(party, MILESTONE_REWARD_POOL, () => Math.random()) : [];
-  return { runState, inventory: saved.inventory, outcome: saved.outcome, shopOffers, unplacedIds: [], milestoneOffers };
+  return {
+    runState,
+    inventory: saved.inventory,
+    outcome: saved.outcome,
+    shopOffers,
+    unplacedIds: [],
+    milestoneOffers,
+    runTotals: saved.runTotals ?? createRunTotals(),
+  };
 }
 
 /** Set by startDungeon (or reconstructed from a save at boot — see resumeFromSave), read/advanced by the Phaser replay layer and the between-room pause UI, cleared by finishDungeonRun. */

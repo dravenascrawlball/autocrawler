@@ -14,6 +14,7 @@ import type { RosterState } from './roster';
 import type { ActiveDungeonRunState } from './activeRun';
 import type { RunHistoryState } from './runHistory';
 import type { MetaProgressionState } from './metaProgression';
+import type { RunSummary } from './runSummary';
 
 const STORAGE_KEY = 'autocrawler:save';
 
@@ -66,6 +67,8 @@ export interface GameState {
   recruitmentPool: RecruitCandidate[];
   runHistory: RunHistoryState;
   metaProgression: MetaProgressionState;
+  /** Past run summaries, newest first (state/runSummary.ts). Optional: older saves have none. */
+  runLog?: RunSummary[];
 }
 
 /** A DieFace with its action narrowed to a plain id — see SerializedAdventurer. */
@@ -118,6 +121,8 @@ interface SerializedGameState {
   recruitmentPool: SerializedRecruitCandidate[];
   runHistory: RunHistoryState;
   metaProgression: MetaProgressionState;
+  /** Past run summaries, newest first (state/runSummary.ts). Optional: older saves have none. */
+  runLog?: RunSummary[];
 }
 
 function serializeDieFace(face: DieFace): SerializedDieFace {
@@ -252,6 +257,7 @@ function serializeGameState(state: GameState): SerializedGameState {
       unlockedKitIds: { ...state.metaProgression.unlockedKitIds },
       trainingRanks: { ...state.metaProgression.trainingRanks },
     },
+    ...(state.runLog ? { runLog: [...state.runLog] } : {}),
   };
 }
 
@@ -278,6 +284,7 @@ function deserializeGameState(raw: SerializedGameState): GameState {
       unlockedKitIds: { ...raw.metaProgression.unlockedKitIds },
       trainingRanks: { ...(raw.metaProgression.trainingRanks ?? {}) },
     },
+    ...(raw.runLog ? { runLog: [...raw.runLog] } : {}),
   };
 }
 

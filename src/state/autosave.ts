@@ -7,6 +7,7 @@ import { recruitmentPool } from './recruitmentPool';
 import { runHistory } from './runHistory';
 import { metaProgression } from './metaProgression';
 import { saveGame } from './persistence';
+import { runLog } from './runSummary';
 import { debounce } from './debounce';
 
 const AUTO_SAVE_DEBOUNCE_MS = 300;
@@ -28,6 +29,7 @@ const scheduleSave = debounce(() => {
     recruitmentPool: get(recruitmentPool),
     runHistory: get(runHistory),
     metaProgression: get(metaProgression),
+    runLog: get(runLog),
   });
 }, AUTO_SAVE_DEBOUNCE_MS);
 
@@ -38,3 +40,4 @@ activeRun.subscribe(scheduleSave);
 recruitmentPool.subscribe(scheduleSave);
 runHistory.subscribe(scheduleSave);
 metaProgression.subscribe(scheduleSave);
+runLog.subscribe(scheduleSave);

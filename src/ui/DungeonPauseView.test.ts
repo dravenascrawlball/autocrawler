@@ -41,14 +41,15 @@ describe('DungeonPauseView run recap (roadmap item 6)', () => {
     render(DungeonPauseView, { onContinue: () => {} });
 
     expect(screen.getByRole('heading', { name: 'Between Rooms' })).toBeInTheDocument();
-    expect(screen.queryByText(/Rooms reached/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/rooms cleared/)).not.toBeInTheDocument();
   });
 
-  it('shows the recap (rooms, gold, loot, per-character stats) once the run has completed', () => {
+  it('shows the run summary once the run has completed: path, hero card, totals and loot', () => {
     const hero = createAdventurer('hero', template(), 'front');
     hero.runDamageDealt = 42;
     hero.runDamageTaken = 7;
     hero.runHealingDone = 3;
+    hero.runKills = 2;
     roster.set({ adventurers: [hero], recruitedIds: [] });
 
     const inventory = createRunInventory();
@@ -59,23 +60,25 @@ describe('DungeonPauseView run recap (roadmap item 6)', () => {
       runState: { party: [hero], rooms: [{ enemies: [] }, { enemies: [] }], roomIndex: 2, roomRecords: [] },
       inventory,
       outcome: 'completed',
+      milestoneOffers: [],
+      runTotals: { goldEarned: 60, goldSpent: 35, relicsBought: ['Lucky Coin'] },
     } as unknown as DungeonPlaybackState);
 
     const { container } = render(DungeonPauseView, { onContinue: () => {} });
-    const recap = container.querySelector('.run-recap') as HTMLElement;
 
     expect(screen.getByRole('heading', { name: 'Dungeon Complete!' })).toBeInTheDocument();
-    expect(recap).not.toBeNull();
-    expect(recap.textContent).toContain('Rooms reached: 2 / 2');
-    expect(recap.textContent).toContain('Gold gained: 25g');
-    expect(recap.textContent).toContain('Loot found: Lucky Ring');
-    expect(recap.querySelector('.run-recap__name')?.textContent).toBe('Hero');
-    expect(recap.textContent).toContain('42 dmg dealt');
-    expect(recap.textContent).toContain('7 dmg taken');
-    expect(recap.textContent).toContain('3 healed');
+    expect(container.textContent).toContain('2 / 2 rooms cleared');
+    expect(container.textContent).toContain('60g earned · 35g spent');
+    expect(container.textContent).toContain('Lucky Coin');
+    expect(container.textContent).toContain('Loot found: Lucky Ring');
+    expect(container.textContent).toContain('42 dmg · 3 healed · 7 taken · 2 kills');
+    expect(container.textContent).toContain('Top Damage');
+    expect(screen.getByRole('button', { name: 'Return to Town' })).toBeInTheDocument();
+    // The between-rooms layout (shop, Continue) is gone.
+    expect(screen.queryByRole('button', { name: /Continue to Next Room/ })).not.toBeInTheDocument();
   });
 
-  it('omits the loot line entirely when nothing was found', () => {
+  it('omits the loot line entirely when nothing was found, and names the floor of a defeat', () => {
     const hero = createAdventurer('hero', template(), 'front');
     roster.set({ adventurers: [hero], recruitedIds: [] });
 
@@ -83,11 +86,13 @@ describe('DungeonPauseView run recap (roadmap item 6)', () => {
       runState: { party: [hero], rooms: [{ enemies: [] }], roomIndex: 1, roomRecords: [] },
       inventory: createRunInventory(),
       outcome: 'loss',
+      milestoneOffers: [],
+      runTotals: { goldEarned: 0, goldSpent: 0, relicsBought: [] },
     } as unknown as DungeonPlaybackState);
 
     render(DungeonPauseView, { onContinue: () => {} });
 
-    expect(screen.getByRole('heading', { name: 'Defeat...' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Defeated on Floor 1' })).toBeInTheDocument();
     expect(screen.queryByText(/Loot found/)).not.toBeInTheDocument();
   });
 });

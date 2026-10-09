@@ -3,6 +3,7 @@ import type { DungeonOutcome, RoomDefinition } from '../sim/dungeonRun';
 import type { RunInventory } from '../sim/items';
 import type { Relic } from '../sim/relics';
 import { INITIAL_SAVE } from './persistence';
+import type { RunTotals } from './dungeonPlayback';
 
 /**
  * A resumable snapshot of the in-progress run — kept in sync with
@@ -28,6 +29,8 @@ export interface ActiveDungeonRunState {
   activeRelics: Relic[];
   /** A floor-boss reward pick was waiting when the game was saved — resume re-rolls the cards (see dungeonPlayback.ts's resumeFromSave). */
   milestonePending?: boolean;
+  /** Run summary totals so far (see dungeonPlayback.ts's RunTotals); absent on older saves. */
+  runTotals?: RunTotals;
 }
 
 /** Sourced from a save if one exists; null means no run is in progress. */

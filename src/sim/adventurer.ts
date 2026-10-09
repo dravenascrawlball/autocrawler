@@ -115,6 +115,10 @@ export interface Adventurer {
   runDamageDealt: number;
   runDamageTaken: number;
   runHealingDone: number;
+  /** Enemies this unit landed the final blow on this run (run summary MVP awards). Absent on older saves = 0. */
+  runKills?: number;
+  /** Set on an enemy once a party member has been credited with killing it, so one kill is never counted twice. */
+  killedBy?: string;
   /**
    * Set the first time this adventurer's hp hits 0 during a run — captures
    * what happened for the post-room Downed popup (see DownedModal.svelte).
@@ -253,6 +257,7 @@ export function createAdventurer(
     runDamageDealt: 0,
     runDamageTaken: 0,
     runHealingDone: 0,
+    runKills: 0,
     downedSummary: undefined,
   };
 }

@@ -6,6 +6,8 @@
   import { clearUnlocksFor, kitsFor } from '../state/progression';
   import { ACTION_DESCRIPTIONS } from './actionDescriptions';
   import ShopView from './ShopView.svelte';
+  import RunSummaryView from './RunSummaryView.svelte';
+  import { runLog, type RunSummary } from '../state/runSummary';
   import { buyTrainingRank } from '../state/townActions';
   import { MAX_TRAINING_RANK, TRAINING_PERCENT_PER_RANK, trainingCost } from '../sim/training';
 
@@ -35,6 +37,12 @@
     };
   });
   $: totalGoals = rows.reduce((sum, row) => sum + row.goals, 0);
+
+  // Run log (run summary pass): the last few runs, each re-openable as its full summary.
+  let openRun: RunSummary | null = null;
+  const outcomeLabel = (run: RunSummary) =>
+    run.outcome === 'completed' ? 'Cleared' : run.outcome === 'loss' ? `Fell on Floor ${run.floorReached}` : `Retreated on Floor ${run.floorReached}`;
+  const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   $: totalEarned = rows.reduce((sum, row) => sum + row.earned, 0);
 </script>
 
@@ -102,11 +110,126 @@
   </ul>
 </section>
 
+<section class="runs">
+  <h3>Recent Runs</h3>
+  {#if $runLog.length === 0}
+    <p class="progress__summary">No runs finished yet.</p>
+  {:else}
+    <ul class="runs__list">
+      {#each $runLog as run (run.id)}
+        <li>
+          <button type="button" class="runs__row" on:click={() => (openRun = run)}>
+            <span class="runs__date">{shortDate(run.endedAt)}</span>
+            <span class="runs__outcome" class:runs__outcome--win={run.outcome === 'completed'}>{outcomeLabel(run)}</span>
+            <span class="runs__party">{run.heroes.map((hero) => hero.name).join(', ')}</span>
+            <span class="runs__renown">+{run.renown.total} Renown</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+</section>
+
+{#if openRun}
+  <div class="run-modal-backdrop" role="presentation" on:click={() => (openRun = null)}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <div class="run-modal" role="dialog" aria-modal="true" aria-label="Run summary" tabindex="-1" on:click|stopPropagation>
+      <button type="button" class="run-modal__close" aria-label="Close run summary" on:click={() => (openRun = null)}>✕</button>
+      <RunSummaryView summary={openRun} />
+    </div>
+  </div>
+{/if}
+
 <ShopView />
 
 <style>
   .progress {
     margin-bottom: 16px;
+  }
+
+  .runs {
+    margin-bottom: 16px;
+  }
+
+  .runs__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .runs__row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 60px 150px 1fr max-content;
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 13px;
+    background: var(--bg-inset);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .runs__row:hover {
+    border-color: var(--gold);
+  }
+
+  @media (max-width: 640px) {
+    .runs__row {
+      grid-template-columns: 1fr max-content;
+    }
+    .runs__party {
+      display: none;
+    }
+  }
+
+  .runs__date,
+  .runs__party {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runs__outcome--win {
+    color: var(--gold-bright);
+  }
+
+  .runs__renown {
+    color: var(--text-heading);
+  }
+
+  .run-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 600;
+  }
+
+  .run-modal {
+    position: relative;
+    width: min(760px, 94vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    background: var(--bg-raised);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .run-modal__close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
   }
 
   .progress__renown {

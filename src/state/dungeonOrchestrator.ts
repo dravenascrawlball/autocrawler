@@ -2,9 +2,10 @@ import { get } from 'svelte/store';
 import { roster } from './roster';
 import { townStorage } from './townStorage';
 import { currentView } from './view';
-import { dungeonPlayback, rollShopOffers } from './dungeonPlayback';
+import { dungeonPlayback, rollShopOffers, createRunTotals } from './dungeonPlayback';
 import { activeRun } from './activeRun';
 import { runHistory, recordRun } from './runHistory';
+import { runLog, recordRunSummary, buildRunSummary } from './runSummary';
 import {
   startDungeonRun,
   resolveNextRoom,
@@ -69,6 +70,7 @@ function touchActiveRun(): void {
           outcome: playback.outcome,
           activeRelics: playback.runState.activeRelics,
           milestonePending: playback.milestoneOffers.length > 0,
+          runTotals: playback.runTotals,
         }
       : null,
   );
@@ -142,7 +144,11 @@ export function startDungeon(
   }
   const outcome = resolveNextRoom(runState, rng);
   const record = runState.roomRecords.at(-1)!;
+  const goldBefore = inventory.gold;
   rollLootForRoom(runState, record, inventory, rng, lookupItem);
+  const runTotals = createRunTotals();
+  runTotals.goldEarned += inventory.gold - goldBefore;
+  for (const relic of seed?.activeRelics ?? []) runTotals.relicsBought.push(relic.name);
   const shopOffers = outcome === null ? rollShopOffers(runState, rng) : { recruits: [], relics: [], equipment: [] };
 
   dungeonPlayback.set({
@@ -153,6 +159,7 @@ export function startDungeon(
     shopOffers,
     unplacedIds: [],
     milestoneOffers: rollMilestonesIfDue(runState, outcome, rng),
+    runTotals,
   });
   touchActiveRun();
   currentView.set('dungeon');
@@ -178,7 +185,9 @@ export function continueDungeonRun(
   placeUnplaced(playback.runState.party, playback.unplacedIds);
   const outcome = resolveNextRoom(playback.runState, rng);
   const record = playback.runState.roomRecords.at(-1)!;
+  const goldBefore = playback.inventory.gold;
   rollLootForRoom(playback.runState, record, playback.inventory, rng, lookupItem);
+  playback.runTotals.goldEarned += playback.inventory.gold - goldBefore;
   const shopOffers =
     outcome === null ? rollShopOffers(playback.runState, rng) : { recruits: [], relics: [], equipment: [] };
 
@@ -328,6 +337,7 @@ export function buyRecruitOffer(adventurerId: string, rng: RngSource = () => Mat
   }
 
   playback.inventory.gold -= offer.price;
+  playback.runTotals.goldSpent += offer.price;
   playback.shopOffers.recruits = playback.shopOffers.recruits.filter((candidate) => candidate !== offer);
   touchRoster();
   dungeonPlayback.set({ ...playback });
@@ -403,7 +413,9 @@ export function buyRelicOffer(relicId: string): void {
     applyRelicToAdventurer(adventurer, offer.relic);
   }
   playback.runState.activeRelics = [...playback.runState.activeRelics, offer.relic];
+  playback.runTotals.relicsBought.push(offer.relic.name);
   playback.inventory.gold -= offer.price;
+  playback.runTotals.goldSpent += offer.price;
   playback.shopOffers.relics = playback.shopOffers.relics.filter((candidate) => candidate !== offer);
   touchRoster();
   dungeonPlayback.set({ ...playback });
@@ -429,6 +441,7 @@ export function buyEquipmentOffer(itemId: string): void {
   }
 
   playback.inventory.gold -= offer.price;
+  playback.runTotals.goldSpent += offer.price;
   playback.inventory.items.push({ ...offer.item, promptDismissed: true });
   playback.shopOffers.equipment = playback.shopOffers.equipment.filter((candidate) => candidate !== offer);
   dungeonPlayback.set({ ...playback });
@@ -468,6 +481,8 @@ export function finishDungeonRun(): void {
   }
 
   const party = playback.runState.party;
+  // Snapshot the run for the summary screen and the run log before anything below resets the party.
+  runLog.update((log) => recordRunSummary(log, buildRunSummary(playback)));
   const renown = calculateRunRenownBreakdown(playback.runState.roomRecords, playback.outcome);
   const historyBefore = get(runHistory);
   const historyAfter = recordRun(

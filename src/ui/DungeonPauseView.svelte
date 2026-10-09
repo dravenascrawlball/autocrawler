@@ -16,6 +16,8 @@
     chooseMilestoneOffer,
   } from '../state/dungeonOrchestrator';
   import { floorOf } from '../sim/dungeonRun';
+  import RunSummaryView from './RunSummaryView.svelte';
+  import { buildRunSummary } from '../state/runSummary';
   import OutfitPicker from './OutfitPicker.svelte';
   import QuirkBadges from './QuirkBadges.svelte';
   import { quirksOf } from '../sim/quirks';
@@ -88,16 +90,6 @@
   // any pending Downed popup still gets shown before the player can leave for town.
   $: runOutcome = $dungeonPlayback?.outcome ?? null;
 
-  // Run recap (shown once runOutcome !== null, below) — every field here reads data already
-  // tracked live all run (see sim/room.ts's applyTurnStats), nothing new to instrument.
-  // "Rooms reached" rather than "rooms cleared": roomIndex counts every room resolveNextRoom has
-  // resolved, win or not, so it's accurate for a completed run (equals the total) without having
-  // to disambiguate a loss/stalemate room (not actually cleared) from a voluntary retreat (every
-  // prior room was) — a small, deliberate simplification rather than threading that distinction
-  // through just for this summary.
-  $: totalRooms = $dungeonPlayback?.runState.rooms.length ?? 0;
-  $: roomsReached = $dungeonPlayback?.runState.roomIndex ?? 0;
-  $: runGold = $dungeonPlayback?.inventory.gold ?? 0;
   // What finishDungeonRun is about to bank (roadmap item 3) — previewed here with the same pure
   // helpers it uses, so the recap and the town toast always agree.
   $: renownPreview =
@@ -124,34 +116,10 @@
 </script>
 
 <section>
-  <h2>
-    {#if runOutcome === 'completed'}
-      Dungeon Complete!
-    {:else if runOutcome === 'loss'}
-      Defeat...
-    {:else if runOutcome === 'retreat'}
-      Retreated
-    {:else}
-      Between Rooms
-    {/if}
-  </h2>
-
-  {#if runOutcome !== null}
-    <section class="run-recap">
-      <p>Rooms reached: {roomsReached} / {totalRooms}</p>
-      <p>Gold gained: {runGold}g</p>
-      {#if renownPreview}
-        <p class="run-recap__renown">
-          Renown earned: <strong>+{renownPreview.total}</strong>
-          <span class="run-recap__breakdown">
-            ({renownPreview.roomsWon} room{renownPreview.roomsWon === 1 ? '' : 's'} × {renownPreview.roomsWon > 0
-              ? renownPreview.roomRenown / renownPreview.roomsWon
-              : 0}{#if renownPreview.floorBonus > 0}
-              + {renownPreview.floorBonus} for {renownPreview.floorsCleared} floor{renownPreview.floorsCleared === 1 ? '' : 's'}{/if}{#if renownPreview.completionBonus > 0}
-              + {renownPreview.completionBonus} completion bonus{/if})
-          </span>
-        </p>
-      {/if}
+  {#if runOutcome !== null && $dungeonPlayback}
+    <!-- The run is over: a dedicated summary screen (ui/RunSummaryView.svelte) instead of the between-rooms layout. -->
+    <RunSummaryView summary={buildRunSummary($dungeonPlayback)} />
+    <div class="run-end__extras">
       {#each kitUnlockPreview as unlock (unlock.kitId)}
         <p class="run-recap__unlock">🎃 {unlock.characterName} unlocked the <strong>{unlock.kitName}</strong> Kit</p>
       {/each}
@@ -161,20 +129,11 @@
       {#if inventoryItems.length > 0}
         <p>Loot found: {inventoryItems.map((item) => item.name).join(', ')}</p>
       {/if}
+      <button type="button" class="run-end__return" on:click={() => finishDungeonRun()}>Return to Town</button>
+    </div>
+  {:else}
+  <h2>Between Rooms</h2>
 
-      <h3>Run Stats</h3>
-      <ul class="run-recap__stats">
-        {#each partyMembers as member (member.id)}
-          <li>
-            <span class="run-recap__name">{member.name}</span>
-            <span class="run-recap__figures">
-              {member.runDamageDealt} dmg dealt · {member.runDamageTaken} dmg taken · {member.runHealingDone} healed
-            </span>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
 
   {#if runOutcome === null && milestoneOffers.length > 0}
     <section class="milestone">
@@ -320,15 +279,12 @@
   {/if}
 
   <div>
-    {#if runOutcome !== null}
-      <button type="button" on:click={() => finishDungeonRun()}>Return to Town</button>
-    {:else}
-      <button type="button" on:click={onContinue} disabled={milestoneOffers.length > 0}>
-        {milestoneOffers.length > 0 ? 'Choose a reward first' : 'Continue to Next Room'}
-      </button>
-      <button type="button" on:click={() => retreatFromDungeon()}>Retreat</button>
-    {/if}
+    <button type="button" on:click={onContinue} disabled={milestoneOffers.length > 0}>
+      {milestoneOffers.length > 0 ? 'Choose a reward first' : 'Continue to Next Room'}
+    </button>
+    <button type="button" on:click={() => retreatFromDungeon()}>Retreat</button>
   </div>
+  {/if}
 </section>
 
 <DownedModal adventurerId={nextDownedId} />
@@ -386,49 +342,24 @@
     color: var(--text-muted);
   }
 
-  .run-recap {
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--panel-border);
+  .run-end__extras {
+    margin-top: 12px;
   }
 
-  .run-recap__renown strong {
-    color: var(--gold-bright);
+  .run-end__return {
+    margin-top: 8px;
   }
 
-  .run-recap__breakdown {
-    font-size: 13px;
-    color: var(--text-muted);
-  }
+
+
 
   .run-recap__unlock {
     color: var(--text-heading);
   }
 
-  .run-recap p {
-    margin: 0 0 4px;
-    color: var(--text);
-  }
 
-  .run-recap__stats {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
 
-  .run-recap__name {
-    font-family: var(--font-heading);
-    color: var(--text-heading);
-    margin-right: 8px;
-  }
 
-  .run-recap__figures {
-    font-size: 13px;
-    color: var(--text-muted);
-  }
 
   .party-grid {
     display: grid;
