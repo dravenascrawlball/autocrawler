@@ -14,9 +14,9 @@ const VALID_SETTINGS: CutInSetting[] = ['off', 'key', 'all'];
 function loadInitialSetting(): CutInSetting {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return VALID_SETTINGS.includes(raw as CutInSetting) ? (raw as CutInSetting) : 'key';
+    return VALID_SETTINGS.includes(raw as CutInSetting) ? (raw as CutInSetting) : 'all';
   } catch {
-    return 'key'; // localStorage unavailable — just don't persist this session
+    return 'all'; // localStorage unavailable — just don't persist this session
   }
 }
 

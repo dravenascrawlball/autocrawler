@@ -476,7 +476,7 @@ idle as the fallback.
   that Specials fire about every 3 turns (see the charge meter below).
 - **Boss entrance cards**: in a floor-boss room the intro holds longer under
   a centered card with the boss's portrait.
-- **Settings → Battle Cut-ins**: Off / Key moments (default) / All. A
+- **Settings → Battle Cut-ins**: Off / Key moments / All (default). A
   display preference in localStorage (`state/cutInSetting.ts`), like battle
   speed. Off also hides boss cards.
 - Plumbing: a `cut-in` ReplayEvent that RoomReplayScene hands to
