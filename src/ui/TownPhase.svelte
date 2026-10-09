@@ -65,6 +65,9 @@
         {#each $lastRunReward.newUnlocks as unlock (unlock.characterName + unlock.name)}
           <span class="reward-toast__unlock">✦ {unlock.characterName} unlocked {unlock.name}</span>
         {/each}
+        {#each $lastRunReward.newKits as unlock (unlock.kitId)}
+          <span class="reward-toast__unlock">🎃 {unlock.characterName} unlocked the {unlock.kitName} Kit</span>
+        {/each}
       </div>
       <div class="reward-toast__actions">
         <button

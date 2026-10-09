@@ -75,7 +75,7 @@
               {#if kit.owned}
                 ✓ Kit: {kit.name}
               {:else}
-                🔒 Kit: {kit.name} <span class="goal__hint">{kit.price} Renown below</span>
+                🔒 Kit: {kit.name} <span class="goal__hint">{kit.howToEarn ? kit.howToEarn.toLowerCase() : `${kit.price} Renown below`}</span>
               {/if}
             </li>
           {/each}

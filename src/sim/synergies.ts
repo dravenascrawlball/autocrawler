@@ -1,5 +1,7 @@
 import type { Adventurer } from './adventurer';
 import type { StatModifier } from './stats';
+import type { TagId } from './tags';
+import { hasTag } from './tags';
 
 /**
  * Role synergies (roadmap item 6, in-run snowballing): having enough party
@@ -24,7 +26,10 @@ export interface SynergyTier {
 export interface Synergy {
   id: string;
   name: string;
+  /** Roles that count toward this synergy. */
   roles: string[];
+  /** Alternatively (or additionally), a tag that counts — e.g. Haunting counts 'spooky' (Halloween Kits). */
+  tag?: TagId;
   /** Ascending by count. */
   tiers: SynergyTier[];
   /** Player-facing summary, e.g. "Fighters gain max HP". */
@@ -40,10 +45,15 @@ export interface ActiveSynergy {
 }
 
 /** Every synergy any party member contributes to, with its member count and the tier reached (null if not yet active). */
+/** Whether `member` counts toward `synergy` (one of its roles, or carries its tag). */
+export function countsToward(member: Adventurer, synergy: Synergy): boolean {
+  return synergy.roles.includes(member.role) || (synergy.tag !== undefined && hasTag(member, synergy.tag));
+}
+
 export function evaluateSynergies(party: Adventurer[], synergies: Synergy[]): ActiveSynergy[] {
   return synergies
     .map((synergy) => {
-      const count = party.filter((member) => synergy.roles.includes(member.role)).length;
+      const count = party.filter((member) => countsToward(member, synergy)).length;
       const reached = synergy.tiers.filter((tier) => count >= tier.count);
       return { synergy, count, tier: reached.at(-1) ?? null };
     })
@@ -57,7 +67,7 @@ export function applySynergies(party: Adventurer[], synergies: Synergy[]): void 
   const active = evaluateSynergies(party, synergies).filter((entry) => entry.tier !== null);
   for (const member of party) {
     const earned: StatModifier[] = active
-      .filter(({ synergy, tier }) => tier!.target === 'party' || synergy.roles.includes(member.role))
+      .filter(({ synergy, tier }) => tier!.target === 'party' || countsToward(member, synergy))
       .map(({ synergy, tier }) => ({
         stat: tier!.stat,
         type: tier!.type,

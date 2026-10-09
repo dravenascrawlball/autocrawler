@@ -53,6 +53,7 @@ describe('TownPhase', () => {
           earned: true,
         },
       ],
+      newKits: [],
     });
     render(TownPhase);
 

@@ -26,7 +26,8 @@
   import SynergyPanel from './SynergyPanel.svelte';
   import { recruitTooltip } from './recruitTooltip';
   import { runHistory, recordRun } from '../state/runHistory';
-  import { newUnlocksForRun } from '../state/progression';
+  import { newUnlocksForRun, halloweenUnlocksForRun } from '../state/progression';
+  import { metaProgression } from '../state/metaProgression';
   import { calculateRunRenownBreakdown } from '../sim/renown';
   import type { EquipmentSlot } from '../sim/items';
 
@@ -97,6 +98,10 @@
     $dungeonPlayback && runOutcome !== null
       ? calculateRunRenownBreakdown($dungeonPlayback.runState.roomRecords, runOutcome)
       : null;
+  $: kitUnlockPreview =
+    $dungeonPlayback && renownPreview
+      ? halloweenUnlocksForRun($dungeonPlayback.runState.party, renownPreview.roomsWon, $metaProgression.unlockedKitIds)
+      : [];
   $: unlockPreview =
     $dungeonPlayback && runOutcome !== null && renownPreview
       ? newUnlocksForRun(
@@ -141,6 +146,9 @@
           </span>
         </p>
       {/if}
+      {#each kitUnlockPreview as unlock (unlock.kitId)}
+        <p class="run-recap__unlock">🎃 {unlock.characterName} unlocked the <strong>{unlock.kitName}</strong> Kit</p>
+      {/each}
       {#each unlockPreview as unlock (unlock.characterName + unlock.name)}
         <p class="run-recap__unlock">✦ {unlock.characterName} unlocked <strong>{unlock.name}</strong> — added to their Special pool</p>
       {/each}

@@ -463,6 +463,37 @@ quick-to-test length; the snowball mechanics (item 6) need room to peak.
 **Still open:** Dawneth (~41%) and Bodil/Glint (~44-45%) trail on the
 long run; more enemy types would reduce repetition across 15 rooms.
 
+## Halloween event — shipped
+
+A seasonal costume for every character, behind one switch:
+`data/events.ts`'s `HALLOWEEN_EVENT_ACTIVE`.
+
+- **14 Halloween Kits** (`data/kits.ts`): Blood Countess (Gudrun), The
+  Banshee (Dawneth), Grave Jester (Isilwen), Headless Horsewoman
+  (Tharavel), Pumpkin Bunny (Bodil), Golden Mummy (Glint), Ghost Pirate
+  (Drifta), Little Devil (Fallacy), The Reaper (Mirka), Black Cat
+  (Nerissa), Spider Queen (Dravena), Stitched Bride (Caladwen), Werewolf
+  Huntress (Melpomene), Pumpkin Witch (Mira). Each: a small stat trade-off
+  plus the new **Spooky** tag.
+- **Unlock**: while the event is on, reaching Floor 2 with a character
+  unlocks their costume for free (`halloweenUnlocksForRun`, in
+  `finishDungeonRun`; announced on the recap and toast). While it's on they
+  can't be bought; once it's off they sell for 50 Renown
+  (`KitShopEntry.event`, `isEventKitEarnOnly`). Unlocked costumes always
+  stay wearable/swappable.
+- **Spooky bonuses**: **Haunting** synergy (tag-based synergies are new —
+  `Synergy.tag`/`countsToward`): 2/3/4 Spooky → +4/7/10% attack for them;
+  **Jack-o'-Lantern** relic (+8% attack for Spooky members — relic scaling
+  gained `per: 'flat'` + `requiresTag`, rechecked each room); **lane Fear**
+  (`sim/fear.ts`): enemies in a Spooky hero's lane take +5% damage.
+- Balance: fresh profile unchanged (~34.5%); a fully grown profile owning
+  every Kit clears 66.7% vs 58.8% with regular Kits only. Spooky was
+  trimmed twice — at first it stacked to 80%.
+- **Art prompts** for all 14 costumes were written to
+  `C:/crawlball/portraits_out/<name>_kit_halloween_<costume>.yaml`
+  (faction `Kit_3`). In-game art keys are `<name>-halloween`, e.g.
+  `/portraits/bodil-halloween-town.png`, `/sprites/adventurers/bodil-halloween.png`.
+
 ## Quirks — shipped
 
 Rare random boons and flaws on recruit offers and monsters

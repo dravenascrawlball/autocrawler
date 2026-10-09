@@ -168,7 +168,7 @@
                   <span class="trait-row__name">{kit.owned ? '✓' : '🔒'} Kit: {kit.name}</span>
                   <span class="trait-row__description">
                     {kit.description}
-                    {kit.owned ? 'Owned.' : `Buy for ${kit.price} Renown in Progress.`}
+                    {kit.owned ? 'Owned.' : (kit.howToEarn ? `${kit.howToEarn} to unlock.` : `Buy for ${kit.price} Renown in Progress.`)}
                   </span>
                 </li>
               {/each}

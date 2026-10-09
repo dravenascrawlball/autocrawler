@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
 import { roster } from './roster';
 import { metaProgression } from './metaProgression';
-import { buyTrainingRank } from './townActions';
+import { buyTrainingRank, buyKitFromShop } from './townActions';
 import { createAdventurer, rerollPoolPicks, effectiveMaxHp } from '../sim/adventurer';
-import { THARAVEL_TEMPLATE, GUDRUN_TEMPLATE, FALLACY_TEMPLATE, MIRA_TEMPLATE, CHARACTER_TEMPLATES } from '../data/characters';
+import { THARAVEL_TEMPLATE, GUDRUN_TEMPLATE, BODIL_TEMPLATE, FALLACY_TEMPLATE, MIRA_TEMPLATE, CHARACTER_TEMPLATES } from '../data/characters';
 import { CHARACTER_UNLOCK_POOL } from '../data/characterUnlocks';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
-import { clearUnlocksFor, newUnlocksForRun, kitsFor, isUnlockEarned, conditionLabel, wearKit } from './progression';
+import { clearUnlocksFor, newUnlocksForRun, kitsFor, isUnlockEarned, conditionLabel, wearKit, halloweenUnlocksForRun } from './progression';
 import { recordRun, createEmptyRunHistory } from './runHistory';
 
 describe('recordRun', () => {
@@ -139,5 +139,22 @@ describe('wearKit (free outfit swap)', () => {
 
     wearKit(gudrun, null);
     expect(gudrun.hp).toBeLessThan(effectiveMaxHp(gudrun)); // not healed back up
+  });
+});
+
+describe('Halloween event Kits', () => {
+  it("reaching Floor 2 unlocks each party member's Halloween Kit once", () => {
+    const bodil = createAdventurer('bodil', BODIL_TEMPLATE, 'front');
+    const gudrun = createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front');
+    expect(halloweenUnlocksForRun([bodil, gudrun], 4, {})).toEqual([]);
+    expect(halloweenUnlocksForRun([bodil, gudrun], 5, {}).map((u) => u.kitName)).toEqual(['Pumpkin Bunny', 'Blood Countess']);
+    expect(halloweenUnlocksForRun([bodil], 7, { Bodil: ['bodil-halloween'] })).toEqual([]);
+  });
+
+  it("can't be bought while the event is running, and the Progress listing says how to earn it", () => {
+    metaProgression.set({ renown: 999, unlockedKitIds: {}, trainingRanks: {} });
+    expect(buyKitFromShop('Bodil', 'bodil-halloween')).toBe(false);
+    const halloween = kitsFor('Bodil', {}).find((k) => k.kitId === 'bodil-halloween')!;
+    expect(halloween.howToEarn).toBe('Reach Floor 2 with Bodil');
   });
 });

@@ -48,4 +48,16 @@ export const SYNERGIES: Synergy[] = [
     description: 'Mages and Rangers hit harder.',
     tiers: [{ count: 2, stat: 'attackPower', type: 'percent', amount: 15, target: 'members' }],
   },
+  {
+    id: 'haunting',
+    name: 'Haunting',
+    roles: [],
+    tag: 'spooky',
+    description: 'Spooky allies (Halloween Kits) hit harder.',
+    tiers: [
+      { count: 2, stat: 'attackPower', type: 'percent', amount: 4, target: 'members' },
+      { count: 3, stat: 'attackPower', type: 'percent', amount: 7, target: 'members' },
+      { count: 4, stat: 'attackPower', type: 'percent', amount: 10, target: 'members' },
+    ],
+  },
 ];

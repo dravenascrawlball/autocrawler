@@ -183,3 +183,190 @@ export const THARAVEL_FIELD_MEDIC_KIT: Kit = {
   title: 'War Nurse',
   synergyRole: 'Healer',
 };
+
+// --- Halloween event Kits (data/events.ts's HALLOWEEN_EVENT_ACTIVE): one costume per character ---
+// Every one grants the 'spooky' tag (Haunting synergy, Jack-o'-Lantern relic, lane Fear) plus a
+// small stat trade-off. Unlocked by reaching Floor 2 with the character while the event is on;
+// sold for Renown once it's off (data/kitShop.ts).
+
+export const GUDRUN_HALLOWEEN_KIT: Kit = {
+  id: 'gudrun-halloween',
+  name: 'Blood Countess',
+  description: 'A high-collared crimson cape and fangs to match the lipstick. +8% Attack Power, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'attackPower', type: 'percent', amount: 8, source: 'kit:gudrun-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:gudrun-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'gudrun-halloween',
+  title: 'Vampire Countess',
+};
+
+export const DAWNETH_HALLOWEEN_KIT: Kit = {
+  id: 'dawneth-halloween',
+  name: 'The Banshee',
+  description: 'Her mourning veil turned spectral, in a tattered burial gown. +10% Heal Power, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'healPower', type: 'percent', amount: 10, source: 'kit:dawneth-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:dawneth-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'dawneth-halloween',
+  title: 'Banshee',
+};
+
+export const ISILWEN_HALLOWEEN_KIT: Kit = {
+  id: 'isilwen-halloween',
+  name: 'Grave Jester',
+  description: 'Black-and-white harlequin with skull bells and a deck of bone cards. +5 Crit Chance, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'critChance', type: 'flat', amount: 5, source: 'kit:isilwen-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:isilwen-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'isilwen-halloween',
+  title: 'Grave Jester',
+};
+
+export const THARAVEL_HALLOWEEN_KIT: Kit = {
+  id: 'tharavel-halloween',
+  name: "Headless Horsewoman",
+  description: "A tattered officer coat and a jack-o'-lantern under her arm (head firmly attached). +8% Speed, -5% Max HP. Spooky.",
+  modifiers: [
+    { stat: 'speed', type: 'percent', amount: 8, source: 'kit:tharavel-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:tharavel-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'tharavel-halloween',
+  title: 'Headless Horsewoman',
+};
+
+export const BODIL_HALLOWEEN_KIT: Kit = {
+  id: 'bodil-halloween',
+  name: "Pumpkin Bunny",
+  description: "An orange-and-black bunny with a jack-o'-lantern-carved cleaver. +10% Max HP, -5% Speed. Spooky.",
+  modifiers: [
+    { stat: 'maxHp', type: 'percent', amount: 10, source: 'kit:bodil-halloween' },
+    { stat: 'speed', type: 'percent', amount: -5, source: 'kit:bodil-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'bodil-halloween',
+  title: 'Pumpkin Bunny',
+};
+
+export const GLINT_HALLOWEEN_KIT: Kit = {
+  id: 'glint-halloween',
+  name: 'Golden Mummy',
+  description: 'A bandage-wrap bikini under gilded scarab plates. +2 Armor, -5% Speed. Spooky.',
+  modifiers: [
+    { stat: 'armor', type: 'flat', amount: 2, source: 'kit:glint-halloween' },
+    { stat: 'speed', type: 'percent', amount: -5, source: 'kit:glint-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'glint-halloween',
+  title: 'Golden Mummy',
+};
+
+export const DRIFTA_HALLOWEEN_KIT: Kit = {
+  id: 'drifta-halloween',
+  name: "Ghost Pirate",
+  description: "A spectral sea-green captain's coat and a phantom rapier. +8% Speed, -5% Max HP. Spooky.",
+  modifiers: [
+    { stat: 'speed', type: 'percent', amount: 8, source: 'kit:drifta-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:drifta-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'drifta-halloween',
+  title: 'Ghost Pirate',
+};
+
+export const FALLACY_HALLOWEEN_KIT: Kit = {
+  id: 'fallacy-halloween',
+  name: 'Little Devil',
+  description: 'A red devil corset and forked tail to go with her horns. +8% Attack Power, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'attackPower', type: 'percent', amount: 8, source: 'kit:fallacy-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:fallacy-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'fallacy-halloween',
+  title: 'Little Devil',
+};
+
+export const MIRKA_HALLOWEEN_KIT: Kit = {
+  id: 'mirka-halloween',
+  name: 'The Reaper',
+  description: 'A black cowl over her void eyes and a scythe for a flail. +10% Attack Power, -8% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'attackPower', type: 'percent', amount: 10, source: 'kit:mirka-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -8, source: 'kit:mirka-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'mirka-halloween',
+  title: 'Reaper',
+};
+
+export const NERISSA_HALLOWEEN_KIT: Kit = {
+  id: 'nerissa-halloween',
+  name: 'Black Cat',
+  description: 'A full black-cat costume with a bell collar and paw gloves, still a thief. +8% Speed, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'speed', type: 'percent', amount: 8, source: 'kit:nerissa-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:nerissa-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'nerissa-halloween',
+  title: 'Black Cat',
+};
+
+export const DRAVENA_HALLOWEEN_KIT: Kit = {
+  id: 'dravena-halloween',
+  name: 'Spider Queen',
+  description: 'A black-widow gown of web lace and a spider-leg crown. +8% Attack Power, -5% Speed. Spooky.',
+  modifiers: [
+    { stat: 'attackPower', type: 'percent', amount: 8, source: 'kit:dravena-halloween' },
+    { stat: 'speed', type: 'percent', amount: -5, source: 'kit:dravena-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'dravena-halloween',
+  title: 'Spider Queen',
+};
+
+export const CALADWEN_HALLOWEEN_KIT: Kit = {
+  id: 'caladwen-halloween',
+  name: 'Stitched Bride',
+  description: 'Stitched seams, neck bolts, and her vials relabeled as reanimation serum. +10% Max HP, -5% Attack Power. Spooky.',
+  modifiers: [
+    { stat: 'maxHp', type: 'percent', amount: 10, source: 'kit:caladwen-halloween' },
+    { stat: 'attackPower', type: 'percent', amount: -5, source: 'kit:caladwen-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'caladwen-halloween',
+  title: 'Stitched Bride',
+};
+
+export const MELPOMENE_HALLOWEEN_KIT: Kit = {
+  id: 'melpomene-halloween',
+  name: 'Werewolf Huntress',
+  description: 'Wolf ears and tail, fur-trimmed leather, and a moonlit bow. +8% Attack Power, -5% Max HP. Spooky.',
+  modifiers: [
+    { stat: 'attackPower', type: 'percent', amount: 8, source: 'kit:melpomene-halloween' },
+    { stat: 'maxHp', type: 'percent', amount: -5, source: 'kit:melpomene-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'melpomene-halloween',
+  title: 'Werewolf',
+};
+
+export const MIRA_HALLOWEEN_KIT: Kit = {
+  id: 'mira-halloween',
+  name: 'Pumpkin Witch',
+  description: 'A pointed hat, a broom, and potions brewed into cauldron bubbles. +10% Heal Power, -5% Attack Power. Spooky.',
+  modifiers: [
+    { stat: 'healPower', type: 'percent', amount: 10, source: 'kit:mira-halloween' },
+    { stat: 'attackPower', type: 'percent', amount: -5, source: 'kit:mira-halloween' },
+  ],
+  tags: ['spooky'],
+  artKey: 'mira-halloween',
+  title: 'Pumpkin Witch',
+};

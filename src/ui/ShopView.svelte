@@ -2,6 +2,7 @@
   import { metaProgression } from '../state/metaProgression';
   import { buyKitFromShop } from '../state/townActions';
   import { KIT_SHOP_CATALOG } from '../data/kitShop';
+  import { isEventKitEarnOnly } from '../state/progression';
 
   // Takes `unlockedKitIds` as a parameter (rather than closing over $metaProgression) so its call
   // site below can reference `$metaProgression` directly — Svelte's dependency tracking for a
@@ -28,6 +29,8 @@
             <p class="kit-description">{entry.kit.description}</p>
             {#if isOwned($metaProgression.unlockedKitIds, entry.characterName, entry.kit.id)}
               <span class="kit-owned">Owned</span>
+            {:else if isEventKitEarnOnly(entry)}
+              <span class="kit-event">🎃 Halloween event: reach Floor 2 with {entry.characterName}</span>
             {:else}
               <button
                 type="button"
@@ -45,6 +48,11 @@
 </section>
 
 <style>
+  .kit-event {
+    font-size: 12px;
+    color: #ffb070;
+  }
+
   .shop {
     position: relative;
     overflow: hidden;

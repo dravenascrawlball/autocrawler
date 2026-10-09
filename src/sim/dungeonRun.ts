@@ -8,6 +8,7 @@ import type { RngSource } from './rng';
 import { assignUniquePositions } from './formation';
 import { applySynergies, type Synergy } from './synergies';
 import { applyRelicScaling } from './relics';
+import { applyLaneFear } from './fear';
 
 /** How a completed dungeon run ended. */
 export type DungeonOutcome = 'completed' | 'loss' | 'retreat';
@@ -164,6 +165,8 @@ export function resolveNextRoom(state: DungeonRunState, rng: RngSource = () => M
   // the rooms-cleared count — and unlike roomRecords, it survives a save/resume.
   applySynergies(party, state.synergies);
   applyRelicScaling(party, state.activeRelics, roomIndex);
+  // Halloween: Spooky heroes frighten enemies in their lane (sim/fear.ts).
+  applyLaneFear(party, room.enemies);
 
   const partyAtRoomStart = snapshotParty(party);
   // Displacement (e.g. the Chain Warden's Hook Chain) moves heroes only for this fight — the

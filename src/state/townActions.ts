@@ -8,7 +8,7 @@ import { buyKit as simBuyKit } from '../sim/shop';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
 import { recruitmentPool } from './recruitmentPool';
 import { trainingCost } from '../sim/training';
-import { applyTrainingFromProgress } from './progression';
+import { applyTrainingFromProgress, isEventKitEarnOnly } from './progression';
 
 /**
  * Sim functions mutate the Adventurer/inventory objects in place; Svelte's
@@ -71,7 +71,8 @@ export function recruitAdventurer(candidateId: string): boolean {
 /** Buys `kitId` (for `characterName`) from the Shop's Kit catalog (see data/kitShop.ts), deducting its price from Renown. No-ops (returns false) if unaffordable or already owned. */
 export function buyKitFromShop(characterName: string, kitId: string): boolean {
   const entry = KIT_SHOP_CATALOG.find((candidate) => candidate.characterName === characterName && candidate.kit.id === kitId);
-  if (!entry) {
+  // A seasonal Kit can't be bought while its event runs — it's earned instead.
+  if (!entry || isEventKitEarnOnly(entry)) {
     return false;
   }
 

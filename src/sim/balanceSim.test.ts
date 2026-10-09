@@ -137,6 +137,9 @@ function shopGreedily(
     }
   }
   for (const offer of byPrice(offers.relics)) {
+    // A sensible player skips a tag-gated relic (e.g. the Jack-o'-Lantern) nobody in the party can use.
+    const tag = offer.relic.scaling?.requiresTag;
+    if (tag && !party.some((member) => member.tags.includes(tag))) continue;
     if (inventory.gold >= offer.price) {
       inventory.gold -= offer.price;
       for (const member of party) applyRelicToAdventurer(member, offer.relic);

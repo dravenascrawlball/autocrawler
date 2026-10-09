@@ -21,7 +21,9 @@ export type TagId =
   | 'demon'
   | 'undead'
   | 'brute'
-  | 'beast';
+  | 'beast'
+  // Seasonal (Halloween Kits) — see data/synergies.ts's Haunting and sim/fear.ts.
+  | 'spooky';
 
 export type TagCategory = 'species' | 'archetype' | 'element' | 'physical' | 'personality' | 'other';
 
@@ -52,6 +54,7 @@ export const TAG_REGISTRY: Record<TagId, Tag> = {
   undead: { id: 'undead', name: 'Undead', category: 'species' },
   brute: { id: 'brute', name: 'Brute', category: 'species' },
   beast: { id: 'beast', name: 'Beast', category: 'species' },
+  spooky: { id: 'spooky', name: 'Spooky', category: 'other' },
 };
 
 /** Whether `unit.tags` includes `tagId` — the standard check an ability/Aura uses instead of reading `.tags` directly. */

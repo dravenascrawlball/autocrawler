@@ -28,6 +28,7 @@ import {
   unlockedKitsFor,
   applyTrainingFromProgress,
   wearKit,
+  halloweenUnlocksForRun,
 } from './progression';
 import type { RngSource } from '../sim/rng';
 import { MAX_PARTY_SIZE } from '../sim/draft';
@@ -435,9 +436,18 @@ export function finishDungeonRun(): void {
     playback.outcome === 'completed',
   );
   runHistory.set(historyAfter);
-  metaProgression.update((state) => ({ ...state, renown: state.renown + renown.total }));
+  // Halloween event: reaching Floor 2 unlocks each party member's Halloween Kit (before the reset
+  // below, so it's already in their Kit pool for it).
+  const newKits = halloweenUnlocksForRun(party, renown.roomsWon, get(metaProgression).unlockedKitIds);
+  metaProgression.update((state) => {
+    const unlockedKitIds = { ...state.unlockedKitIds };
+    for (const unlock of newKits) {
+      unlockedKitIds[unlock.characterName] = [...(unlockedKitIds[unlock.characterName] ?? []), unlock.kitId];
+    }
+    return { ...state, renown: state.renown + renown.total, unlockedKitIds };
+  });
   // Read by the town toast (ui/TownPhase.svelte) — see state/progression.ts.
-  lastRunReward.set({ outcome: playback.outcome, renown, newUnlocks: newUnlocksForRun(party, historyBefore, historyAfter) });
+  lastRunReward.set({ outcome: playback.outcome, renown, newUnlocks: newUnlocksForRun(party, historyBefore, historyAfter), newKits });
 
   // Resolved against the updated history, so an unlock earned this very run is already in the
   // pool for this reset, not just the next one.

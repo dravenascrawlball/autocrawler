@@ -1,5 +1,7 @@
 import type { Adventurer } from './adventurer';
 import type { StatModifier } from './stats';
+import type { TagId } from './tags';
+import { hasTag } from './tags';
 
 /**
  * A whole-party buff bought from the between-room shop's Relics section —
@@ -22,7 +24,14 @@ export interface Relic {
    * far, or per current party member. Recomputed at each room start (see
    * applyRelicScaling) rather than granted once on purchase.
    */
-  scaling?: { stat: string; percentPerUnit: number; per: 'room-cleared' | 'party-member' };
+  scaling?: {
+    stat: string;
+    percentPerUnit: number;
+    /** 'flat' = a fixed bonus (percentPerUnit once), recomputed each room — useful with requiresTag. */
+    per: 'room-cleared' | 'party-member' | 'flat';
+    /** Only party members carrying this tag get the bonus (e.g. the Jack-o'-Lantern's 'spooky'). Rechecked every room, so swapping a Kit mid-run is reflected. */
+    requiresTag?: TagId;
+  };
 }
 
 /** Grants `relic`'s modifiers to `adventurer` — called once per party member when a relic is bought, and again for anyone who joins the party afterward (see dungeonOrchestrator.ts's buyRelicOffer/buyRecruitOffer). */
@@ -48,11 +57,13 @@ const RELIC_SCALING_SOURCE_PREFIX = 'relic-scaling:';
 export function applyRelicScaling(party: Adventurer[], activeRelics: Relic[], roomsCleared: number): void {
   const scaling = activeRelics.filter((relic) => relic.scaling);
   for (const member of party) {
-    const earned = scaling.map((relic) => {
-      const { stat, percentPerUnit, per } = relic.scaling!;
-      const units = per === 'room-cleared' ? roomsCleared : party.length;
-      return { stat, type: 'percent' as const, amount: units * percentPerUnit, source: `${RELIC_SCALING_SOURCE_PREFIX}${relic.id}` };
-    });
+    const earned = scaling
+      .filter((relic) => !relic.scaling!.requiresTag || hasTag(member, relic.scaling!.requiresTag))
+      .map((relic) => {
+        const { stat, percentPerUnit, per } = relic.scaling!;
+        const units = per === 'room-cleared' ? roomsCleared : per === 'party-member' ? party.length : 1;
+        return { stat, type: 'percent' as const, amount: units * percentPerUnit, source: `${RELIC_SCALING_SOURCE_PREFIX}${relic.id}` };
+      });
     member.modifiers = [
       ...member.modifiers.filter((modifier) => !modifier.source.startsWith(RELIC_SCALING_SOURCE_PREFIX)),
       ...earned,

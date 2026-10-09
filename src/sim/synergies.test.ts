@@ -16,6 +16,8 @@ import {
 } from '../data/characters';
 import { THARAVEL_FIELD_MEDIC_KIT, BODIL_FUR_AND_FURY_KIT } from '../data/kits';
 import { KIT_SHOP_CATALOG } from '../data/kitShop';
+import { RELIC_REGISTRY } from '../data/relics';
+import { applyLaneFear, SPOOKY_FEAR_PERCENT_PER_HERO } from './fear';
 
 const fighters = () => [
   createAdventurer('gudrun', GUDRUN_TEMPLATE, 'front'),
@@ -93,10 +95,47 @@ describe('Kits that swap synergy role', () => {
 });
 
 describe('Kit catalog', () => {
-  it('sells exactly one Kit for every character except Dee', () => {
+  it('sells one regular Kit and one Halloween Kit for every character except Dee', () => {
     for (const template of CHARACTER_TEMPLATES) {
-      const count = KIT_SHOP_CATALOG.filter((entry) => entry.characterName === template.name).length;
-      expect(count).toBe(template.name === 'Dee' ? 0 : 1);
+      const entries = KIT_SHOP_CATALOG.filter((entry) => entry.characterName === template.name);
+      expect(entries.filter((entry) => !entry.event)).toHaveLength(template.name === 'Dee' ? 0 : 1);
+      expect(entries.filter((entry) => entry.event === 'halloween')).toHaveLength(template.name === 'Dee' ? 0 : 1);
     }
+  });
+
+  it('every Halloween Kit grants the Spooky tag', () => {
+    for (const entry of KIT_SHOP_CATALOG.filter((e) => e.event === 'halloween')) {
+      expect(entry.kit.tags).toContain('spooky');
+    }
+  });
+});
+
+describe('Spooky (Halloween)', () => {
+  const spookyKit = KIT_SHOP_CATALOG.find((e) => e.characterName === 'Bodil' && e.event === 'halloween')!.kit;
+  const spookyBodil = () => createAdventurer('bodil', { ...BODIL_TEMPLATE, kitPool: [spookyKit] }, { lane: 1, rank: 0 });
+
+  it('Haunting counts Spooky party members by tag', () => {
+    const party = [spookyBodil(), createAdventurer('glint', { ...GLINT_TEMPLATE, kitPool: [KIT_SHOP_CATALOG.find((e) => e.characterName === 'Glint' && e.event === 'halloween')!.kit] }, 'front')];
+    const haunting = evaluateSynergies(party, SYNERGIES).find((s) => s.synergy.id === 'haunting');
+    expect(haunting?.count).toBe(2);
+    expect(haunting?.tier).not.toBeNull();
+  });
+
+  it("the Jack-o'-Lantern relic only boosts Spooky members", () => {
+    const lantern = RELIC_REGISTRY.find((r) => r.id === 'relic-jack-o-lantern')!;
+    const bodil = spookyBodil();
+    const plain = createAdventurer('mira', MIRA_TEMPLATE, 'back');
+    applyRelicScaling([bodil, plain], [lantern], 0);
+    expect(bodil.modifiers).toContainEqual(expect.objectContaining({ source: 'relic-scaling:relic-jack-o-lantern', amount: 8 }));
+    expect(plain.modifiers.some((m) => m.source.startsWith('relic-scaling:'))).toBe(false);
+  });
+
+  it('lane Fear: enemies sharing a lane with Spooky heroes take more damage, capped', () => {
+    const bodil = spookyBodil();
+    const enemyInLane = createAdventurer('e1', GUDRUN_TEMPLATE, { lane: 1, rank: 0 });
+    const enemyElsewhere = createAdventurer('e2', GUDRUN_TEMPLATE, { lane: 2, rank: 0 });
+    applyLaneFear([bodil], [enemyInLane, enemyElsewhere]);
+    expect(getEffectiveStat(0, 'vulnerability', enemyInLane.modifiers)).toBe(SPOOKY_FEAR_PERCENT_PER_HERO);
+    expect(getEffectiveStat(0, 'vulnerability', enemyElsewhere.modifiers)).toBe(0);
   });
 });

@@ -59,4 +59,13 @@ export const RELIC_REGISTRY: Relic[] = [
     price: 20,
     scaling: { stat: 'maxHp', percentPerUnit: 2, per: 'party-member' },
   },
+  // Halloween: only matters with Spooky (Halloween Kit) party members.
+  {
+    id: 'relic-jack-o-lantern',
+    name: "Jack-o'-Lantern",
+    description: '+8% Attack Power for every Spooky party member, rest of the run.',
+    modifiers: [],
+    price: 15,
+    scaling: { stat: 'attackPower', percentPerUnit: 8, per: 'flat', requiresTag: 'spooky' },
+  },
 ];

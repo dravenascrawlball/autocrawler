@@ -7,14 +7,15 @@ import { rollQuirks, applyQuirks, quirkPriceMultiplier } from '../sim/quirks';
 import { HERO_QUIRK_POOL } from '../data/quirks';
 import type { ActionId } from '../sim/action';
 import type { CharacterPoolEntry } from '../sim/characterPool';
-import type { DungeonOutcome } from '../sim/dungeonRun';
+import { ROOMS_PER_FLOOR, type DungeonOutcome } from '../sim/dungeonRun';
 import type { Kit } from '../sim/kits';
 import type { RngSource } from '../sim/rng';
 import type { RunRenownBreakdown } from '../sim/renown';
 import type { RecruitShopOffer } from '../sim/shopOffers';
 import { CHARACTER_UNLOCK_POOL, type UnlockCondition } from '../data/characterUnlocks';
 import { CHARACTER_TEMPLATES } from '../data/characters';
-import { KIT_SHOP_CATALOG } from '../data/kitShop';
+import { KIT_SHOP_CATALOG, type KitShopEntry } from '../data/kitShop';
+import { HALLOWEEN_EVENT_ACTIVE } from '../data/events';
 import { runHistory, type RunHistoryState } from './runHistory';
 import { metaProgression } from './metaProgression';
 import { roster } from './roster';
@@ -110,6 +111,8 @@ export interface KitProgress {
   description: string;
   price: number;
   owned: boolean;
+  /** Set while the Kit's seasonal event is active: it's earned this way rather than bought. */
+  howToEarn?: string;
 }
 
 /** Every Kit the Shop sells for `characterName`, with ownership from `unlockedKitIds` (metaProgression). */
@@ -121,7 +124,38 @@ export function kitsFor(characterName: string, unlockedKitIds: Record<string, st
     description: entry.kit.description,
     price: entry.price,
     owned: owned.has(entry.kit.id),
+    howToEarn: isEventKitEarnOnly(entry) ? `Reach Floor 2 with ${characterName}` : undefined,
   }));
+}
+
+/** Whether a Kit shop entry is a seasonal Kit whose event is running — earned, not bought (see data/events.ts). */
+export function isEventKitEarnOnly(entry: KitShopEntry): boolean {
+  return entry.event === 'halloween' && HALLOWEEN_EVENT_ACTIVE;
+}
+
+/** A Kit a finished run newly unlocked (the Halloween event's "reach Floor 2 with them"). */
+export interface KitUnlock {
+  characterName: string;
+  kitId: string;
+  kitName: string;
+}
+
+/**
+ * Halloween Kits a finished run unlocks: while HALLOWEEN_EVENT_ACTIVE, every
+ * party member who reached Floor 2 (won a full floor's worth of rooms) and
+ * doesn't own their Halloween Kit yet.
+ */
+export function halloweenUnlocksForRun(
+  party: Adventurer[],
+  roomsWon: number,
+  unlockedKitIds: Record<string, string[]>,
+): KitUnlock[] {
+  if (!HALLOWEEN_EVENT_ACTIVE || roomsWon < ROOMS_PER_FLOOR) return [];
+  return party.flatMap((member) => {
+    const entry = KIT_SHOP_CATALOG.find((candidate) => candidate.event === 'halloween' && candidate.characterName === member.name);
+    if (!entry || (unlockedKitIds[member.name] ?? []).includes(entry.kit.id)) return [];
+    return [{ characterName: member.name, kitId: entry.kit.id, kitName: entry.kit.name }];
+  });
 }
 
 /**
@@ -161,6 +195,8 @@ export interface RunReward {
   outcome: DungeonOutcome | null;
   renown: RunRenownBreakdown;
   newUnlocks: ClearUnlock[];
+  /** Kits this run unlocked (Halloween event). */
+  newKits: KitUnlock[];
 }
 
 export const lastRunReward = writable<RunReward | null>(null);
